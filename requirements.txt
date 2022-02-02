@@ -1,0 +1,5 @@
+jupyterlab
+ipykernel
+ipywidgets
+aiohttp
+here-map-widget-for-jupyter
