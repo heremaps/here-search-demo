@@ -73,6 +73,7 @@ class FQuery(Text):
                  autosuggest_automatic_recenter: bool=False,
                  **kwargs):
         self.text = ""
+        self.placeholder = "free text"
         self.language = language
         self.api_key = api_key
         self.latitude = latitude
@@ -90,13 +91,17 @@ class FQuery(Text):
         box_layout = Layout(display="flex", justify_content="center", width="33%", border="solid 1px")
         labels = []
         def on_click(change):
-            self.text = self.value = ' '.join(self.value.split(' ')[:-1]+ [change.description])
+            tokens = self.value.strip().split(' ')
+            if tokens:
+                head, tail = tokens[:-1], tokens[-1]
+                head.extend([change.description.strip(), ''])
+                self.text = self.value = ' '.join(head)
 
         for i in range(FQuery.default_terms_limit):
             label = Button(layout=box_layout)
             label.on_click(on_click)
             labels.append(label)
-        self.query_terms = HBox(labels, layout={'width': '250px'})
+        self.query_terms = HBox(labels, layout={'width': '280px'})
 
         Text.__init__(self, **kwargs)
 
@@ -105,14 +110,14 @@ class FQuery(Text):
         self.on_submit(self.on_enter_key_stroke)
         def observe(change):
             if change.type == "change":
-                if change.name == "center":
+                if change.name in "center":
                     self.latitude, self.longitude = change.new[:2]
                 elif change.name == "zoom":
-                    pass
+                    self.latitude, self.longitude = self.map.center
         self.map.observe(observe)
 
-        with out:
-            print(Text.__doc__)
+        self.lens = Button(icon='fa-search', layout={'width': '10px'})
+        self.lens.on_click(self.on_lens_click)
 
     async def autosuggest(self, session: ClientSession,
                           q: str, latitude: float, longitude: float,
@@ -181,6 +186,7 @@ class FQuery(Text):
                 lat, lng = self.latitude, self.longitude
                 # lat, lng = self.map.center[1], self.map.center[0]
                 _q, resp = await asyncio.ensure_future(self.autosuggest(session, q, lat, lng))
+                self.text = q
                 self.output_widget.append_display_data(IJSON(resp))
                 search_resp = SearchFeatureCollection(resp)
                 if search_resp.bbox:
@@ -189,11 +195,9 @@ class FQuery(Text):
                     self.layer = search_resp
                     self.map.add_layer(self.layer)
                 for i in range(FQuery.default_terms_limit):
-                    self.query_terms.children[i].description = ''
+                    self.query_terms.children[i].description = ' '
                 for i, term in enumerate(resp['queryTerms']):
                     self.query_terms.children[i].description = term['term']
-                if resp['queryTerms']:
-                    self.placeholder = resp['queryTerms'][0]['term']
                 #if self.layer.bbox:
                 #    self.map.bounds = self.layer.bbox
 
@@ -203,20 +207,35 @@ class FQuery(Text):
         """
         q = change.value
         if q:
-            resp = self.discover(q, self.latitude, self.longitude)
-            self.autosuggest_done = True
-            with self.output_widget:
-                clear_output(wait=False)
-                Idisplay(IJSON(resp))
-            if self.layer:
-                self.map.remove_layer(self.layer)
-            self.layer = SearchFeatureCollection(resp)
-            self.map.add_layer(self.layer)
-            if self.layer.bbox:
-                self.map.bounds = self.layer.bbox
-                if len(resp["items"]) == 1:
-                    self.map.zoom = FQuery.minimum_zoom_level
-                self.latitude, self.longitude = self.map.center[1], self.map.center[0]
+            self.do_search(q)
+
+    def on_lens_click(self, change):
+        """
+        This method is called when the use hits enter/return in the Text form
+        """
+        q = self.text
+        if q:
+            self.do_search(q)
+
+    def do_search(self, q):
+        resp = self.discover(q, self.latitude, self.longitude)
+        self.autosuggest_done = True
+        with self.output_widget:
+            clear_output(wait=False)
+            Idisplay(IJSON(resp))
+        if self.layer:
+            self.map.remove_layer(self.layer)
+        self.layer = SearchFeatureCollection(resp)
+        self.map.add_layer(self.layer)
+        if self.layer.bbox:
+            self.map.bounds = self.layer.bbox
+            if len(resp["items"]) == 1:
+                self.map.zoom = FQuery.minimum_zoom_level
+            self.latitude, self.longitude = self.map.center[1], self.map.center[0]
+        self.value = self.text = ''
+        for i in range(FQuery.default_terms_limit):
+            self.query_terms.children[i].description = ' '
+        self.autosuggest_done = False
 
 
 def onebox(language: str, latitude: float, longitude: float, api_key: str=None, autosuggest_automatic_recenter: bool=False):
@@ -246,8 +265,8 @@ def onebox(language: str, latitude: float, longitude: float, api_key: str=None, 
     wquery = FQuery(language=language, api_key=api_key, latitude=latitude, longitude=longitude, output_widget=output_widget,
                     a_map=m, value="",
                     autosuggest_automatic_recenter=autosuggest_automatic_recenter,
-                    placeholder="", disabled=False, layout={'width': '250px'})
-    widget_control = WidgetControl(widget=VBox([wquery, wquery.query_terms]), alignment="TOP_LEFT", name="search")
+                    placeholder="", disabled=False, layout={'width': '240px'})
+    widget_control = WidgetControl(widget=VBox([HBox([wquery, wquery.lens]), wquery.query_terms]), alignment="TOP_LEFT", name="search")
     m.add_control(widget_control)
     m.zoom_control_instance.alignment="RIGHT_TOP"
     #with out:
