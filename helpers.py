@@ -203,7 +203,7 @@ class FQuery(Text):
 
     def on_enter_key_stroke(self, change):
         """
-        This method is called when the use hits enter/return in the Text form
+        This method is called when the user hits enter/return in the Text form
         """
         q = change.value
         if q:
@@ -211,7 +211,7 @@ class FQuery(Text):
 
     def on_lens_click(self, change):
         """
-        This method is called when the use hits enter/return in the Text form
+        This method is called when the use select the lens
         """
         q = self.text
         if q:
@@ -264,6 +264,9 @@ def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
     m = Map(api_key=api_key, center=[latitude, longitude], zoom=12, basemap=maptile_layer)
 
 
+    # TODO: clearly decide if FQuery rendering is really independant from the map... Below looks really ugly
+    # Probably separate the widgets classes and the search client classes.
+    # need to find a well known architecture for event based programming in Python...
     wquery = FQuery(language=language, api_key=api_key, latitude=latitude, longitude=longitude, output_widget=output_widget,
                     a_map=m, value="",
                     autosuggest_automatic_recenter=autosuggest_automatic_recenter,
