@@ -238,7 +238,9 @@ class FQuery(Text):
         self.autosuggest_done = False
 
 
-def onebox(language: str, latitude: float, longitude: float, api_key: str=None, autosuggest_automatic_recenter: bool=False):
+def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
+           autosuggest_automatic_recenter: bool=False,
+           render_json: bool=False):
     if not api_key:
         api_key = os.environ.get('API_KEY') or getpass()
 

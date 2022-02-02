@@ -2,4 +2,6 @@ jupyterlab
 ipykernel
 ipywidgets
 aiohttp
+requests
+ujson
 here-map-widget-for-jupyter
