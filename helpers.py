@@ -8,7 +8,6 @@ from pprint import pprint
 from typing import Callable
 import asyncio, http.client, json, sys, time
 
-
 from here_map_widget import GeoJSON, WidgetControl, InfoBubble, ZoomControl, MapTile
 from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
@@ -58,66 +57,123 @@ class SearchFeatureCollection(GeoJSON):
 out = Output()
 Idisplay(out)
 
+
+class TermsButtons(HBox):
+    default_layout = {'width': '280px'}
+    default_buttons_count = 3
+
+    def __init__(self, buttons_count: int=None, layout: dict=None):
+        if not isinstance(buttons_count, int):
+            buttons_count = TermsButtons.default_buttons_count
+        width = int(100/buttons_count)
+        box_layout = Layout(display="flex", justify_content="center", width=f"{width}%", border="solid 1px")
+        buttons = []
+        for i in range(buttons_count):
+            button = Button(layout=box_layout)
+            buttons.append(button)
+        HBox.__init__(self, buttons, layout=layout or TermsButtons.default_layout)
+
+    def on_click(self, handler):
+        for button in self.children:
+            button.on_click(handler)
+
+
 class FQuery(Text):
     default_results_limit = 5
     default_terms_limit = 3
     minimum_zoom_level = 11
+    default_layout = {'width': '240px'}
+    default_placeholder = "free text"
 
     def __init__(self, api_key: str,
                  language: str,
                  latitude: float, longitude: float,
-                 output_widget: DisplayObject,
-                 a_map: Map,
                  results_limit: int=None,
                  terms_limit: int=None,
                  autosuggest_automatic_recenter: bool=False,
                  **kwargs):
+
         self.text = ""
-        self.placeholder = "free text"
+        Text.__init__(self,
+                      value=self.text,
+                      layout=kwargs.pop('layout', FQuery.default_layout),
+                      placeholder=kwargs.pop('placeholder', FQuery.default_placeholder),
+                      **kwargs)
+
         self.language = language
         self.api_key = api_key
         self.latitude = latitude
         self.longitude = longitude
         self.results_limit = results_limit or FQuery.default_results_limit
         self.terms_limit = terms_limit or FQuery.default_terms_limit
-        self.map = a_map
         self.layer = None
         self.as_url = f'https://autosuggest.search.hereapi.com/v1/autosuggest?apiKey={self.api_key}'
         self.ds_url = f'https://discover.search.hereapi.com/v1/discover?apiKey={self.api_key}'
         self.session = Session()
         self.autosuggest_done = False
-        self.output_widget = output_widget
 
-        box_layout = Layout(display="flex", justify_content="center", width="33%", border="solid 1px")
-        labels = []
-        def on_click(change):
+        self.init_termsButtons()
+
+        def get_position_handler(latitude, longitude):
+            self.latitude, self.longitude = latitude, longitude
+        self.map = FQuery.get_map(api_key, latitude, longitude, get_position_handler)
+        self.lens = Button(icon='fa-search', layout={'width': '32px'})
+        self.add_search_control_to_map()
+
+        self.output_widget = Output(layout={'width': '450px'})
+
+        # bind the Text form key strokes events to autosuggest
+        asyncio.ensure_future(self.on_key_stroke_handler())
+
+        # bind the Text form key strokes events to discover
+        self.lens.on_click(self.on_lens_click_handler)
+        self.on_submit(self.on_enter_key_stroke_handler)
+
+    def init_termsButtons(self):
+        self.query_terms = TermsButtons(FQuery.default_terms_limit)
+
+        def on_terms_click_handler(change):
             tokens = self.value.strip().split(' ')
             if tokens:
                 head, tail = tokens[:-1], tokens[-1]
                 head.extend([change.description.strip(), ''])
                 self.text = self.value = ' '.join(head)
 
-        for i in range(FQuery.default_terms_limit):
-            label = Button(layout=box_layout)
-            label.on_click(on_click)
-            labels.append(label)
-        self.query_terms = HBox(labels, layout={'width': '280px'})
+        self.query_terms.on_click(on_terms_click_handler)
 
-        Text.__init__(self, **kwargs)
+    def add_search_control_to_map(self):
+        widget_control = WidgetControl(widget=VBox([HBox([self, self.lens]), self.query_terms]), alignment="TOP_LEFT",
+                                       name="search")
+        self.map.add_control(widget_control)
+        self.map.zoom_control_instance.alignment = "RIGHT_TOP"
 
-        # bind the Text form key strokes events to autosuggest and discover
-        asyncio.ensure_future(self.on_key_stroke())
-        self.on_submit(self.on_enter_key_stroke)
+    @classmethod
+    def get_map(cls, api_key, latitude, longitude, get_position_handler: Callable[[float, float], None]) -> Map:
+        platform = Platform(api_key=api_key, services_config={
+            ServiceNames.maptile: {
+                MapTileUrl.scheme: "https",
+                MapTileUrl.host: "maps.ls.hereapi.com",
+                MapTileUrl.path: "maptile/2.1",
+            }
+        })
+        map_tile = MapTile(
+            tile_type="maptile",
+            scheme="normal.day",
+            tile_size=256,
+            format="png",
+            platform=platform
+        )
+        maptile_layer = TileLayer(provider=map_tile, style={"max": 22})
+        map = Map(api_key=api_key, center=[latitude, longitude], zoom=12, basemap=maptile_layer)
         def observe(change):
             if change.type == "change":
                 if change.name in "center":
-                    self.latitude, self.longitude = change.new[:2]
+                    get_position_handler(*change.new[:2])
                 elif change.name == "zoom":
-                    self.latitude, self.longitude = self.map.center
-        self.map.observe(observe)
+                    get_position_handler(*map.center)
+        map.observe(observe)
 
-        self.lens = Button(icon='fa-search', layout={'width': '10px'})
-        self.lens.on_click(self.on_lens_click)
+        return map
 
     async def autosuggest(self, session: ClientSession,
                           q: str, latitude: float, longitude: float,
@@ -173,7 +229,7 @@ class FQuery(Text):
         widget.observe(getvalue, name)
         return future
 
-    async def on_key_stroke(self):
+    async def on_key_stroke_handler(self):
         """
         This method is called for each key stroke in the one box search Text form.
         """
@@ -201,7 +257,7 @@ class FQuery(Text):
                 #if self.layer.bbox:
                 #    self.map.bounds = self.layer.bbox
 
-    def on_enter_key_stroke(self, change):
+    def on_enter_key_stroke_handler(self, change):
         """
         This method is called when the user hits enter/return in the Text form
         """
@@ -209,7 +265,7 @@ class FQuery(Text):
         if q:
             self.do_search(q)
 
-    def on_lens_click(self, change):
+    def on_lens_click_handler(self, change):
         """
         This method is called when the use select the lens
         """
@@ -244,36 +300,13 @@ def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
     if not api_key:
         api_key = os.environ.get('API_KEY') or getpass()
 
-    #results = [[Label('query', layout={'width': '250px'})]]
-    output_widget = Output(layout={'width': '450px'})
-    platform = Platform(api_key=api_key, services_config={
-        ServiceNames.maptile: {
-            MapTileUrl.scheme: "https",
-            MapTileUrl.host: "maps.ls.hereapi.com",
-            MapTileUrl.path: "maptile/2.1",
-        }
-    })
-    map_tile = MapTile(
-        tile_type="maptile",
-        scheme="normal.day",
-        tile_size=256,
-        format="png",
-        platform=platform
-    )
-    maptile_layer = TileLayer(provider=map_tile, style={"max": 22})
-    m = Map(api_key=api_key, center=[latitude, longitude], zoom=12, basemap=maptile_layer)
-
-
     # TODO: clearly decide if FQuery rendering is really independant from the map... Below looks really ugly
     # Probably separate the widgets classes and the search client classes.
     # need to find a well known architecture for event based programming in Python...
-    wquery = FQuery(language=language, api_key=api_key, latitude=latitude, longitude=longitude, output_widget=output_widget,
-                    a_map=m, value="",
+    wquery = FQuery(api_key=api_key, language=language, latitude=latitude, longitude=longitude,
                     autosuggest_automatic_recenter=autosuggest_automatic_recenter,
-                    placeholder="", disabled=False, layout={'width': '240px'})
-    widget_control = WidgetControl(widget=VBox([HBox([wquery, wquery.lens]), wquery.query_terms]), alignment="TOP_LEFT", name="search")
-    m.add_control(widget_control)
-    m.zoom_control_instance.alignment="RIGHT_TOP"
+                    placeholder="", disabled=False)
+
     #with out:
     #    print(m.center)
-    Idisplay(HBox([m, output_widget]))
+    Idisplay(HBox([wquery.map, wquery.output_widget]))

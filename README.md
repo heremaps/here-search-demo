@@ -4,8 +4,13 @@ A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/
 
 ![searching for "statue of liberty"](screenshot.png)
 
+    
     API_KEY="your api key" jupyter lab demo.ipynb
 
+or using `voila` for a presentation mode:
+
+    API_KEY="your api key" voila demo.ipynb
+    
 
 ## Detailed installation guideline
 
