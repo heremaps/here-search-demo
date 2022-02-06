@@ -17,6 +17,9 @@ import asyncio
 from functools import reduce
 import os
 
+out = Output()
+Idisplay(out)
+
 
 class SearchFeatureCollection(GeoJSON):
     bbox: Tuple[float, float, float, float]
@@ -58,10 +61,6 @@ class SearchFeatureCollection(GeoJSON):
                          )
 
 
-out = Output()
-Idisplay(out)
-
-
 class TermsButtons(HBox):
     default_layout = {'width': '280px'}
     default_buttons_count = 3
@@ -83,8 +82,8 @@ class TermsButtons(HBox):
 
 
 class SearchTermsBox(VBox):
-    def __init__(self, wquery: "FQuery", lens: Button, query_terms: TermsButtons):
-        VBox.__init__(self, [HBox([wquery, lens]), query_terms])
+    def __init__(self, wquery: "FQuery", query_terms: TermsButtons):
+        VBox.__init__(self, [wquery, query_terms])
 
 
 class PositionMap(Map):
@@ -158,7 +157,49 @@ class SubmittableText(Text):
             self._submission_callbacks(self)
 
 
-class FQuery(SubmittableText):
+class SubmittableTextBox(HBox):
+    default_icon = 'fa-search'
+
+    def __init__(self, *args, **kwargs):
+        self.lens = Button(icon=kwargs.pop('icon', SubmittableTextBox.default_icon), layout={'width': '32px'})
+        self.text = SubmittableText(*args, layout=kwargs.pop('layout', Layout()), **kwargs)
+        super().__init__([self.text, self.lens], **kwargs)
+
+    def observe_text(self, *args):
+        self.text.observe(*args)
+
+    def unobserve_text(self, *args):
+        self.text.unobserve(*args)
+
+    def on_submit(self, callback, remove=False):
+        self.text.on_submit(callback, remove=remove)
+
+    def on_click(self, callback, remove=False):
+        self.lens.on_click(callback, remove=remove)
+
+    def wait_for_new_change(self, name: str) -> asyncio.Future:
+        # This methods allows to control the call to the widget handler outside of the jupyter event loop
+        future = asyncio.Future()
+        def getvalue(change: dict):
+            future.set_result(change.new)
+            self.unobserve_text(getvalue, name)
+            pass
+        self.observe_text(getvalue, name)
+        return future
+
+    def wait_for_submitted_value(self) -> asyncio.Future:
+        future = asyncio.Future()
+        def getvalue(_):
+            value = self.text.value
+            future.set_result(value)
+            self.on_submit(getvalue, remove=True)
+            self.on_click(getvalue, remove=True)
+        self.on_submit(getvalue)
+        self.on_click(getvalue)
+        return future
+
+
+class FQuery(SubmittableTextBox):
     default_results_limit = 5
     default_terms_limit = 3
     minimum_zoom_level = 11
@@ -173,12 +214,10 @@ class FQuery(SubmittableText):
                  autosuggest_automatic_recenter: bool=False,
                  **kwargs):
 
-        self.text = ""
-        Text.__init__(self,
-                      value=self.text,
-                      layout=kwargs.pop('layout', FQuery.default_layout),
-                      placeholder=kwargs.pop('placeholder', FQuery.default_placeholder),
-                      **kwargs)
+        SubmittableTextBox.__init__(self,
+                                    layout=kwargs.pop('layout', FQuery.default_layout),
+                                    placeholder=kwargs.pop('placeholder', FQuery.default_placeholder),
+                                    **kwargs)
 
         self.language = language
         self.api_key = api_key
@@ -198,7 +237,6 @@ class FQuery(SubmittableText):
             self.latitude, self.longitude = latitude, longitude
         self.map = PositionMap(api_key=api_key, center=[latitude, longitude], position_handler=position_handler)
 
-        self.lens = Button(icon='fa-search', layout={'width': '32px'})
         self.add_search_control_to_map()
 
         self.output_widget = Output(layout={'width': '450px'})
@@ -207,21 +245,20 @@ class FQuery(SubmittableText):
         asyncio.ensure_future(self.on_key_stroke_handler())
 
         # bind the Text form key strokes events to discover
-        self.lens.on_click(self.on_lens_click_handler_sync)
         asyncio.ensure_future(self.on_enter_key_stroke_handler())
 
     def init_termsButtons(self):
         self.query_terms = TermsButtons(FQuery.default_terms_limit)
         def on_terms_click_handler(change):
-            tokens = self.value.strip().split(' ')
+            tokens = self.text.value.strip().split(' ')
             if tokens:
                 head, tail = tokens[:-1], tokens[-1]
                 head.extend([change.description.strip(), ''])
-                self.text = self.value = ' '.join(head)
+                self.text.value = ' '.join(head)
         self.query_terms.on_click(on_terms_click_handler)
 
     def add_search_control_to_map(self):
-        self.search_box = SearchTermsBox(self, self.lens, self.query_terms)
+        self.search_box = SearchTermsBox(self, self.query_terms)
         widget_control = WidgetControl(widget=self.search_box, alignment="TOP_LEFT", name="search")
         self.map.add_control(widget_control)
         self.map.zoom_control_instance.alignment = "RIGHT_TOP"
@@ -271,36 +308,6 @@ class FQuery(SubmittableText):
         async with session.get(self.ds_url, params=params) as response:
             return await response.json(loads=loads)
 
-    @staticmethod
-    def _wait_for_new_change(widget, name: str) -> asyncio.Future:
-        # This methods allows to control the call to the widget handler outside of the jupyter event loop
-        future = asyncio.Future()
-        def getvalue(change: dict):
-            # make the new value available
-            future.set_result(change.new)
-            widget.unobserve(getvalue, name)
-        widget.observe(getvalue, name)
-        return future
-
-    @staticmethod
-    def _wait_for_submitted_value(widget) -> asyncio.Future:
-        future = asyncio.Future()
-        def getvalue(change: dict):
-            value = change.value
-            future.set_result(value)
-            widget.on_submit(getvalue, remove=True)
-        widget.on_submit(getvalue)
-        return future
-
-    @staticmethod
-    def _wait_for_click(widget) -> asyncio.Future:
-        future = asyncio.Future()
-        def getvalue(change: dict):
-            value = change.value
-            future.set_result(value)
-            widget.on_submit(getvalue, remove=True)
-        widget.on_submit(getvalue)
-        return future
 
     async def on_key_stroke_handler(self):
         """
@@ -308,7 +315,7 @@ class FQuery(SubmittableText):
         """
         async with ClientSession(raise_for_status=True) as session:
             while not self.autosuggest_done:
-                q = await FQuery._wait_for_new_change(self, 'value')
+                q = await self.wait_for_new_change('value')
 
                 self.output_widget.clear_output(wait=True)
                 if not q:
@@ -316,7 +323,6 @@ class FQuery(SubmittableText):
                 lat, lng = self.latitude, self.longitude
                 # lat, lng = self.map.center[1], self.map.center[0]
                 _q, autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, lat, lng))
-                self.text = q
                 self.output_widget.append_display_data(IJSON(autosuggest_resp))
                 search_feature = SearchFeatureCollection(autosuggest_resp)
                 if search_feature.bbox:
@@ -337,7 +343,7 @@ class FQuery(SubmittableText):
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:
-                q = await FQuery._wait_for_submitted_value(self)
+                q = await self.wait_for_submitted_value()
                 discover_resp = await asyncio.ensure_future(self.do_search(session, q, self.latitude, self.longitude))
                 pass
 
@@ -382,7 +388,7 @@ class FQuery(SubmittableText):
                 self.map.zoom = FQuery.minimum_zoom_level
             self.latitude, self.longitude = self.map.center[1], self.map.center[0]
 
-        self.value = self.text = ''
+        self.text.value = ''
         for i in range(FQuery.default_terms_limit):
             self.query_terms.children[i].description = ' '
         self.autosuggest_done = False
@@ -403,13 +409,13 @@ class FQuery(SubmittableText):
             if len(resp["items"]) == 1:
                 self.map.zoom = FQuery.minimum_zoom_level
             self.latitude, self.longitude = self.map.center[1], self.map.center[0]
-        self.value = self.text = ''
+        self.text.value = ''
         for i in range(FQuery.default_terms_limit):
             self.query_terms.children[i].description = ' '
         self.autosuggest_done = False
 
     def discover_sync(self, q: str, latitude: float, longitude: float,
-                 language: str=None) -> dict:
+                      language: str=None) -> dict:
         """
         Calls HERE Search Discover endpoint
         https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
