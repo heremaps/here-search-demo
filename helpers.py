@@ -242,10 +242,10 @@ class FQuery(SubmittableTextBox):
         self.output_widget = Output(layout={'width': '450px'})
 
         # bind the Text form key strokes events to autosuggest
-        asyncio.ensure_future(self.on_key_stroke_handler())
+        asyncio.ensure_future(self.key_strokes())
 
         # bind the Text form key strokes events to discover
-        asyncio.ensure_future(self.on_enter_key_stroke_handler())
+        asyncio.ensure_future(self.text_submissions())
 
     def init_termsButtons(self):
         self.query_terms = TermsButtons(FQuery.default_terms_limit)
@@ -308,8 +308,7 @@ class FQuery(SubmittableTextBox):
         async with session.get(self.ds_url, params=params) as response:
             return await response.json(loads=loads)
 
-
-    async def on_key_stroke_handler(self):
+    async def key_strokes(self):
         """
         This method is called for each key stroke in the one box search Text form.
         """
@@ -337,31 +336,13 @@ class FQuery(SubmittableTextBox):
                 #if self.layer.bbox:
                 #    self.map.bounds = self.layer.bbox
 
-    async def on_enter_key_stroke_handler(self):
+    async def text_submissions(self):
         """
         This method is called for each key stroke in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:
                 q = await self.wait_for_submitted_value()
-                discover_resp = await asyncio.ensure_future(self.do_search(session, q, self.latitude, self.longitude))
-                pass
-
-    def on_lens_click_handler_sync(self, change):
-        """
-        This method is called when the use select the lens
-        """
-        q = self.text
-        if q:
-            self.do_search_sync(q)
-
-    async def on_lens_click_handler(self):
-        """
-        This method is called when the use select the lens
-        """
-        async with ClientSession(raise_for_status=True) as session:
-            while True:
-                q = await FQuery._wait_for_submitted_value(self)
                 discover_resp = await asyncio.ensure_future(self.do_search(session, q, self.latitude, self.longitude))
                 pass
 
@@ -394,45 +375,6 @@ class FQuery(SubmittableTextBox):
         self.autosuggest_done = False
         return discover_resp
 
-    def do_search_sync(self, q):
-        resp = self.discover_sync(q, self.latitude, self.longitude)
-        self.autosuggest_done = True
-        with self.output_widget:
-            clear_output(wait=False)
-            Idisplay(IJSON(resp))
-        if self.layer:
-            self.map.remove_layer(self.layer)
-        self.layer = SearchFeatureCollection(resp)
-        self.map.add_layer(self.layer)
-        if self.layer.bbox:
-            self.map.bounds = self.layer.bbox
-            if len(resp["items"]) == 1:
-                self.map.zoom = FQuery.minimum_zoom_level
-            self.latitude, self.longitude = self.map.center[1], self.map.center[0]
-        self.text.value = ''
-        for i in range(FQuery.default_terms_limit):
-            self.query_terms.children[i].description = ' '
-        self.autosuggest_done = False
-
-    def discover_sync(self, q: str, latitude: float, longitude: float,
-                      language: str=None) -> dict:
-        """
-        Calls HERE Search Discover endpoint
-        https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
-
-        :param q: query text
-        :param latitude: search center latitude
-        :param longitude: search center longitude
-        :param language: preferred result language (by default self.language)
-        :return: a response dictionary
-        """
-        params = {'q': q,
-                  'at': f'{latitude},{longitude}',
-                  'lang': language or self.language,
-                  'limit': self.results_limit}
-        resp = self.session.get(self.ds_url, params=params)
-        resp.raise_for_status()
-        return loads(resp.content)
 
 def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
            autosuggest_automatic_recenter: bool=False,
