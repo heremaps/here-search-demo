@@ -1,18 +1,20 @@
-from IPython.display import display as Idisplay, JSON as IJSON, clear_output, DisplayObject
+from IPython.display import display as Idisplay, JSON as IJSON, clear_output
 from ipywidgets import HBox, VBox, Text, Label, Combobox, Dropdown, Button, Output, Layout
+from ipywidgets.widgets.widget import CallbackDispatcher
+from traitlets import observe
+
 from ujson import dumps, loads
 from requests import Session, get
 from aiohttp import ClientSession
 
-from here_map_widget import GeoJSON, WidgetControl, InfoBubble, ZoomControl, MapTile
+from here_map_widget import GeoJSON, WidgetControl
 from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
 
 from getpass import getpass
-from pprint import pprint
 from typing import Callable, Tuple, List
-import asyncio, http.client, json, sys, time
-
+import asyncio
+from functools import reduce
 import os
 
 
@@ -54,6 +56,7 @@ class SearchFeatureCollection(GeoJSON):
                              "fillOpacity": 0.7,
                              "radius": 5}
                          )
+
 
 out = Output()
 Idisplay(out)
@@ -125,7 +128,37 @@ class PositionMap(Map):
         self.observe(observe)
 
 
-class FQuery(Text):
+class SubmittableText(Text):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._submission_callbacks = CallbackDispatcher()
+
+    def on_submit(self, callback, remove=False):
+        self._submission_callbacks.register_callback(callback, remove=remove)
+
+    @observe('comm')
+    def _comm_changed(self, change):
+        if change['new'] is None:
+            return
+        self._model_id = self.model_id
+        self.comm.on_msg(self.handle_msg)
+
+    def handle_msg(self, msg):
+        data = msg['content']['data']
+        method = data['method']
+        if method == 'update' and 'state' in data:
+            state = data['state']
+            if 'buffer_paths' in data:
+                for buffer_path, buffer in zip(data['buffer_paths'], msg['buffers']):
+                    reduce(dict.get, buffer_path, state)[buffer_path[-1]] = buffer
+            self.set_state(state)
+        elif method == 'request_state':
+            self.send_state()
+        elif method == 'custom' and 'content' in data and data['content'].get('event') == 'submit':
+            self._submission_callbacks(self)
+
+
+class FQuery(SubmittableText):
     default_results_limit = 5
     default_terms_limit = 3
     minimum_zoom_level = 11
@@ -175,7 +208,6 @@ class FQuery(Text):
 
         # bind the Text form key strokes events to discover
         self.lens.on_click(self.on_lens_click_handler_sync)
-        #self.on_submit(self.on_enter_key_stroke_handler_2)
         asyncio.ensure_future(self.on_enter_key_stroke_handler())
 
     def init_termsButtons(self):

@@ -4,4 +4,5 @@ ipywidgets
 aiohttp
 requests
 ujson
+traitlets
 here-map-widget-for-jupyter
