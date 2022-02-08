@@ -1,3 +1,5 @@
+import collections
+
 from IPython.display import display as Idisplay, JSON as IJSON, clear_output
 from ipywidgets import HBox, VBox, Text, Label, Combobox, Dropdown, Button, Output, Layout
 from ipywidgets.widgets.widget import CallbackDispatcher
@@ -12,13 +14,21 @@ from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
 
 from getpass import getpass
-from typing import Callable, Tuple, List
-import asyncio
+from typing import Callable, Tuple, List, Awaitable
 from functools import reduce
 import os
+import abc
+import asyncio
+import contextlib
+import sys
+import termios
+
 
 out = Output()
 Idisplay(out)
+
+
+
 
 
 class SearchFeatureCollection(GeoJSON):
@@ -47,6 +57,7 @@ class SearchFeatureCollection(GeoJSON):
             height = north-south
             width = east-west
             self.bbox = (south-height/6, north+height/6, east+width/6, west-width/6)
+            # [33.65, 49.46, 175.41, -109.68]
         else:
             self.bbox = None
 
@@ -128,6 +139,7 @@ class PositionMap(Map):
 
 
 class SubmittableText(Text):
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._submission_callbacks = CallbackDispatcher()
@@ -177,17 +189,25 @@ class SubmittableTextBox(HBox):
     def on_click(self, callback, remove=False):
         self.lens.on_click(callback, remove=remove)
 
-    def wait_for_new_change(self, name: str) -> asyncio.Future:
+    def disable(self):
+        self.text.disabled = True
+        self.lens.disabled = True
+
+    def emable(self):
+        self.text.disabled = False
+        self.lens.disabled = False
+
+    def wait_for_new_change(self) -> Awaitable:
         # This methods allows to control the call to the widget handler outside of the jupyter event loop
         future = asyncio.Future()
         def getvalue(change: dict):
             future.set_result(change.new)
-            self.unobserve_text(getvalue, name)
+            self.unobserve_text(getvalue, 'value')
             pass
-        self.observe_text(getvalue, name)
+        self.observe_text(getvalue, 'value')
         return future
 
-    def wait_for_submitted_value(self) -> asyncio.Future:
+    def wait_for_submitted_value(self) -> Awaitable:
         future = asyncio.Future()
         def getvalue(_):
             value = self.text.value
@@ -197,6 +217,228 @@ class SubmittableTextBox(HBox):
         self.on_submit(getvalue)
         self.on_click(getvalue)
         return future
+
+
+class OneBoxBase(abc.ABC):
+    as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
+    ds_url = 'https://discover.search.hereapi.com/v1/discover'
+    default_results_limit = 5
+    default_terms_limit = 0
+
+    def __init__(self, api_key:str, language: str=None, results_limit: int=None, terms_limit: int=None):
+        self.api_key = api_key
+        self.language = language
+        self.results_limit = results_limit or OneBoxBase.default_results_limit
+        self.terms_limit = terms_limit or OneBoxBase.default_terms_limit
+
+    def run(self):
+        asyncio.ensure_future(self.handle_key_strokes())
+        asyncio.ensure_future(self.handle_text_submissions())
+
+    async def autosuggest(self, session: ClientSession,
+                          q: str, latitude: float, longitude: float) -> dict:
+        """
+        Calls HERE Search Autosuggest endpoint
+        https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
+
+        :param session: instance of ClientSession
+        :param q: query text
+        :param latitude: search center latitude
+        :param longitude: search center longitude
+        :return: a tuple made of the input query text and the response dictionary
+        """
+        params = {'q': q,
+                  'at': f'{latitude},{longitude}',
+                  'limit': self.results_limit,
+                  'termsLimit': self.terms_limit,
+                  'apiKey': self.api_key}
+        language = self.get_language()
+        if language:
+            params['lang'] = language
+
+        async with session.get(self.as_url, params=params) as response:
+            return await response.json(loads=loads)
+
+    async def discover(self, session: ClientSession,
+                       q: str, latitude: float, longitude: float) -> dict:
+        """
+        Calls HERE Search Discover endpoint
+        https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
+
+        :param session: instance of ClientSession
+        :param q: query text
+        :param latitude: search center latitude
+        :param longitude: search center longitude
+        :return: a response dictionary
+        """
+        params = {'q': q,
+                  'at': f'{latitude},{longitude}',
+                  'limit': self.results_limit,
+                  'apiKey': self.api_key}
+        language = self.get_language()
+        if language:
+            params['lang'] = language
+
+        async with session.get(self.ds_url, params=params) as response:
+            return await response.json(loads=loads)
+
+    async def handle_key_strokes(self):
+        """
+        This method is called for each key stroke in the one box search Text form.
+        """
+        async with ClientSession(raise_for_status=True) as session:
+            while True:
+                q = await self.wait_for_new_key_stroke()
+                if q is None:
+                    break
+                if not q:
+                    continue
+
+                latitude, longitude = self.get_search_center()
+                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude))
+
+                self.display_suggestions(autosuggest_resp)
+
+    async def handle_text_submissions(self):
+        """
+        This method is called for each key stroke in the one box search Text form.
+        """
+        async with ClientSession(raise_for_status=True) as session:
+            while True:
+                q = await self.wait_for_submitted_value()
+                if q is None:
+                    break
+                if not q:
+                    continue
+
+                latitude, longitude = self.get_search_center()
+                discover_resp = await asyncio.ensure_future(self.discover(session, q, latitude, longitude))
+
+                self.display_results(discover_resp)
+
+    def get_language(self):
+        return self.language
+
+    @abc.abstractmethod
+    def get_search_center(self) -> Tuple[float, float]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def wait_for_new_key_stroke(self) -> Awaitable:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def wait_for_submitted_value(self) -> Awaitable:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def display_suggestions(self, response: dict) -> None:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def display_results(self, response: dict) -> None:
+        raise NotImplementedError()
+
+
+class OneBoxConsole(OneBoxBase):
+    def __init__(self, api_key: str, language: str,latitude: float, longitude: float, results_limit: int=None, term_keys: str=None):
+        self.center = latitude, longitude
+        self.loop = asyncio.get_event_loop()
+        self.key_queue = None
+        self.line_queue = None
+        self.keys = []
+        self.term_keys = list(term_keys)
+        self.terms = []
+        super().__init__(api_key, language, results_limit=results_limit, terms_limit=len(term_keys))
+
+    def get_search_center(self) -> Tuple[float, float]:
+        return self.center
+
+    def display_results(self, response: dict) -> None:
+        out = [' '.ljust(100, ' ')]
+        i = -1
+        for i, item in enumerate(response["items"]):
+            out.append(f'{item["title"]}'.ljust(100, ' '))
+        for j in range(self.results_limit-i-1):
+            out.append(' '.ljust(100, ' '))
+        out.append(f"\r\033[{self.results_limit+2}A->")
+        print('\n'.join(out), end="")
+
+    def display_suggestions(self, response: dict) -> None:
+        self.terms = [term['term'] for term in response["queryTerms"]]
+        terms_line = " | ".join(f"{i}: {term}" for i, term in enumerate(self.terms))
+        out=[f'| {terms_line} |'.ljust(100, ' ')]
+        i = -1
+        for i, item in enumerate(response["items"]):
+            out.append(f'{item["title"]}'.ljust(100, ' '))
+        for j in range(self.results_limit-i-1):
+            out.append(' '.ljust(100, ' '))
+        out.append(f"\r\033[{self.results_limit+2}A")
+        print('\n'.join(out), end="")
+
+    def wait_for_new_key_stroke(self) -> Awaitable:
+        return self.key_queue.get()
+
+    def wait_for_submitted_value(self) -> Awaitable:
+        return self.line_queue.get()
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _raw_mode(file):
+        old_attrs = termios.tcgetattr(file.fileno())
+        new_attrs = old_attrs[:]
+        new_attrs[3] = new_attrs[3] & ~(termios.ECHO | termios.ICANON)
+        try:
+            termios.tcsetattr(file.fileno(), termios.TCSADRAIN, new_attrs)
+            yield
+        finally:
+            termios.tcsetattr(file.fileno(), termios.TCSADRAIN, old_attrs)
+
+    async def dispath(self):
+        """Dispatches keystrokes and aggregated lines to two different queues"""
+        with OneBoxConsole._raw_mode(sys.stdin):
+            reader = asyncio.StreamReader()
+            loop = asyncio.get_event_loop()
+            await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
+
+            while not reader.at_eof():
+                ch = await reader.read(1)
+                if not ch or ord(ch) <= 4:
+                    await self.key_queue.put(None)
+                    await self.line_queue.put(None)
+                    break
+                if ch == b'\n':
+                    line = "".join(self.keys)
+                    await self.line_queue.put(line)
+                    self.keys = []
+                else:
+                    ch = ch.decode('utf8')
+                    if ch in self.term_keys:
+                        line = "".join(self.keys)
+                        tokens = line.strip().split(' ')
+                        if tokens:
+                            head, tail = tokens[:-1], tokens[-1]
+                            head.extend([self.terms[self.term_keys.index(ch)].strip(), ''])
+                            self.keys = list(' '.join(head))
+                            line = "".join(self.keys)
+                            print(f'-> {line}'.ljust(100, ' '))
+                            await self.key_queue.put(line)
+                    else:
+                        self.keys.append(ch)
+                        line = "".join(self.keys)
+                        print(f'-> {line}'.ljust(100, ' '))
+                        await self.key_queue.put(line)
+
+
+    def run(self):
+        async def main(self):
+            self.key_queue = asyncio.Queue()
+            self.line_queue = asyncio.Queue()
+            t1 = asyncio.create_task(self.dispath())
+            t2 = asyncio.create_task(self.handle_key_strokes())
+            t3 = asyncio.create_task(self.handle_text_submissions())
+            await asyncio.gather(t1, t2, t3)
+        asyncio.run(main(self))
 
 
 class FQuery(SubmittableTextBox):
@@ -221,21 +463,16 @@ class FQuery(SubmittableTextBox):
 
         self.language = language
         self.api_key = api_key
-        self.latitude = latitude
-        self.longitude = longitude
         self.results_limit = results_limit or FQuery.default_results_limit
         self.terms_limit = terms_limit or FQuery.default_terms_limit
         self.layer = None
         self.as_url = f'https://autosuggest.search.hereapi.com/v1/autosuggest?apiKey={self.api_key}'
         self.ds_url = f'https://discover.search.hereapi.com/v1/discover?apiKey={self.api_key}'
         self.session = Session()
-        self.autosuggest_done = False
 
         self.init_termsButtons()
 
-        def position_handler(latitude, longitude):
-            self.latitude, self.longitude = latitude, longitude
-        self.map = PositionMap(api_key=api_key, center=[latitude, longitude], position_handler=position_handler)
+        self.map = PositionMap(api_key=api_key, center=[latitude, longitude])
 
         self.add_search_control_to_map()
 
@@ -263,9 +500,15 @@ class FQuery(SubmittableTextBox):
         self.map.add_control(widget_control)
         self.map.zoom_control_instance.alignment = "RIGHT_TOP"
 
+    def display_terms(self, autosuggest_resp):
+        for i in range(FQuery.default_terms_limit):
+            self.query_terms.children[i].description = ' '
+        for i, term in enumerate(autosuggest_resp.get('queryTerms', [])):
+            self.query_terms.children[i].description = term['term']
+
     async def autosuggest(self, session: ClientSession,
                           q: str, latitude: float, longitude: float,
-                          language: str=None) -> Tuple[str, dict]:
+                          language: str=None) -> dict:
         """
         Calls HERE Search Autosuggest endpoint
         https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
@@ -284,7 +527,7 @@ class FQuery(SubmittableTextBox):
                   'termsLimit': self.terms_limit}
 
         async with session.get(self.as_url, params=params) as response:
-            return q, await response.json(loads=loads)
+            return await response.json(loads=loads)
 
     async def discover(self, session: ClientSession,
                        q: str, latitude: float, longitude: float,
@@ -306,35 +549,34 @@ class FQuery(SubmittableTextBox):
                   'limit': self.results_limit}
 
         async with session.get(self.ds_url, params=params) as response:
-            return await response.json(loads=loads)
+            return self.ds_url, params, await response.json(loads=loads)
 
     async def key_strokes(self):
         """
         This method is called for each key stroke in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True) as session:
-            while not self.autosuggest_done:
-                q = await self.wait_for_new_change('value')
-
-                self.output_widget.clear_output(wait=True)
+            while True:
+                q = await self.wait_for_new_change()
                 if not q:
                     continue
-                lat, lng = self.latitude, self.longitude
-                # lat, lng = self.map.center[1], self.map.center[0]
-                _q, autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, lat, lng))
-                self.output_widget.append_display_data(IJSON(autosuggest_resp))
+
+                latitude, longitude = self.map.center
+                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude))
+
+                #self.output_widget.clear_output(wait=True)
+                #self.output_widget.append_display_data(IJSON(autosuggest_resp))
+                self.display_result_list(autosuggest_resp)
+
                 search_feature = SearchFeatureCollection(autosuggest_resp)
                 if search_feature.bbox:
                     if self.layer:
                         self.map.remove_layer(self.layer)
                     self.layer = search_feature
                     self.map.add_layer(self.layer)
-                for i in range(FQuery.default_terms_limit):
-                    self.query_terms.children[i].description = ' '
-                for i, term in enumerate(autosuggest_resp['queryTerms']):
-                    self.query_terms.children[i].description = term['term']
-                #if self.layer.bbox:
-                #    self.map.bounds = self.layer.bbox
+                #self.display_result_map(autosuggest_resp, update_search_center=False)
+
+                self.display_terms(autosuggest_resp)
 
     async def text_submissions(self):
         """
@@ -343,37 +585,36 @@ class FQuery(SubmittableTextBox):
         async with ClientSession(raise_for_status=True) as session:
             while True:
                 q = await self.wait_for_submitted_value()
-                discover_resp = await asyncio.ensure_future(self.do_search(session, q, self.latitude, self.longitude))
-                pass
+                if not q:
+                    continue
 
-    async def do_search(self, session, q, latitude, longitude):
-        discover_resp = await self.discover(session, q, latitude, longitude)
-        search_feature = SearchFeatureCollection(discover_resp)
+                latitude, longitude = self.map.center
+                url, params, discover_resp = await asyncio.ensure_future(self.discover(session, q, latitude, longitude))
 
-        # temporarily stop to check for suggestions
-        self.autosuggest_done = True
+                self.display_result_list(discover_resp)
+                self.display_result_map(discover_resp, update_search_center=True)
+                self.clear_query_text()
 
-        with self.output_widget:
-            clear_output(wait=False)
-            Idisplay(IJSON(discover_resp))
-
-        if self.layer:
-            self.map.remove_layer(self.layer)
-
-        self.layer = search_feature
-        self.map.add_layer(self.layer)
-
-        if self.layer.bbox:
-            self.map.bounds = self.layer.bbox
-            if len(discover_resp["items"]) == 1:
-                self.map.zoom = FQuery.minimum_zoom_level
-            self.latitude, self.longitude = self.map.center[1], self.map.center[0]
-
+    def clear_query_text(self):
         self.text.value = ''
         for i in range(FQuery.default_terms_limit):
             self.query_terms.children[i].description = ' '
-        self.autosuggest_done = False
-        return discover_resp
+
+    def display_result_map(self, resp, update_search_center=False):
+        if self.layer:
+            self.map.remove_layer(self.layer)
+        self.layer = SearchFeatureCollection(resp)
+        self.map.add_layer(self.layer)
+        if self.layer.bbox:
+            self.map.bounds = self.layer.bbox
+            if len(resp["items"]) == 1:
+                self.map.zoom = FQuery.minimum_zoom_level
+
+    def display_result_list(self, resp):
+        with self.output_widget:
+            clear_output(wait=False)
+            Idisplay(IJSON(resp))
+
 
 
 def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
