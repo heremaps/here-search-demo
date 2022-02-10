@@ -22,13 +22,7 @@ import asyncio
 import contextlib
 import sys
 import termios
-
-
-out = Output()
-Idisplay(out)
-
-
-
+from array import array
 
 
 class SearchFeatureCollection(GeoJSON):
@@ -339,40 +333,46 @@ class OneBoxBase(abc.ABC):
     def display_results(self, response: dict) -> None:
         raise NotImplementedError()
 
-
 class OneBoxConsole(OneBoxBase):
-    def __init__(self, api_key: str, language: str,latitude: float, longitude: float, results_limit: int=None, term_keys: str=None):
+    def __init__(self, api_key: str, language: str,latitude: float, longitude: float, results_limit: int=None, term_keys: bytes=None):
         self.center = latitude, longitude
-        self.loop = asyncio.get_event_loop()
+        self.term_keys = array('B', term_keys)
         self.key_queue = None
         self.line_queue = None
-        self.keys = []
-        self.term_keys = list(term_keys)
-        self.terms = []
+        self.reset()
         super().__init__(api_key, language, results_limit=results_limit, terms_limit=len(term_keys))
+
+    def reset(self):
+        try:
+            self.key_queue.join()
+            self.line_queue.join()
+        except AttributeError:
+            pass
+        self.keys = array('B')
+        self.terms = []
 
     def get_search_center(self) -> Tuple[float, float]:
         return self.center
 
     def display_results(self, response: dict) -> None:
-        out = [' '.ljust(100, ' ')]
+        out = [' '*100]
         i = -1
         for i, item in enumerate(response["items"]):
-            out.append(f'{item["title"]}'.ljust(100, ' '))
+            out.append(f'{item["title"]: 100s}')
         for j in range(self.results_limit-i-1):
-            out.append(' '.ljust(100, ' '))
+            out.append(' '*100)
         out.append(f"\r\033[{self.results_limit+2}A->")
         print('\n'.join(out), end="")
 
     def display_suggestions(self, response: dict) -> None:
         self.terms = [term['term'] for term in response["queryTerms"]]
-        terms_line = " | ".join(f"{i}: {term}" for i, term in enumerate(self.terms))
-        out=[f'| {terms_line} |'.ljust(100, ' ')]
+        terms_line = f'| {" | ".join(f"{i}: {term}" for i, term in enumerate(self.terms))} |'
+        out = [f'{terms_line: <100s}']
         i = -1
         for i, item in enumerate(response["items"]):
-            out.append(f'{item["title"]}'.ljust(100, ' '))
+            out.append(f'{item["title"]: <100s}')
         for j in range(self.results_limit-i-1):
-            out.append(' '.ljust(100, ' '))
+            out.append(' '*100)
         out.append(f"\r\033[{self.results_limit+2}A")
         print('\n'.join(out), end="")
 
@@ -408,37 +408,42 @@ class OneBoxConsole(OneBoxBase):
                     await self.line_queue.put(None)
                     break
                 if ch == b'\n':
-                    line = "".join(self.keys)
-                    await self.line_queue.put(line)
-                    self.keys = []
+                    await self.line_queue.put(self.keys.tobytes())
+                    self.keys = array('B')
                 else:
-                    ch = ch.decode('utf8')
-                    if ch in self.term_keys:
-                        line = "".join(self.keys)
-                        tokens = line.strip().split(' ')
-                        if tokens:
-                            head, tail = tokens[:-1], tokens[-1]
-                            head.extend([self.terms[self.term_keys.index(ch)].strip(), ''])
-                            self.keys = list(' '.join(head))
-                            line = "".join(self.keys)
-                            print(f'-> {line}'.ljust(100, ' '))
-                            await self.key_queue.put(line)
-                    else:
-                        self.keys.append(ch)
-                        line = "".join(self.keys)
-                        print(f'-> {line}'.ljust(100, ' '))
-                        await self.key_queue.put(line)
+                    #ch = ch.decode('utf8')
+                    try:
+                        term_index = self.term_keys.index(ord(ch))
+                        try:  # to remove the last word
+                            while self.keys.pop() != b' ':
+                                pass
+                        except IndexError:
+                            pass
+                        self.keys.frombytes(b' ')
+                        self.keys.frombytes(self.terms[term_index].strip().encode())
+                        self.keys.frombytes(b' ')
+                    except ValueError:
+                        self.keys.frombytes(ch)
+                    line = self.keys.tobytes().decode()
+                    print(f'-> {line: <100s}')
+                    await self.key_queue.put(line)
 
+    async def main(self):
+        self.key_queue = asyncio.Queue()
+        self.line_queue = asyncio.Queue()
+        t1 = asyncio.create_task(self.dispath())
+        t2 = asyncio.create_task(self.handle_key_strokes())
+        t3 = asyncio.create_task(self.handle_text_submissions())
+        await asyncio.gather(t1, t2, t3)
+        await self.key_queue.join()
+        await self.line_queue.join()
 
     def run(self):
-        async def main(self):
-            self.key_queue = asyncio.Queue()
-            self.line_queue = asyncio.Queue()
-            t1 = asyncio.create_task(self.dispath())
-            t2 = asyncio.create_task(self.handle_key_strokes())
-            t3 = asyncio.create_task(self.handle_text_submissions())
-            await asyncio.gather(t1, t2, t3)
-        asyncio.run(main(self))
+        self.reset()
+        asyncio.run(self.main())
+
+class IOneBox(OneBoxBase):
+    pass
 
 
 class FQuery(SubmittableTextBox):
@@ -611,10 +616,13 @@ class FQuery(SubmittableTextBox):
                 self.map.zoom = FQuery.minimum_zoom_level
 
     def display_result_list(self, resp):
-        with self.output_widget:
-            clear_output(wait=False)
-            Idisplay(IJSON(resp))
-
+        if True:
+            self.output_widget.clear_output(wait=True)
+            self.output_widget.append_display_data(IJSON(resp))
+        else: # does not work for key strokes... TODO: Check why
+            with self.output_widget:
+                clear_output(wait=True)
+                Idisplay(IJSON(resp))
 
 
 def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
