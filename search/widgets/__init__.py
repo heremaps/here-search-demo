@@ -1,28 +1,18 @@
-import collections
-
 from IPython.display import display as Idisplay, JSON as IJSON, clear_output
-from ipywidgets import HBox, VBox, Text, Label, Combobox, Dropdown, Button, Output, Layout
+from ipywidgets import HBox, VBox, Text, Button, Output, Layout
 from ipywidgets.widgets.widget import CallbackDispatcher
 from traitlets import observe
-
-from ujson import dumps, loads
-from requests import Session, get
-from aiohttp import ClientSession
+from requests import Session
 
 from here_map_widget import GeoJSON, WidgetControl
 from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
 
-from getpass import getpass
+from ..core import OneBoxBase
+
 from typing import Callable, Tuple, List, Awaitable
 from functools import reduce
-import os
-import abc
 import asyncio
-import contextlib
-import sys
-import termios
-from array import array
 
 
 class SearchFeatureCollection(GeoJSON):
@@ -215,245 +205,6 @@ class SubmittableTextBox(HBox):
         return future
 
 
-class OneBoxBase:
-    as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
-    ds_url = 'https://discover.search.hereapi.com/v1/discover'
-    default_results_limit = 20
-    default_suggestions_limit = 5
-    default_terms_limit = 0
-
-    def __init__(self,
-                 api_key: str=None,
-                 language: str=None,
-                 suggestions_limit: int=None,
-                 results_limit: int=None,
-                 terms_limit: int=None):
-        self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="apiKey")
-        self.language = language
-        self.results_limit = results_limit or self.__class__.default_results_limit
-        self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
-        self.terms_limit = terms_limit or self.__class__.default_terms_limit
-
-    def run(self):
-        asyncio.ensure_future(self.handle_key_strokes())
-        asyncio.ensure_future(self.handle_text_submissions())
-
-    async def autosuggest(self, session: ClientSession,
-                          q: str, latitude: float, longitude: float) -> dict:
-        """
-        Calls HERE Search Autosuggest endpoint
-        https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
-
-        :param session: instance of ClientSession
-        :param q: query text
-        :param latitude: search center latitude
-        :param longitude: search center longitude
-        :return: a tuple made of the input query text and the response dictionary
-        """
-        params = {'q': q,
-                  'at': f'{latitude},{longitude}',
-                  'limit': self.suggestions_limit,
-                  'termsLimit': self.terms_limit,
-                  'apiKey': self.api_key}
-        language = self.get_language()
-        if language:
-            params['lang'] = language
-
-        async with session.get(self.as_url, params=params) as response:
-            return await response.json(loads=loads)
-
-    async def discover(self, session: ClientSession,
-                       q: str, latitude: float, longitude: float) -> dict:
-        """
-        Calls HERE Search Discover endpoint
-        https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
-
-        :param session: instance of ClientSession
-        :param q: query text
-        :param latitude: search center latitude
-        :param longitude: search center longitude
-        :return: a response dictionary
-        """
-        params = {'q': q,
-                  'at': f'{latitude},{longitude}',
-                  'limit': self.results_limit,
-                  'apiKey': self.api_key}
-        language = self.get_language()
-        if language:
-            params['lang'] = language
-
-        async with session.get(self.ds_url, params=params) as response:
-            return await response.json(loads=loads)
-
-    async def handle_key_strokes(self):
-        """
-        This method is called for each key stroke in the one box search Text form.
-        """
-        async with ClientSession(raise_for_status=True) as session:
-            while True:
-                q = await self.wait_for_new_key_stroke()
-                if q is None:
-                    break
-                if not q:
-                    continue
-
-                latitude, longitude = self.get_search_center()
-                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude))
-
-                self.display_suggestions(autosuggest_resp)
-
-    async def handle_text_submissions(self):
-        """
-        This method is called for each key stroke in the one box search Text form.
-        """
-        async with ClientSession(raise_for_status=True) as session:
-            while True:
-                q = await self.wait_for_submitted_value()
-                if q is None:
-                    break
-                if not q:
-                    continue
-
-                latitude, longitude = self.get_search_center()
-                discover_resp = await asyncio.ensure_future(self.discover(session, q, latitude, longitude))
-
-                self.display_results(discover_resp)
-
-    def get_language(self):
-        return self.language
-
-    def get_search_center(self) -> Tuple[float, float]:
-        raise NotImplementedError()
-
-    def wait_for_new_key_stroke(self) -> Awaitable:
-        raise NotImplementedError()
-
-    def wait_for_submitted_value(self) -> Awaitable:
-        raise NotImplementedError()
-
-    def display_suggestions(self, response: dict) -> None:
-        raise NotImplementedError()
-
-    def display_results(self, response: dict) -> None:
-        raise NotImplementedError()
-
-
-class OneBoxConsole(OneBoxBase):
-    default_results_limit = 5
-
-    def __init__(self,
-                 language: str,latitude: float, longitude: float,
-                 api_key: str=None,
-                 results_limit: int=None,
-                 suggestions_limit: int=None,
-                 term_keys: bytes=None):
-        self.center = latitude, longitude
-        self.term_keys = array('B', term_keys)
-        self.key_queue = None
-        self.line_queue = None
-        self.reset()
-        super().__init__(api_key, language, results_limit=results_limit, suggestions_limit=suggestions_limit, terms_limit=len(term_keys))
-
-    def reset(self):
-        # TODO: this function needs to be awaited... Check a better way to have the b.run() reantrant
-        # Maybe bu centralizing a self.loop and explicitely have all call using it???
-        try:
-            self.key_queue.join()
-            self.line_queue.join()
-        except AttributeError:
-            pass
-        self.keys = array('B')
-        self.terms = []
-
-    def get_search_center(self) -> Tuple[float, float]:
-        return self.center
-
-    def display_results(self, response: dict) -> None:
-        out = [f"{'->' :<100s}", ' '*100]
-        i = -1
-        for i, item in enumerate(response["items"]):
-            out.append(f'{item["title"]: <100s}')
-        for j in range(self.results_limit-i-1):
-            out.append(' '*100)
-        out.append(f"\r\033[{self.results_limit+2}A")
-        print('\n'.join(out), end="")
-
-    def display_suggestions(self, response: dict) -> None:
-        self.terms = [term['term'] for term in response["queryTerms"]]
-        terms_line = f'| {" | ".join(f"{i}: {term}" for i, term in enumerate(self.terms))} |'
-        out = [f'{terms_line: <100s}']
-        i = -1
-        for i, item in enumerate(response["items"]):
-            out.append(f'{item["title"]: <100s}')
-        for j in range(self.results_limit-i-1):
-            out.append(' '*100)
-        out.append(f"\r\033[{self.results_limit+2}A")
-        print('\n'.join(out), end="")
-
-    def wait_for_new_key_stroke(self) -> Awaitable:
-        return self.key_queue.get()
-
-    def wait_for_submitted_value(self) -> Awaitable:
-        return self.line_queue.get()
-
-    @staticmethod
-    @contextlib.contextmanager
-    def _raw_mode(file):
-        old_attrs = termios.tcgetattr(file.fileno())
-        new_attrs = old_attrs[:]
-        new_attrs[3] = new_attrs[3] & ~(termios.ECHO | termios.ICANON)
-        try:
-            termios.tcsetattr(file.fileno(), termios.TCSADRAIN, new_attrs)
-            yield
-        finally:
-            termios.tcsetattr(file.fileno(), termios.TCSADRAIN, old_attrs)
-
-    async def dispath(self):
-        """Dispatches keystrokes and aggregated lines to two different queues"""
-        with OneBoxConsole._raw_mode(sys.stdin):
-            reader = asyncio.StreamReader()
-            loop = asyncio.get_event_loop()
-            await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
-
-            while not reader.at_eof():
-                ch = await reader.read(1)
-                if not ch or ord(ch) <= 4:
-                    await self.key_queue.put(None)
-                    await self.line_queue.put(None)
-                    break
-                if ch == b'\n':
-                    await self.line_queue.put(self.keys.tobytes().decode())
-                    self.keys = array('B')
-                else:
-                    try:
-                        term_index = self.term_keys.index(ord(ch))
-                        try:  # to remove the last word
-                            while self.keys.pop() != 32:
-                                pass
-                        except IndexError:
-                            pass
-                        self.keys.frombytes(b' ')
-                        self.keys.frombytes(self.terms[term_index].strip().encode())
-                        self.keys.frombytes(b' ')
-                    except ValueError:
-                        self.keys.frombytes(ch)
-                    line = self.keys.tobytes().decode()
-                    print(f'-> {line: <100s}')
-                    await self.key_queue.put(line)
-
-    async def main(self):
-        self.key_queue = asyncio.Queue()
-        self.line_queue = asyncio.Queue()
-        t1 = asyncio.create_task(self.dispath())
-        t2 = asyncio.create_task(self.handle_key_strokes())
-        t3 = asyncio.create_task(self.handle_text_submissions())
-        await asyncio.gather(t1, t2, t3)
-
-    def run(self):
-        self.reset()
-        asyncio.run(self.main())
-
-
 class OneBoxMap(SubmittableTextBox, OneBoxBase):
     default_results_limit = 20
     default_suggestions_limit = 5
@@ -480,9 +231,9 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
         OneBoxBase.__init__(self,
                             language=language,
                             api_key=api_key,
-                            results_limit=results_limit,
-                            suggestions_limit=suggestions_limit,
-                            terms_limit=terms_limit)
+                            results_limit=results_limit or OneBoxMap.default_results_limit,
+                            suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
+                            terms_limit=terms_limit or OneBoxMap.default_terms_limit)
 
         self.layer = None
         self.as_url = f'https://autosuggest.search.hereapi.com/v1/autosuggest?apiKey={self.api_key}'
@@ -564,19 +315,3 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
             with self.output_widget:
                 clear_output(wait=True)
                 Idisplay(IJSON(resp))
-
-
-def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
-           results_limit: int=None,
-           suggestions_limit: int=None,
-           autosuggest_automatic_recenter: bool=False,
-           render_json: bool=False):
-
-
-    ionebox = OneBoxMap(api_key=api_key, language=language, latitude=latitude, longitude=longitude,
-                        results_limit=results_limit, suggestions_limit=suggestions_limit,
-                        autosuggest_automatic_recenter=autosuggest_automatic_recenter,
-                        placeholder="", disabled=False)
-
-    Idisplay(HBox([ionebox.map, ionebox.output_widget]))
-    return ionebox

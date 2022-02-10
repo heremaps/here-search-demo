@@ -7,10 +7,20 @@ A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/
     
     API_KEY="your api key" jupyter lab demo.ipynb
 
-or using `voila` for a presentation mode:
+There is also a terminal version:
 
-    API_KEY="your api key" voila demo.ipynb
-    
+    >>> from search.terminal import OneBoxConsole
+    >>> OneBoxConsole(latitude=40.71455, longitude=-74.00714, language="en", term_keys=b"[]\\").run()
+    apiKey:
+    -> sta
+    | 0: Statue | 1: Starbucks | 2: Station |
+    Statue of Liberty-New York Access (Statue of Liberty)
+    Starbucks
+    NJ TRANSIT-Penn Station-New York
+    Staten Island, NY, United States
+    Stage Door Deli (Stage Door Pizza -Traditional NYC Style)
+
+
 
 ## Detailed installation guideline
 
