@@ -93,6 +93,7 @@ class SearchTermsBox(VBox):
 
 class PositionMap(Map):
     default_zoom_level = 12
+    default_layout = {'height': '600px'}
 
     def __init__(self, api_key: str,
                  center: List[float],
@@ -118,7 +119,8 @@ class PositionMap(Map):
                      api_key=api_key,
                      center=center,
                      zoom=kvargs.pop('zoom', PositionMap.default_zoom_level),
-                     basemap=maptile_layer)
+                     basemap=maptile_layer,
+                     layout = kvargs.pop('layout', PositionMap.default_layout))
         if position_handler:
             self.set_position_handler(position_handler)
 
@@ -216,14 +218,19 @@ class SubmittableTextBox(HBox):
 class OneBoxBase(abc.ABC):
     as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
     ds_url = 'https://discover.search.hereapi.com/v1/discover'
-    default_results_limit = 5
+    default_results_limit = 20
+    default_suggestions_limit = 5
     default_terms_limit = 0
 
-    def __init__(self, api_key:str, language: str=None, results_limit: int=None, terms_limit: int=None):
+    def __init__(self, api_key:str, language: str=None,
+                 suggestions_limit: int=None,
+                 results_limit: int=None,
+                 terms_limit: int=None):
         self.api_key = api_key
         self.language = language
-        self.results_limit = results_limit or OneBoxBase.default_results_limit
-        self.terms_limit = terms_limit or OneBoxBase.default_terms_limit
+        self.results_limit = results_limit or self.__class__.default_results_limit
+        self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
+        self.terms_limit = terms_limit or self.__class__.default_terms_limit
 
     def run(self):
         asyncio.ensure_future(self.handle_key_strokes())
@@ -243,7 +250,7 @@ class OneBoxBase(abc.ABC):
         """
         params = {'q': q,
                   'at': f'{latitude},{longitude}',
-                  'limit': self.results_limit,
+                  'limit': self.suggestions_limit,
                   'termsLimit': self.terms_limit,
                   'apiKey': self.api_key}
         language = self.get_language()
@@ -334,13 +341,18 @@ class OneBoxBase(abc.ABC):
         raise NotImplementedError()
 
 class OneBoxConsole(OneBoxBase):
-    def __init__(self, api_key: str, language: str,latitude: float, longitude: float, results_limit: int=None, term_keys: bytes=None):
+    default_results_limit = 5
+
+    def __init__(self, api_key: str, language: str,latitude: float, longitude: float,
+                 results_limit: int=None,
+                 suggestions_limit: int=None,
+                 term_keys: bytes=None):
         self.center = latitude, longitude
         self.term_keys = array('B', term_keys)
         self.key_queue = None
         self.line_queue = None
         self.reset()
-        super().__init__(api_key, language, results_limit=results_limit, terms_limit=len(term_keys))
+        super().__init__(api_key, language, results_limit=results_limit, suggestions_limit=suggestions_limit, terms_limit=len(term_keys))
 
     def reset(self):
         # TODO: this function needs to be awaited... Check a better way to have the b.run() reantrant
@@ -446,7 +458,8 @@ class IOneBox(OneBoxBase):
 
 
 class FQuery(SubmittableTextBox):
-    default_results_limit = 5
+    default_results_limit = 20
+    default_suggestions_limit = 5
     default_terms_limit = 3
     minimum_zoom_level = 11
     default_layout = {'width': '240px'}
@@ -456,6 +469,7 @@ class FQuery(SubmittableTextBox):
                  language: str,
                  latitude: float, longitude: float,
                  results_limit: int=None,
+                 suggestions_limit: int=None,
                  terms_limit: int=None,
                  autosuggest_automatic_recenter: bool=False,
                  **kwargs):
@@ -468,6 +482,7 @@ class FQuery(SubmittableTextBox):
         self.language = language
         self.api_key = api_key
         self.results_limit = results_limit or FQuery.default_results_limit
+        self.suggestions_limit = suggestions_limit or FQuery.default_suggestions_limit
         self.terms_limit = terms_limit or FQuery.default_terms_limit
         self.layer = None
         self.as_url = f'https://autosuggest.search.hereapi.com/v1/autosuggest?apiKey={self.api_key}'
@@ -527,7 +542,7 @@ class FQuery(SubmittableTextBox):
         params = {'q': q,
                   'at': f'{latitude},{longitude}',
                   'lang': language or self.language,
-                  'limit': self.results_limit,
+                  'limit': self.suggestions_limit,
                   'termsLimit': self.terms_limit}
 
         async with session.get(self.as_url, params=params) as response:
@@ -625,12 +640,15 @@ class FQuery(SubmittableTextBox):
 
 
 def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
+           results_limit: int=None,
+           suggestions_limit: int=None,
            autosuggest_automatic_recenter: bool=False,
            render_json: bool=False):
     if not api_key:
         api_key = os.environ.get('API_KEY') or getpass()
 
     wquery = FQuery(api_key=api_key, language=language, latitude=latitude, longitude=longitude,
+                    results_limit=results_limit, suggestions_limit=suggestions_limit,
                     autosuggest_automatic_recenter=autosuggest_automatic_recenter,
                     placeholder="", disabled=False)
 
