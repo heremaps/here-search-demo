@@ -343,6 +343,8 @@ class OneBoxConsole(OneBoxBase):
         super().__init__(api_key, language, results_limit=results_limit, terms_limit=len(term_keys))
 
     def reset(self):
+        # TODO: this function needs to be awaited... Check a better way to have the b.run() reantrant
+        # Maybe bu centralizing a self.loop and explicitely have all call using it???
         try:
             self.key_queue.join()
             self.line_queue.join()
@@ -355,13 +357,13 @@ class OneBoxConsole(OneBoxBase):
         return self.center
 
     def display_results(self, response: dict) -> None:
-        out = [' '*100]
+        out = [f"{'->' :<100s}", ' '*100]
         i = -1
         for i, item in enumerate(response["items"]):
-            out.append(f'{item["title"]: 100s}')
+            out.append(f'{item["title"]: <100s}')
         for j in range(self.results_limit-i-1):
             out.append(' '*100)
-        out.append(f"\r\033[{self.results_limit+2}A->")
+        out.append(f"\r\033[{self.results_limit+2}A")
         print('\n'.join(out), end="")
 
     def display_suggestions(self, response: dict) -> None:
@@ -408,14 +410,13 @@ class OneBoxConsole(OneBoxBase):
                     await self.line_queue.put(None)
                     break
                 if ch == b'\n':
-                    await self.line_queue.put(self.keys.tobytes())
+                    await self.line_queue.put(self.keys.tobytes().decode())
                     self.keys = array('B')
                 else:
-                    #ch = ch.decode('utf8')
                     try:
                         term_index = self.term_keys.index(ord(ch))
                         try:  # to remove the last word
-                            while self.keys.pop() != b' ':
+                            while self.keys.pop() != 32:
                                 pass
                         except IndexError:
                             pass
@@ -435,8 +436,6 @@ class OneBoxConsole(OneBoxBase):
         t2 = asyncio.create_task(self.handle_key_strokes())
         t3 = asyncio.create_task(self.handle_text_submissions())
         await asyncio.gather(t1, t2, t3)
-        await self.key_queue.join()
-        await self.line_queue.join()
 
     def run(self):
         self.reset()
