@@ -6,6 +6,8 @@ from typing import Tuple, Awaitable
 import os
 import asyncio
 
+__version__ = '0.1'
+
 
 class OneBoxBase:
     as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
@@ -13,6 +15,7 @@ class OneBoxBase:
     default_results_limit = 20
     default_suggestions_limit = 5
     default_terms_limit = 0
+    default_headers = {'User-Agent': f'here-search-notebook-{__version__}'}
 
     def __init__(self,
                  api_key: str=None,
@@ -42,7 +45,8 @@ class OneBoxBase:
                   'at': f'{latitude},{longitude}',
                   'limit': self.suggestions_limit,
                   'termsLimit': self.terms_limit,
-                  'apiKey': self.api_key}
+                  'apiKey': self.api_key,
+                  'show': 'details'}
         language = self.get_language()
         if language:
             params['lang'] = language
@@ -77,7 +81,7 @@ class OneBoxBase:
         """
         This method is called for each key stroke in the one box search Text form.
         """
-        async with ClientSession(raise_for_status=True) as session:
+        async with ClientSession(raise_for_status=True, headers=OneBoxBase.default_headers) as session:
             while True:
                 q = await self.wait_for_new_key_stroke()
                 if q is None:
@@ -94,7 +98,7 @@ class OneBoxBase:
         """
         This method is called for each key stroke in the one box search Text form.
         """
-        async with ClientSession(raise_for_status=True) as session:
+        async with ClientSession(raise_for_status=True, headers=OneBoxBase.default_headers) as session:
             while True:
                 q = await self.wait_for_submitted_value()
                 if q is None:
