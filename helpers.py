@@ -87,7 +87,7 @@ class TermsButtons(HBox):
 
 
 class SearchTermsBox(VBox):
-    def __init__(self, wquery: "FQuery", query_terms: TermsButtons):
+    def __init__(self, wquery: "OneBoxMap", query_terms: TermsButtons):
         VBox.__init__(self, [wquery, query_terms])
 
 
@@ -193,7 +193,7 @@ class SubmittableTextBox(HBox):
         self.text.disabled = False
         self.lens.disabled = False
 
-    def wait_for_new_change(self) -> Awaitable:
+    def wait_for_new_key_stroke(self) -> Awaitable:
         # This methods allows to control the call to the widget handler outside of the jupyter event loop
         future = asyncio.Future()
         def getvalue(change: dict):
@@ -215,18 +215,20 @@ class SubmittableTextBox(HBox):
         return future
 
 
-class OneBoxBase(abc.ABC):
+class OneBoxBase:
     as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
     ds_url = 'https://discover.search.hereapi.com/v1/discover'
     default_results_limit = 20
     default_suggestions_limit = 5
     default_terms_limit = 0
 
-    def __init__(self, api_key:str, language: str=None,
+    def __init__(self,
+                 api_key: str=None,
+                 language: str=None,
                  suggestions_limit: int=None,
                  results_limit: int=None,
                  terms_limit: int=None):
-        self.api_key = api_key
+        self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="apiKey")
         self.language = language
         self.results_limit = results_limit or self.__class__.default_results_limit
         self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
@@ -320,30 +322,28 @@ class OneBoxBase(abc.ABC):
     def get_language(self):
         return self.language
 
-    @abc.abstractmethod
     def get_search_center(self) -> Tuple[float, float]:
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def wait_for_new_key_stroke(self) -> Awaitable:
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def wait_for_submitted_value(self) -> Awaitable:
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def display_suggestions(self, response: dict) -> None:
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def display_results(self, response: dict) -> None:
         raise NotImplementedError()
+
 
 class OneBoxConsole(OneBoxBase):
     default_results_limit = 5
 
-    def __init__(self, api_key: str, language: str,latitude: float, longitude: float,
+    def __init__(self,
+                 language: str,latitude: float, longitude: float,
+                 api_key: str=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  term_keys: bytes=None):
@@ -453,11 +453,8 @@ class OneBoxConsole(OneBoxBase):
         self.reset()
         asyncio.run(self.main())
 
-class IOneBox(OneBoxBase):
-    pass
 
-
-class FQuery(SubmittableTextBox):
+class OneBoxMap(SubmittableTextBox, OneBoxBase):
     default_results_limit = 20
     default_suggestions_limit = 5
     default_terms_limit = 3
@@ -465,9 +462,10 @@ class FQuery(SubmittableTextBox):
     default_layout = {'width': '240px'}
     default_placeholder = "free text"
 
-    def __init__(self, api_key: str,
+    def __init__(self,
                  language: str,
                  latitude: float, longitude: float,
+                 api_key: str=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
@@ -475,36 +473,36 @@ class FQuery(SubmittableTextBox):
                  **kwargs):
 
         SubmittableTextBox.__init__(self,
-                                    layout=kwargs.pop('layout', FQuery.default_layout),
-                                    placeholder=kwargs.pop('placeholder', FQuery.default_placeholder),
+                                    layout=kwargs.pop('layout', OneBoxMap.default_layout),
+                                    placeholder=kwargs.pop('placeholder', OneBoxMap.default_placeholder),
                                     **kwargs)
 
-        self.language = language
-        self.api_key = api_key
-        self.results_limit = results_limit or FQuery.default_results_limit
-        self.suggestions_limit = suggestions_limit or FQuery.default_suggestions_limit
-        self.terms_limit = terms_limit or FQuery.default_terms_limit
+        OneBoxBase.__init__(self,
+                            language=language,
+                            api_key=api_key,
+                            results_limit=results_limit,
+                            suggestions_limit=suggestions_limit,
+                            terms_limit=terms_limit)
+
         self.layer = None
         self.as_url = f'https://autosuggest.search.hereapi.com/v1/autosuggest?apiKey={self.api_key}'
         self.ds_url = f'https://discover.search.hereapi.com/v1/discover?apiKey={self.api_key}'
         self.session = Session()
 
-        self.init_termsButtons()
-
-        self.map = PositionMap(api_key=api_key, center=[latitude, longitude])
-
+        self.init_terms_buttons()
+        self.map = PositionMap(api_key=self.api_key, center=[latitude, longitude])
         self.add_search_control_to_map()
-
         self.output_widget = Output(layout={'width': '450px'})
 
-        # bind the Text form key strokes events to autosuggest
-        asyncio.ensure_future(self.key_strokes())
+    def run(self):
+        Idisplay(HBox([self.map, self.output_widget]))
+        OneBoxBase.run(self)
 
-        # bind the Text form key strokes events to discover
-        asyncio.ensure_future(self.text_submissions())
+    def get_search_center(self):
+        return self.map.center
 
-    def init_termsButtons(self):
-        self.query_terms = TermsButtons(FQuery.default_terms_limit)
+    def init_terms_buttons(self):
+        self.query_terms = TermsButtons(OneBoxMap.default_terms_limit)
         def on_terms_click_handler(change):
             tokens = self.text.value.strip().split(' ')
             if tokens:
@@ -520,103 +518,32 @@ class FQuery(SubmittableTextBox):
         self.map.zoom_control_instance.alignment = "RIGHT_TOP"
 
     def display_terms(self, autosuggest_resp):
-        for i in range(FQuery.default_terms_limit):
+        for i in range(OneBoxMap.default_terms_limit):
             self.query_terms.children[i].description = ' '
         for i, term in enumerate(autosuggest_resp.get('queryTerms', [])):
             self.query_terms.children[i].description = term['term']
 
-    async def autosuggest(self, session: ClientSession,
-                          q: str, latitude: float, longitude: float,
-                          language: str=None) -> dict:
-        """
-        Calls HERE Search Autosuggest endpoint
-        https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
+    def display_suggestions(self, autosuggest_resp):
+        self.display_result_list(autosuggest_resp)
 
-        :param session: instance of ClientSession
-        :param q: query text
-        :param latitude: search center latitude
-        :param longitude: search center longitude
-        :param language: preferred result language (by default self.language)
-        :return: a tuple made of the input query text and the response dictionary
-        """
-        params = {'q': q,
-                  'at': f'{latitude},{longitude}',
-                  'lang': language or self.language,
-                  'limit': self.suggestions_limit,
-                  'termsLimit': self.terms_limit}
+        search_feature = SearchFeatureCollection(autosuggest_resp)
+        if search_feature.bbox:
+            if self.layer:
+                self.map.remove_layer(self.layer)
+            self.layer = search_feature
+            self.map.add_layer(self.layer)
+        #self.display_result_map(autosuggest_resp, update_search_center=False)
 
-        async with session.get(self.as_url, params=params) as response:
-            return await response.json(loads=loads)
+        self.display_terms(autosuggest_resp)
 
-    async def discover(self, session: ClientSession,
-                       q: str, latitude: float, longitude: float,
-                       language: str=None) -> dict:
-        """
-        Calls HERE Search Discover endpoint
-        https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
-
-        :param session: instance of ClientSession
-        :param q: query text
-        :param latitude: search center latitude
-        :param longitude: search center longitude
-        :param language: preferred result language (by default self.language)
-        :return: a response dictionary
-        """
-        params = {'q': q,
-                  'at': f'{latitude},{longitude}',
-                  'lang': language or self.language,
-                  'limit': self.results_limit}
-
-        async with session.get(self.ds_url, params=params) as response:
-            return self.ds_url, params, await response.json(loads=loads)
-
-    async def key_strokes(self):
-        """
-        This method is called for each key stroke in the one box search Text form.
-        """
-        async with ClientSession(raise_for_status=True) as session:
-            while True:
-                q = await self.wait_for_new_change()
-                if not q:
-                    continue
-
-                latitude, longitude = self.map.center
-                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude))
-
-                #self.output_widget.clear_output(wait=True)
-                #self.output_widget.append_display_data(IJSON(autosuggest_resp))
-                self.display_result_list(autosuggest_resp)
-
-                search_feature = SearchFeatureCollection(autosuggest_resp)
-                if search_feature.bbox:
-                    if self.layer:
-                        self.map.remove_layer(self.layer)
-                    self.layer = search_feature
-                    self.map.add_layer(self.layer)
-                #self.display_result_map(autosuggest_resp, update_search_center=False)
-
-                self.display_terms(autosuggest_resp)
-
-    async def text_submissions(self):
-        """
-        This method is called for each key stroke in the one box search Text form.
-        """
-        async with ClientSession(raise_for_status=True) as session:
-            while True:
-                q = await self.wait_for_submitted_value()
-                if not q:
-                    continue
-
-                latitude, longitude = self.map.center
-                url, params, discover_resp = await asyncio.ensure_future(self.discover(session, q, latitude, longitude))
-
-                self.display_result_list(discover_resp)
-                self.display_result_map(discover_resp, update_search_center=True)
-                self.clear_query_text()
+    def display_results(self, discover_resp):
+        self.display_result_list(discover_resp)
+        self.display_result_map(discover_resp, update_search_center=True)
+        self.clear_query_text()
 
     def clear_query_text(self):
         self.text.value = ''
-        for i in range(FQuery.default_terms_limit):
+        for i in range(OneBoxMap.default_terms_limit):
             self.query_terms.children[i].description = ' '
 
     def display_result_map(self, resp, update_search_center=False):
@@ -627,7 +554,7 @@ class FQuery(SubmittableTextBox):
         if self.layer.bbox:
             self.map.bounds = self.layer.bbox
             if len(resp["items"]) == 1:
-                self.map.zoom = FQuery.minimum_zoom_level
+                self.map.zoom = OneBoxMap.minimum_zoom_level
 
     def display_result_list(self, resp):
         if True:
@@ -644,12 +571,12 @@ def onebox(language: str, latitude: float, longitude: float, api_key: str=None,
            suggestions_limit: int=None,
            autosuggest_automatic_recenter: bool=False,
            render_json: bool=False):
-    if not api_key:
-        api_key = os.environ.get('API_KEY') or getpass()
 
-    wquery = FQuery(api_key=api_key, language=language, latitude=latitude, longitude=longitude,
-                    results_limit=results_limit, suggestions_limit=suggestions_limit,
-                    autosuggest_automatic_recenter=autosuggest_automatic_recenter,
-                    placeholder="", disabled=False)
 
-    Idisplay(HBox([wquery.map, wquery.output_widget]))
+    ionebox = OneBoxMap(api_key=api_key, language=language, latitude=latitude, longitude=longitude,
+                        results_limit=results_limit, suggestions_limit=suggestions_limit,
+                        autosuggest_automatic_recenter=autosuggest_automatic_recenter,
+                        placeholder="", disabled=False)
+
+    Idisplay(HBox([ionebox.map, ionebox.output_widget]))
+    return ionebox
