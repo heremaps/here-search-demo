@@ -49,8 +49,8 @@ class OneBoxConsole(OneBoxBase):
         print('\n'.join(out), end="")
 
     def display_suggestions(self, response: dict) -> None:
-        self.terms = [term['term'] for term in response["queryTerms"]]
-        terms_line = f'| {" | ".join(f"{i}: {term}" for i, term in enumerate(self.terms))} |'
+        self.terms = [term['term'].strip() for term in response["queryTerms"]]
+        terms_line = f'| {" | ".join(self.terms)} |'
         out = [f'{terms_line: <100s}']
         i = -1
         for i, item in enumerate(response["items"]):
