@@ -5,7 +5,7 @@ A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/
 ![searching for "statue of liberty"](screenshot.png)
 
     
-    API_KEY="your api key" jupyter lab demo.ipynb
+<code>API_KEY="[your api key](https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start-dhc.html#get-an-api-key)" here-search-notebook</code>
 
 There is also a terminal version:
 
@@ -26,33 +26,32 @@ There is also a terminal version:
 
     pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search-notebook
 
-### step-by-step fir non developers
+### step-by-step for non developers
 
 This simplified method does not use pyenv or conda, but the python3 integrated `venv` module.
 The recipe below runs on a macos Monterey machine.
 
 1. Get A HERE [API key](https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start-dhc.html#get-an-api-key)
 
-2. Clone the repo
+2. Do:
 
    ```
-   git clone ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git
+   mkdir virtualenv
+   python3 -m venv virtualenv
+   source virtualenv/bin/activate
+   pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search-notebook
+   jupyter nbextension enable --py widgetsnbextension
+   jupyter labextension install @jupyterlab/geojson-extension
+   python3 -m ipykernel install --user --name search_notebook --display-name "demo search"
+   ```
+
+3. Run the demo in your virtualenv
+
+   ```
    cd search-notebook
+   source virtualenv/bin/activate
+   API_KEY="your api key" here-search-notebook
    ```
-3. Run `install.sh`
-
-   ```
-   source install.sh
-   ```
-
-4. Run the demo in your virtualenv
-
-   ```
-   cd search-notebook
-   source run.sh <your api key>
-   ```
-
-   You can jump to this step each time you need to start the demo.
 
 
 ## Reference
