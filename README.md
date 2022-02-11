@@ -7,7 +7,7 @@ A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/
     
 <code>API_KEY="[your api key](https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start-dhc.html#get-an-api-key)" here-search-notebook</code>
 
-There is also a terminal version. An example with three terms buttons associated with the keys `[`, `]` and `\\`:
+There is also a terminal version. An example with three terms buttons associated with the keys `[`, `]` and ``\``:
 
     >>> from search.terminal import OneBoxConsole
     >>> OneBoxConsole(latitude=40.71455, longitude=-74.00714, language="en", term_keys=b"[]\\").run()
