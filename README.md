@@ -22,7 +22,11 @@ There is also a terminal version:
 
 
 
-## Detailed installation guideline
+## Installation
+
+    pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search-notebook
+
+### step-by-step fir non developers
 
 This simplified method does not use pyenv or conda, but the python3 integrated `venv` module.
 The recipe below runs on a macos Monterey machine.
