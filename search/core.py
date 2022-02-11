@@ -8,6 +8,37 @@ import asyncio
 
 from . import __version__
 
+
+class Timer:
+    def __init__(self, milliseconds, callback):
+        self._timeout = milliseconds
+        self._callback = callback
+
+    async def _job(self):
+        await asyncio.sleep(self._timeout/1000.0)
+        self._callback()
+
+    def start(self):
+        self._task = asyncio.ensure_future(self._job())
+
+    def cancel(self):
+        self._task.cancel()
+
+def debounce(milliseconds):
+    def decorator(fn):
+        timer = None
+        def debounced(*args, **kwargs):
+            nonlocal timer
+            def call_it():
+                fn(*args, **kwargs)
+            if timer is not None:
+                timer.cancel()
+            timer = Timer(milliseconds, call_it)
+            timer.start()
+        return debounced
+    return decorator
+
+
 class OneBoxBase:
     as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
     ds_url = 'https://discover.search.hereapi.com/v1/discover'

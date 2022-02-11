@@ -59,3 +59,4 @@ The recipe below runs on a macos Monterey machine.
 - [here_map_widget](https://here-map-widget-for-jupyter.readthedocs.io/en/latest/index.html)
 - [ipywidgets](https://ipywidgets.readthedocs.io/en/latest/index.html)
 - [Effective Python environment](https://realpython.com/effective-python-environment/)
+- [Launch your OSS](https://opensource.guide/starting-a-project/#launching-your-own-open-source-project)

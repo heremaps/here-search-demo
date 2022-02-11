@@ -7,7 +7,7 @@ from here_map_widget import GeoJSON, WidgetControl
 from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
 
-from search.core import OneBoxBase, __version__
+from search.core import OneBoxBase, __version__, debounce
 
 from typing import Callable, Tuple, List, Awaitable
 from functools import reduce
@@ -80,10 +80,10 @@ class SubmittableTextBox(HBox):
     def wait_for_new_key_stroke(self) -> Awaitable:
         # This methods allows to control the call to the widget handler outside of the jupyter event loop
         future = asyncio.Future()
+        @debounce(200)
         def getvalue(change: dict):
             future.set_result(change.new)
             self.unobserve_text(getvalue, 'value')
-            pass
         self.observe_text(getvalue, 'value')
         return future
 
