@@ -7,7 +7,7 @@ from here_map_widget import GeoJSON, WidgetControl
 from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
 
-from search.core import OneBoxBase
+from search.core import OneBoxBase, __version__
 
 from typing import Callable, Tuple, List, Awaitable
 from functools import reduce

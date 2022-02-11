@@ -6,8 +6,7 @@ from typing import Tuple, Awaitable
 import os
 import asyncio
 
-__version__ = '0.1'
-
+from . import __version__
 
 class OneBoxBase:
     as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'

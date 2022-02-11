@@ -1,0 +1,1 @@
+jupyter lab $(python -c "import search, pathlib, os.path; print(pathlib.Path(os.path.dirname(search.__file__), '..', 'demo.ipynb'))")
