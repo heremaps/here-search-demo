@@ -226,7 +226,7 @@ class Design(Widget):
             terms: TermsButtons,
             out: HBox):
         search_box = VBox([query_text, terms])
-        widget_control = WidgetControl(widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=True)
+        widget_control = WidgetControl(widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=False)
         map.add_control(widget_control)
         map.zoom_control_instance.alignment = "RIGHT_TOP"
         return HBox([map, out])
@@ -246,8 +246,8 @@ class Design(Widget):
             map: PositionMap,
             terms: TermsButtons,
             out: HBox):
-        search_box = VBox([query_text, terms, out])
-        widget_control = WidgetControl(widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=True)
+        search_box = VBox([query_text, terms, out], layout={'width': "280px"})
+        widget_control = WidgetControl(widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=False)
         map.add_control(widget_control)
         map.zoom_control_instance.alignment = "RIGHT_TOP"
         return map
@@ -290,7 +290,8 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
         self.query_terms = TermsButtons(OneBoxMap.default_terms_limit)
         self.query_terms.on_click(self.__get_terms_buttons_handler())
         self.map = PositionMap(api_key=self.api_key, center=[latitude, longitude])
-        self.out = HBox([Output(layout={'width': '450px'})])
+        self.out_layout = {'display': 'flex', 'width': '276px', 'justify_content': 'flex-start'}
+        self.out = VBox([Output(layout=self.out_layout)])
         self.design = (design or Design.two)(self, self.map, self.query_terms, self.out)
         self.output_format = output_format or OneBoxMap.default_output_format
 
@@ -366,11 +367,11 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
     def display_result_list(self, resp):
         # https://stackoverflow.com/questions/66704546/why-cannot-i-print-in-jupyter-lab-using-ipywidgets-class
         old_out = self.out.children[0]
-        out = Output(layout={'width': '450px'})
+        out = Output(layout=self.out_layout)
         if self.output_format == 'json':
             out.append_display_data(IJSON(data=resp, expanded=False, root='response'))
         else:
-            text = ['| | |', '|-|-|']
+            text = ['| | |', '|:-|:-|']
             for i, item in enumerate(resp["items"]):
                 if "contacts" in item:
                     category_id, category_name = OneBoxMap.get_primary_category(item)
@@ -378,12 +379,12 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                     title = f"**[{item['title']}]({www})**" if www else f"**{item['title']}**"
                 else:
                     title = f"**{item['title']}**"
-                text.append(f"| {i: <2} | {title} |")
+                text.append(f"| <font size='1px'>{i: <2}</font> | <font size='1px'>{title}</font> |")
                 if item["resultType"] in ("categoryQuery", "chainQuery"):
-                    text.append(f"| | <sup>{item['resultType']}</sup> |")
+                    text.append(f"| | <font size='1px'><sup>{item['resultType']}</sup></font> |")
                 elif item["resultType"] == 'place':
                     address = item['address']['label'].partition(', ')[-1]
-                    text.append(f"| | <sup>{address}</sup> |")
+                    text.append(f"| | <font size='1px'><sup>{address}</sup></font> |")
             out.append_display_data(Markdown("\n".join(text)))
         self.out.children = [out]
         old_out.close()
