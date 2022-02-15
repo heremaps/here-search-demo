@@ -415,4 +415,4 @@ class OneBoxMapCI(OneBoxMap):
     as_url = 'http://ci.opensearch.dev.api.here.com/v1/autosuggest'
     ds_url = 'http://ci.opensearch.dev.api.here.com/v1/discover'
     default_autosuggest_query_params = {'show': 'details,expandedOntologies'}
-    default_discover_query_params = {'ctrl_options': 'candgen'}
+    default_discover_query_params = {'show': 'ta,ev'}
