@@ -3,7 +3,7 @@ from ipywidgets import HBox, VBox, Text, Button, Output, Layout
 from ipywidgets.widgets.widget import CallbackDispatcher, Widget
 from traitlets import observe
 
-from here_map_widget import GeoJSON, WidgetControl
+from here_map_widget import GeoJSON, WidgetControl, Icon
 from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
 
@@ -242,10 +242,10 @@ class Design(Widget):
 
     @classmethod
     def three(cls,
-            query_text: SubmittableTextBox,
-            map: PositionMap,
-            terms: TermsButtons,
-            out: HBox):
+              query_text: SubmittableTextBox,
+              map: PositionMap,
+              terms: TermsButtons,
+              out: HBox):
         search_box = VBox([query_text, terms, out], layout={'width': "280px"})
         widget_control = WidgetControl(widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=False)
         map.add_control(widget_control)
@@ -364,6 +364,10 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
             else:
                 return None
 
+    @staticmethod
+    def get_image(place_item) -> str:
+        return place_item["media"]["images"]["items"][0]["href"]
+
     def display_result_list(self, resp):
         # https://stackoverflow.com/questions/66704546/why-cannot-i-print-in-jupyter-lab-using-ipywidgets-class
         old_out = self.out.children[0]
@@ -385,6 +389,9 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                 elif item["resultType"] == 'place':
                     address = item['address']['label'].partition(', ')[-1]
                     text.append(f"| | <font size='1px'><sup>{address}</sup></font> |")
+                    if "media" in item:
+                        text.append(f'| | <img src="{OneBoxMap.get_image(item)}" width="32" height="32"/> |')
+
             out.append_display_data(Markdown("\n".join(text)))
         self.out.children = [out]
         old_out.close()

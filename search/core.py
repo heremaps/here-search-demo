@@ -45,6 +45,8 @@ class OneBoxBase:
     default_results_limit = 20
     default_suggestions_limit = 5
     default_terms_limit = 0
+    default_autosuggest_query_params = {'show': 'details,expandedOntologies'}
+    default_discover_query_params = {'show': 'ta'}
     default_headers = {'User-Agent': f'here-search-notebook-{__version__}'}
 
     def __init__(self,
@@ -52,15 +54,20 @@ class OneBoxBase:
                  language: str=None,
                  suggestions_limit: int=None,
                  results_limit: int=None,
-                 terms_limit: int=None):
+                 terms_limit: int=None,
+                 autosuggest_query_params: dict=None,
+                 discover_query_params: dict=None):
         self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="apiKey: ")
         self.language = language
         self.results_limit = results_limit or self.__class__.default_results_limit
         self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
         self.terms_limit = terms_limit or self.__class__.default_terms_limit
+        self.autosuggest_query_params = autosuggest_query_params or OneBoxBase.default_autosuggest_query_params
+        self.discover_query_params = discover_query_params or OneBoxBase.default_discover_query_params
 
     async def autosuggest(self, session: ClientSession,
-                          q: str, latitude: float, longitude: float) -> dict:
+                          q: str, latitude: float, longitude: float,
+                          **params) -> dict:
         """
         Calls HERE Search Autosuggest endpoint
         https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
@@ -71,21 +78,22 @@ class OneBoxBase:
         :param longitude: search center longitude
         :return: a tuple made of the input query text and the response dictionary
         """
-        params = {'q': q,
+        _params = {'q': q,
                   'at': f'{latitude},{longitude}',
                   'limit': self.suggestions_limit,
                   'termsLimit': self.terms_limit,
-                  'apiKey': self.api_key,
-                  'show': 'details'}
+                  'apiKey': self.api_key}
+        _params.update(params)
         language = self.get_language()
         if language:
-            params['lang'] = language
+            _params['lang'] = language
 
-        async with session.get(self.as_url, params=params) as response:
+        async with session.get(self.as_url, params=_params) as response:
             return await response.json(loads=loads)
 
     async def discover(self, session: ClientSession,
-                       q: str, latitude: float, longitude: float) -> dict:
+                       q: str, latitude: float, longitude: float,
+                       **params) -> dict:
         """
         Calls HERE Search Discover endpoint
         https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
@@ -96,15 +104,16 @@ class OneBoxBase:
         :param longitude: search center longitude
         :return: a response dictionary
         """
-        params = {'q': q,
+        _params = {'q': q,
                   'at': f'{latitude},{longitude}',
                   'limit': self.results_limit,
                   'apiKey': self.api_key}
+        _params.update(params)
         language = self.get_language()
         if language:
-            params['lang'] = language
+            _params['lang'] = language
 
-        async with session.get(self.ds_url, params=params) as response:
+        async with session.get(self.ds_url, params=_params) as response:
             return await response.json(loads=loads)
 
     async def handle_key_strokes(self):
@@ -120,7 +129,7 @@ class OneBoxBase:
                     continue
 
                 latitude, longitude = self.get_search_center()
-                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude))
+                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
 
                 self.display_suggestions(autosuggest_resp)
 
@@ -137,7 +146,7 @@ class OneBoxBase:
                     continue
 
                 latitude, longitude = self.get_search_center()
-                discover_resp = await asyncio.ensure_future(self.discover(session, q, latitude, longitude))
+                discover_resp = await asyncio.ensure_future(self.discover(session, q, latitude, longitude, **self.discover_query_params))
 
                 self.display_results(discover_resp)
 
