@@ -119,6 +119,17 @@ class SearchFeatureCollection(GeoJSON):
                                                "coordinates": [longitude, latitude]},
                                            "properties": {"title": item["title"],
                                                           "categories": categories}})
+            if "mapView" in item:
+                collection["features"].append({"type": "Feature",
+                                               "geometry": {
+                                                    "type": "Polygon",
+                                                    "coordinates":    [
+                                                       [ [item["mapView"]["west"], item["mapView"]["south"]],
+                                                         [item["mapView"]["east"], item["mapView"]["south"]],
+                                                         [item["mapView"]["east"], item["mapView"]["north"]],
+                                                         [item["mapView"]["west"], item["mapView"]["north"]],
+                                                         [item["mapView"]["west"], item["mapView"]["south"]] ]
+                                                   ]}})
         if latitudes:
             south, west, north, east = min(latitudes), min(longitudes), max(latitudes), max(longitudes)
             collection["bbox"] = [south, west, north, east]
@@ -275,19 +286,19 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                  **kwargs):
 
         SubmittableTextBox.__init__(self,
-                                    layout=kwargs.pop('layout', OneBoxMap.default_search_box_layout),
-                                    placeholder=kwargs.pop('placeholder', OneBoxMap.default_placeholder),
+                                    layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
+                                    placeholder=kwargs.pop('placeholder', self.__class__.default_placeholder),
                                     **kwargs)
 
         OneBoxBase.__init__(self,
                             language=language,
                             api_key=api_key,
-                            results_limit=results_limit or OneBoxMap.default_results_limit,
-                            suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
-                            terms_limit=terms_limit or OneBoxMap.default_terms_limit)
+                            results_limit=results_limit or self.__class__.default_results_limit,
+                            suggestions_limit=suggestions_limit or self.__class__.default_suggestions_limit,
+                            terms_limit=terms_limit or self.__class__.default_terms_limit)
 
         self.layer = None
-        self.query_terms = TermsButtons(OneBoxMap.default_terms_limit)
+        self.query_terms = TermsButtons(self.__class__.default_terms_limit)
         self.query_terms.on_click(self.__get_terms_buttons_handler())
         self.map = PositionMap(api_key=self.api_key, center=[latitude, longitude])
         self.out_layout = {'display': 'flex', 'width': '276px', 'justify_content': 'flex-start'}
@@ -389,7 +400,7 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                 elif item["resultType"] == 'place':
                     address = item['address']['label'].partition(', ')[-1]
                     text.append(f"| | <font size='1px'><sup>{address}</sup></font> |")
-                    if "media" in item:
+                    if self.output_format == "images" and "media" in item:
                         text.append(f'| | <img src="{OneBoxMap.get_image(item)}" width="32" height="32"/> |')
 
             out.append_display_data(Markdown("\n".join(text)))
@@ -399,3 +410,9 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
     def run(self):
         Idisplay(self.design)
         OneBoxBase.run(self)
+
+class OneBoxMapCI(OneBoxMap):
+    as_url = 'http://ci.opensearch.dev.api.here.com/v1/autosuggest'
+    ds_url = 'http://ci.opensearch.dev.api.here.com/v1/discover'
+    default_autosuggest_query_params = {'show': 'details,expandedOntologies'}
+    default_discover_query_params = {'ctrl_options': 'candgen'}

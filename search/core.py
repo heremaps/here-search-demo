@@ -57,13 +57,13 @@ class OneBoxBase:
                  terms_limit: int=None,
                  autosuggest_query_params: dict=None,
                  discover_query_params: dict=None):
-        self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="apiKey: ")
+        self.api_key = api_key or os.environ.get('API_KEY')
         self.language = language
         self.results_limit = results_limit or self.__class__.default_results_limit
         self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
         self.terms_limit = terms_limit or self.__class__.default_terms_limit
-        self.autosuggest_query_params = autosuggest_query_params or OneBoxBase.default_autosuggest_query_params
-        self.discover_query_params = discover_query_params or OneBoxBase.default_discover_query_params
+        self.autosuggest_query_params = autosuggest_query_params or self.__class__.default_autosuggest_query_params
+        self.discover_query_params = discover_query_params or self.__class__.default_discover_query_params
 
     async def autosuggest(self, session: ClientSession,
                           q: str, latitude: float, longitude: float,
@@ -81,14 +81,15 @@ class OneBoxBase:
         _params = {'q': q,
                   'at': f'{latitude},{longitude}',
                   'limit': self.suggestions_limit,
-                  'termsLimit': self.terms_limit,
-                  'apiKey': self.api_key}
+                  'termsLimit': self.terms_limit}
         _params.update(params)
         language = self.get_language()
         if language:
             _params['lang'] = language
+        if self.api_key:
+            _params['apiKey'] = self.api_key
 
-        async with session.get(self.as_url, params=_params) as response:
+        async with session.get(self.__class__.as_url, params=_params) as response:
             return await response.json(loads=loads)
 
     async def discover(self, session: ClientSession,
@@ -106,15 +107,20 @@ class OneBoxBase:
         """
         _params = {'q': q,
                   'at': f'{latitude},{longitude}',
-                  'limit': self.results_limit,
-                  'apiKey': self.api_key}
+                  'limit': self.results_limit}
         _params.update(params)
         language = self.get_language()
         if language:
             _params['lang'] = language
+        if self.api_key:
+            _params['apiKey'] = self.api_key
 
-        async with session.get(self.ds_url, params=_params) as response:
-            return await response.json(loads=loads)
+
+        async with session.get(self.__class__.ds_url, params=_params) as response:
+            result = await response.json(loads=loads)
+            result["_url"] = self.__class__.ds_url
+            result["_params"] =_params
+            return result
 
     async def handle_key_strokes(self):
         """
