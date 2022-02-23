@@ -38,7 +38,12 @@ class OneBoxConsole(OneBoxBase):
     def get_search_center(self) -> Tuple[float, float]:
         return self.center
 
-    def display_results(self, response: dict) -> None:
+    def handle_result_list(self, response: dict) -> None:
+        """
+        Typically called by OneBoxBase.handle_text_submissions()
+        :param response:
+        :return: None
+        """
         out = [f"{'->' :<100s}", ' '*100]
         i = -1
         for i, item in enumerate(response["items"]):
@@ -48,10 +53,13 @@ class OneBoxConsole(OneBoxBase):
         out.append(f"\r\033[{self.results_limit+2}A")
         print('\n'.join(out), end="")
 
-    def display_suggestions(self, response: dict) -> None:
+    def display_terms(self, response: dict):
         self.terms = [term['term'].strip() for term in response["queryTerms"]]
         terms_line = f'| {" | ".join(self.terms)} |'
-        out = [f'{terms_line: <100s}']
+        print(f'{terms_line: <100s}')
+
+    def display_suggestions(self, response: dict):
+        out = []
         i = -1
         for i, item in enumerate(response["items"]):
             out.append(f'{item["title"]: <100s}')
@@ -59,6 +67,15 @@ class OneBoxConsole(OneBoxBase):
             out.append(' '*100)
         out.append(f"\r\033[{self.results_limit+2}A")
         print('\n'.join(out), end="")
+
+    def handle_suggestion_list(self, response: dict) -> None:
+        """
+        Typically called by OneBoxBase.handle_key_strokes()
+        :param response:
+        :return: None
+        """
+        self.display_terms(response)
+        self.display_suggestions(response)
 
     def wait_for_new_key_stroke(self) -> Awaitable:
         return self.key_queue.get()

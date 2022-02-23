@@ -1,5 +1,5 @@
 from IPython.display import display as Idisplay, JSON as IJSON, Markdown, clear_output, display_markdown
-from ipywidgets import HBox, VBox, Text, Button, Output, Layout
+from ipywidgets import HBox, VBox, Text, Button, Output, Layout, SelectMultiple, Label, HTML
 from ipywidgets.widgets.widget import CallbackDispatcher, Widget
 from traitlets import observe
 
@@ -9,8 +9,9 @@ from here_map_widget import ServiceNames, MapTileUrl
 
 from search.core import OneBoxBase, __version__, debounce
 
-from typing import Callable, Tuple, List, Awaitable
+from typing import Callable, Tuple, List, Awaitable, ClassVar
 from functools import reduce
+from dataclasses import dataclass
 import asyncio
 
 
@@ -105,12 +106,18 @@ class SearchFeatureCollection(GeoJSON):
     def __init__(self, results: dict):
         collection = {"type": "FeatureCollection", "features": []}
         latitudes, longitudes = [], []
+        south, west, north, east = None, None, None, None
         for item in results["items"]:
             if "position" not in item:
                 continue
             longitude, latitude = item["position"]["lng"], item["position"]["lat"]
             latitudes.append(latitude)
             longitudes.append(longitude)
+            if "mapView" in item:
+                latitudes.append(item["mapView"]["north"])
+                latitudes.append(item["mapView"]["south"])
+                longitudes.append(item["mapView"]["west"])
+                longitudes.append(item["mapView"]["east"])
             categories = [c["name"] for c in item["categories"]
                           if c.get("primary")][0] if "categories" in item else None
             collection["features"].append({"type": "Feature",
@@ -119,11 +126,11 @@ class SearchFeatureCollection(GeoJSON):
                                                "coordinates": [longitude, latitude]},
                                            "properties": {"title": item["title"],
                                                           "categories": categories}})
-            if "mapView" in item:
+            if False and "mapView" in item:
                 collection["features"].append({"type": "Feature",
                                                "geometry": {
-                                                    "type": "Polygon",
-                                                    "coordinates":    [
+                                                   "type": "Polygon",
+                                                   "coordinates":    [
                                                        [ [item["mapView"]["west"], item["mapView"]["south"]],
                                                          [item["mapView"]["east"], item["mapView"]["south"]],
                                                          [item["mapView"]["east"], item["mapView"]["north"]],
@@ -135,7 +142,7 @@ class SearchFeatureCollection(GeoJSON):
             collection["bbox"] = [south, west, north, east]
             height = north-south
             width = east-west
-            self.bbox = (south-height/6, north+height/6, east+width/6, west-width/6)
+            self.bbox = (south-height/8, north+height/8, east+width/8, west-width/8)
             # [33.65, 49.46, 175.41, -109.68]
         else:
             self.bbox = None
@@ -147,7 +154,7 @@ class SearchFeatureCollection(GeoJSON):
                              "lineWidth": 1,
                              "fillColor": "blue",
                              "fillOpacity": 0.7,
-                             "radius": 5}
+                             "radius": 7}
                          )
 
 
@@ -155,6 +162,7 @@ class TermsButtons(HBox):
     """A HBox containing a list of Buttons"""
     default_layout = {'width': '280px'}
     default_buttons_count = 3
+    css_displayed = False
 
     def __init__(self, buttons_count: int=None, layout: dict=None):
         if not isinstance(buttons_count, int):
@@ -166,6 +174,10 @@ class TermsButtons(HBox):
             button = Button(layout=box_layout)
             buttons.append(button)
         HBox.__init__(self, buttons, layout=layout or TermsButtons.default_layout)
+        if not TermsButtons.css_displayed:
+            TermsButtons.css_displayed = True
+            Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
+        self.add_class('term-button')
 
     def on_click(self, handler):
         for button in self.children:
@@ -229,6 +241,123 @@ class PositionMap(Map):
         self.observe(observe)
 
 
+@dataclass
+class SearchResultList(VBox):
+    widget: Widget
+    result_queue: asyncio.Queue=None
+    layout: dict=None
+
+    default_layout = {'display': 'flex', 'width': '276px', 'justify_content': 'flex-start'}
+
+    def __post_init__(self):
+        if self.layout is None:
+            self.layout = SearchResultList.default_layout
+        VBox.__init__(self, [self.widget])
+        self.futures = []
+
+    @classmethod
+    def get_primary_category(cls, place_item):
+        primary_category = [c for c in place_item.get("categories", []) if c.get("primary")][0]
+        category_id = primary_category["id"]
+        category_name = primary_category["name"]
+        return category_id, category_name
+
+    @classmethod
+    def get_www(cls, place_item, category_id) -> str:
+        for contact in place_item["contacts"]:
+            for www in contact.get("www", []):
+                for category in www.get("categories", []):
+                    if category_id == category["id"]:
+                        return www["value"]
+        else:
+            for contact in place_item["contacts"]:
+                for www in contact.get("www", []):
+                    return www["value"]
+            else:
+                return None
+
+    @classmethod
+    def get_image(cls, place_item) -> str:
+        return place_item["media"]["images"]["items"][0]["href"]
+
+    def _display(self, resp: dict) -> Widget:
+        out = Output(layout=self.layout)
+        text = ['| | |', '|:-|:-|']
+        for i, item in enumerate(resp["items"]):
+            if "contacts" in item:
+                category_id, category_name = self.get_primary_category(item)
+                www = self.get_www(item, category_id)
+                title = f"**[{item['title']}]({www})**" if www else f"**{item['title']}**"
+            else:
+                title = f"**{item['title']}**"
+            text.append(f"| <font size='1px'>{i: <2}</font> | <font size='1px'>{title}</font> |")
+            if item["resultType"] in ("categoryQuery", "chainQuery"):
+                text.append(f"| | <font size='1px'><sup>{item['resultType']}</sup></font> |")
+            elif item["resultType"] == 'place':
+                address = item['address']['label'].partition(', ')[-1]
+                text.append(f"| | <font size='1px'><sup>{address}</sup></font> |")
+                if "media" in item and "images" in item["media"]:
+                    text.append(f'| | <img src="{item["media"]["images"]["items"][0]["href"]}" width="32" height="32"/> |')
+        out.append_display_data(Markdown("\n".join(text)))
+        return out
+
+    def display(self, resp: dict):
+        # https://stackoverflow.com/questions/66704546/why-cannot-i-print-in-jupyter-lab-using-ipywidgets-class
+        old_out = self.children[0]
+        out = self._display(resp)
+        self.children = [out]
+        old_out.close()
+
+class SearchResultJson(SearchResultList):
+    def _display(self, resp: dict) -> Widget:
+        out = Output(layout=self.layout)
+        out.append_display_data(IJSON(data=resp, expanded=False, root='response'))
+        return out
+
+class SearchResultSelectMultiple(SearchResultList):
+    def _display(self, resp: dict) -> Widget:
+        return SelectMultiple(options=[item["title"] for item in resp["items"]],
+                              rows = len(resp["items"]),
+                              disabled=False)
+
+class SearchResultButton(HBox):
+    default_layout = {'display': 'flex', 'width': '270px', 'justify_content': 'flex-start'}
+
+    def __init__(self, item: dict, rank: int, **kvargs):
+        #self.item = item
+        label = Label(value=f'{rank+1: <2}', layout={'width': '20px'})
+        icon = 'search' if item["resultType"] in ("categoryQuery", "chainQuery") else ''
+        self.button = Button(description=item["title"],
+                             icon=icon,
+                             layout=kvargs.pop('layout', self.__class__.default_layout))
+        self.button.item = item
+        HBox.__init__(self, [label, self.button], **kvargs)
+        self.add_class('result-button')
+
+
+class SearchResultButtons(SearchResultList):
+    css_displayed = False
+    def __post_init__(self):
+        if not SearchResultButtons.css_displayed:
+            Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10px; }</style>"))
+            SearchResultButtons.css_displayed = True
+        super().__post_init__()
+
+    def _display(self, resp: dict) -> Widget:
+        out = []
+        self.tasks = []
+        for rank, item in enumerate(resp["items"]):
+            search_result = SearchResultButton(item=item, rank=rank)
+            future = asyncio.Future()
+            def getvalue(button: Button):
+                value = button.item
+                self.result_queue.put_nowait(value)
+            search_result.button.on_click(getvalue)
+            out.append(search_result)
+        return VBox(out)
+
+
+
 class Design(Widget):
     @classmethod
     def one(cls,
@@ -272,6 +401,7 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
     default_search_box_layout = {'width': '240px'}
     default_placeholder = "free text"
     default_output_format = 'text'
+    default_resultlist_class = SearchResultList
 
     def __init__(self,
                  language: str,
@@ -281,7 +411,7 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                  suggestions_limit: int=None,
                  terms_limit: int=None,
                  design: Callable=None,
-                 output_format: str=None,
+                 resultlist_class: ClassVar=None,
                  autosuggest_automatic_recenter: bool=False,
                  **kwargs):
 
@@ -297,14 +427,16 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                             suggestions_limit=suggestions_limit or self.__class__.default_suggestions_limit,
                             terms_limit=terms_limit or self.__class__.default_terms_limit)
 
-        self.layer = None
-        self.query_terms = TermsButtons(self.__class__.default_terms_limit)
-        self.query_terms.on_click(self.__get_terms_buttons_handler())
-        self.map = PositionMap(api_key=self.api_key, center=[latitude, longitude])
-        self.out_layout = {'display': 'flex', 'width': '276px', 'justify_content': 'flex-start'}
-        self.out = VBox([Output(layout=self.out_layout)])
-        self.design = (design or Design.two)(self, self.map, self.query_terms, self.out)
-        self.output_format = output_format or OneBoxMap.default_output_format
+        self.result_points: SearchFeatureCollection = None
+
+        self.query_terms_w = TermsButtons(self.__class__.default_terms_limit)
+        self.query_terms_w.on_click(self.__get_terms_buttons_handler())
+
+        self.map_w = PositionMap(api_key=self.api_key, center=[latitude, longitude])
+
+        self.result_list_w = (resultlist_class or self.__class__.default_resultlist_class)(widget=Output(), result_queue=self.result_queue)
+
+        self.app_design_w = (design or Design.two)(self, self.map_w, self.query_terms_w, self.result_list_w)
 
     def __get_terms_buttons_handler(self):
         def on_terms_click_handler(button):
@@ -317,99 +449,67 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
         return on_terms_click_handler
 
     def get_search_center(self):
-        return self.map.center
+        return self.map_w.center
 
-    def display_terms(self, autosuggest_resp):
-        self.query_terms.set([term['term'] for term in autosuggest_resp.get('queryTerms', [])])
+    def display_terms(self, autosuggest_resp: dict):
+        self.query_terms_w.set([term['term'] for term in autosuggest_resp.get('queryTerms', [])])
 
-    def display_suggestions(self, autosuggest_resp):
-        self.display_result_list(autosuggest_resp)
+    def display_suggestions(self, autosuggest_resp: dict) -> None:
+        self.result_list_w.display(autosuggest_resp)
 
         search_feature = SearchFeatureCollection(autosuggest_resp)
         if search_feature.bbox:
-            if self.layer:
-                self.map.remove_layer(self.layer)
-            self.layer = search_feature
-            self.map.add_layer(self.layer)
+            if self.result_points:
+                self.map_w.remove_layer(self.result_points)
+            self.result_points = search_feature
+            self.map_w.add_layer(self.result_points)
         #self.display_result_map(autosuggest_resp, update_search_center=False)
 
+    def handle_suggestion_list(self, autosuggest_resp):
+        """
+        Typically called by OneBoxBase.handle_key_strokes()
+        :param autosuggest_resp:
+        :return: None
+        """
+        self.display_suggestions(autosuggest_resp)
         self.display_terms(autosuggest_resp)
 
-    def display_results(self, discover_resp):
-        self.display_result_list(discover_resp)
+    def handle_result_list(self, discover_resp):
+        """
+        Typically called by OneBoxBase.handle_text_submissions()
+        :param autosuggest_resp:
+        :return: None
+        """
+        self.result_list_w.display(discover_resp)
         self.display_result_map(discover_resp, update_search_center=True)
         self.clear_query_text()
 
+    def handle_result_details(self, lookup_resp: dict):
+        """
+        Typically called by OneBoxBase.handle_result_selections()
+        :param autosuggest_resp:
+        :return: None
+        """
+        self.display_result_map({"items": [lookup_resp]}, update_search_center=True)
+
     def clear_query_text(self):
         self.text.value = ''
-        self.query_terms.set([])
+        self.query_terms_w.set([])
 
     def display_result_map(self, resp, update_search_center=False):
-        if self.layer:
-            self.map.remove_layer(self.layer)
-        self.layer = SearchFeatureCollection(resp)
-        self.map.add_layer(self.layer)
-        if self.layer.bbox:
-            self.map.bounds = self.layer.bbox
+        if self.result_points:
+            self.map_w.remove_layer(self.result_points)
+        self.result_points = SearchFeatureCollection(resp)
+        self.map_w.add_layer(self.result_points)
+        if self.result_points.bbox:
+            self.map_w.bounds = self.result_points.bbox
             if len(resp["items"]) == 1:
-                self.map.zoom = OneBoxMap.minimum_zoom_level
-
-    @staticmethod
-    def get_primary_category(place_item):
-        primary_category = [c for c in place_item.get("categories", []) if c.get("primary")][0]
-        category_id = primary_category["id"]
-        category_name = primary_category["name"]
-        return category_id, category_name
-
-    @staticmethod
-    def get_www(place_item, category_id) -> str:
-        for contact in place_item["contacts"]:
-            for www in contact.get("www", []):
-                for category in www.get("categories", []):
-                    if category_id == category["id"]:
-                        return www["value"]
-        else:
-            for contact in place_item["contacts"]:
-                for www in contact.get("www", []):
-                    return www["value"]
-            else:
-                return None
-
-    @staticmethod
-    def get_image(place_item) -> str:
-        return place_item["media"]["images"]["items"][0]["href"]
-
-    def display_result_list(self, resp):
-        # https://stackoverflow.com/questions/66704546/why-cannot-i-print-in-jupyter-lab-using-ipywidgets-class
-        old_out = self.out.children[0]
-        out = Output(layout=self.out_layout)
-        if self.output_format == 'json':
-            out.append_display_data(IJSON(data=resp, expanded=False, root='response'))
-        else:
-            text = ['| | |', '|:-|:-|']
-            for i, item in enumerate(resp["items"]):
-                if "contacts" in item:
-                    category_id, category_name = OneBoxMap.get_primary_category(item)
-                    www = OneBoxMap.get_www(item, category_id)
-                    title = f"**[{item['title']}]({www})**" if www else f"**{item['title']}**"
-                else:
-                    title = f"**{item['title']}**"
-                text.append(f"| <font size='1px'>{i: <2}</font> | <font size='1px'>{title}</font> |")
-                if item["resultType"] in ("categoryQuery", "chainQuery"):
-                    text.append(f"| | <font size='1px'><sup>{item['resultType']}</sup></font> |")
-                elif item["resultType"] == 'place':
-                    address = item['address']['label'].partition(', ')[-1]
-                    text.append(f"| | <font size='1px'><sup>{address}</sup></font> |")
-                    if self.output_format == "images" and "media" in item:
-                        text.append(f'| | <img src="{OneBoxMap.get_image(item)}" width="32" height="32"/> |')
-
-            out.append_display_data(Markdown("\n".join(text)))
-        self.out.children = [out]
-        old_out.close()
+                self.map_w.zoom = OneBoxMap.minimum_zoom_level
 
     def run(self):
-        Idisplay(self.design)
+        Idisplay(self.app_design_w)
         OneBoxBase.run(self)
+
 
 class OneBoxMapCI(OneBoxMap):
     as_url = 'http://ci.opensearch.dev.api.here.com/v1/autosuggest'

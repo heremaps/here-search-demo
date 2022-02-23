@@ -58,5 +58,6 @@ The recipe below runs on a macos Monterey machine.
 - [HERE Geocoding & Search](https://developer.here.com/documentation/geocoding-search-api/dev_guide/index.html)
 - [here_map_widget](https://here-map-widget-for-jupyter.readthedocs.io/en/latest/index.html)
 - [ipywidgets](https://ipywidgets.readthedocs.io/en/latest/index.html)
+- [asyncio](https://bbc.github.io/cloudfit-public-docs/asyncio/asyncio-part-1)
 - [Effective Python environment](https://realpython.com/effective-python-environment/)
 - [Launch your OSS](https://opensource.guide/starting-a-project/#launching-your-own-open-source-project)
