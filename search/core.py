@@ -245,15 +245,7 @@ class OneBoxBase:
     def handle_result_details(self, response: dict) -> None:
         raise NotImplementedError()
 
-    async def main(self):
-        self.result_queue = asyncio.Queue()
-        t1 = asyncio.create_task(self.handle_key_strokes())
-        t2 = asyncio.create_task(self.handle_text_submissions())
-        t3 = asyncio.create_task(self.handle_result_selections())
-        await asyncio.gather(t1, t2, t3)
-
     def run(self):
-        #asyncio.run(self.main())
         asyncio.ensure_future(self.handle_key_strokes())
         asyncio.ensure_future(self.handle_text_submissions())
         asyncio.ensure_future(self.handle_result_selections())
