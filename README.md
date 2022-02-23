@@ -2,7 +2,7 @@
 
 A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/autosuggest` and `/discover`.
 
-![searching for "statue of liberty"](screenshot.png)
+![searching for restaurants](screenshot.png)
 
     
 <code>API_KEY="[your api key](https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start-dhc.html#get-an-api-key)" here-search-notebook</code>
