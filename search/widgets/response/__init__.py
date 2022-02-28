@@ -1,5 +1,5 @@
 from IPython.display import display as Idisplay, JSON as IJSON, Markdown
-from ipywidgets import Widget, HBox, VBox, Button, Output, SelectMultiple, Label, HTML
+from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML
 
 from here_map_widget import GeoJSON
 from here_map_widget import Platform, MapTile, TileLayer, Map
@@ -123,6 +123,22 @@ class SearchResultButtons(SearchResultList):
             search_result.button.on_click(getvalue)
             out.append(search_result)
         return VBox(out)
+
+class SearchResultRadioButtons(SearchResultList):
+    css_displayed = False
+    def __post_init__(self):
+        if not SearchResultButtons.css_displayed:
+            Idisplay(HTML("<style>.result-radio label { font-size: 10px; }</style>"))
+            SearchResultButtons.css_displayed = True
+        super().__post_init__()
+
+    def _display(self, resp: dict) -> Widget:
+        buttons = RadioButtons(options=[item["title"] for item in resp["items"]],
+                               disabled=False)
+        buttons.add_class('result-radio')
+        # TODO: create a class derived from RadioButtons, able to host an item (A SearchResultRadioButton class)
+        return buttons
+
 
 class SearchFeatureCollection(GeoJSON):
     bbox: Tuple[float, float, float, float]

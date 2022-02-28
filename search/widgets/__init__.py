@@ -3,7 +3,7 @@ from ipywidgets import Output
 
 from search.core import OneBoxBase
 from .query import SubmittableTextBox, TermsButtons
-from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson
+from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson, SearchResultRadioButtons
 from .design import Design
 
 from typing import Callable, ClassVar
