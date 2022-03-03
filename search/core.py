@@ -2,7 +2,7 @@ from ujson import loads
 from aiohttp import ClientSession
 
 from getpass import getpass
-from typing import Tuple, Awaitable
+from typing import Tuple, Awaitable, Callable
 import os
 import asyncio
 
@@ -177,13 +177,12 @@ class OneBoxBase:
                 q = await self.wait_for_new_key_stroke()
                 if q is None:
                     break
-                if not q:
-                    continue
-
-                latitude, longitude = self.get_search_center()
-                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
-
-                self.handle_suggestion_list(autosuggest_resp)
+                if q:
+                    latitude, longitude = self.get_search_center()
+                    autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
+                    self.handle_suggestion_list(autosuggest_resp)
+                else:
+                    self.handle_empty_text_submission(autosuggest_resp)
 
     async def handle_text_submissions(self):
         """
@@ -239,13 +238,20 @@ class OneBoxBase:
     def handle_suggestion_list(self, response: dict) -> None:
         raise NotImplementedError()
 
+    def handle_empty_text_submission(self) -> None:
+        raise NotImplementedError()
+
     def handle_result_list(self, response: dict) -> None:
         raise NotImplementedError()
 
     def handle_result_details(self, response: dict) -> None:
         raise NotImplementedError()
 
-    def run(self):
-        asyncio.ensure_future(self.handle_key_strokes())
-        asyncio.ensure_future(self.handle_text_submissions())
-        asyncio.ensure_future(self.handle_result_selections())
+    def run(self, 
+            handle_key_strokes: Callable=None, 
+            handle_text_submissions: Callable=None, 
+            handle_result_selections: Callable=None):
+        asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
+        asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
+        asyncio.ensure_future((handle_result_selections or self.handle_result_selections)())
+

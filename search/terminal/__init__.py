@@ -77,6 +77,14 @@ class OneBoxConsole(OneBoxBase):
         self.display_terms(response)
         self.display_suggestions(response)
 
+    def handle_empty_text_submission(self) -> None:
+        """
+        Typically called by OneBoxBase.handle_key_strokes()
+        :param autosuggest_resp:
+        :return: None
+        """
+        self.display_terms({"queryTerms": []})
+
     def wait_for_new_key_stroke(self) -> Awaitable:
         return self.key_queue.get()
 
