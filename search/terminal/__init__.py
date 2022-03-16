@@ -12,17 +12,17 @@ class OneBoxConsole(OneBoxBase):
     default_results_limit = 5
 
     def __init__(self,
-                 language: str,latitude: float, longitude: float,
+                 language: str=None,
+                 latitude: float=None, longitude: float=None,
                  api_key: str=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  term_keys: bytes=None):
-        self.center = latitude, longitude
         self.term_keys = array('B', term_keys)
         self.key_queue = None
         self.line_queue = None
         self.reset()
-        super().__init__(api_key, language, results_limit=results_limit, suggestions_limit=suggestions_limit, terms_limit=len(term_keys))
+        super().__init__(language, latitude, longitude, api_key, results_limit=results_limit, suggestions_limit=suggestions_limit, terms_limit=len(term_keys))
 
     def reset(self):
         # TODO: this function needs to be awaited... Check a better way to have the b.run() reantrant
@@ -34,9 +34,6 @@ class OneBoxConsole(OneBoxBase):
             pass
         self.keys = array('B')
         self.terms = []
-
-    def get_search_center(self) -> Tuple[float, float]:
-        return self.center
 
     def handle_result_list(self, response: dict) -> None:
         """

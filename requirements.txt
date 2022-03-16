@@ -2,6 +2,7 @@ jupyterlab
 ipykernel
 ipywidgets
 aiohttp
+nest_asyncio
 ujson
 traitlets
 here-map-widget-for-jupyter

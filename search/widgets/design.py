@@ -1,8 +1,8 @@
 from ipywidgets import HBox, VBox, Widget
 from here_map_widget import WidgetControl
 
-from ..query import SubmittableTextBox, TermsButtons
-from ..response import PositionMap
+from .query import SubmittableTextBox, TermsButtons
+from .response import PositionMap
 
 
 class Design(Widget):

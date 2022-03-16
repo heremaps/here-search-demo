@@ -1,6 +1,8 @@
 from ujson import loads
 from aiohttp import ClientSession
 
+from .util import get_lat_lon
+
 from getpass import getpass
 from typing import Tuple, Awaitable, Callable
 import os
@@ -38,30 +40,35 @@ def debounce(milliseconds):
         return debounced
     return decorator
 
-
 class OneBoxBase:
     as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
     ds_url = 'https://discover.search.hereapi.com/v1/discover'
     l_url = 'https://lookup.search.hereapi.com/v1/lookup'
+    rgc_url = 'https://revgeocode.search.hereapi.com/v1/revgeocode'
+
     default_results_limit = 20
     default_suggestions_limit = 5
     default_terms_limit = 0
     default_autosuggest_query_params = {}
     default_discover_query_params = {}
     default_lookup_query_params = {}
+    default_profile_language = 'en'
     default_headers = {'User-Agent': f'here-search-notebook-{__version__}'}
 
     def __init__(self,
-                 api_key: str=None,
                  language: str=None,
+                 latitude: float=None, longitude: float=None,
+                 api_key: str=None,
                  suggestions_limit: int=None,
                  results_limit: int=None,
                  terms_limit: int=None,
                  autosuggest_query_params: dict=None,
                  discover_query_params: dict=None,
                  lookup_query_params: dict=None):
-        self.api_key = api_key or os.environ.get('API_KEY')
+        #self.latitude, self.longitude = (latitude, longitude) if latitude else get_lat_lon()
         self.language = language
+        self.latitude, self.longitude = latitude, longitude
+        self.api_key = api_key or os.environ.get('API_KEY')
         self.results_limit = results_limit or self.__class__.default_results_limit
         self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
         self.terms_limit = terms_limit or self.__class__.default_terms_limit
@@ -146,7 +153,7 @@ class OneBoxBase:
             result["_params"] =_params
             return result
 
-    async def lookup(self, session: ClientSession, id: str, **params) -> dict:
+    async def lookup(self, session: ClientSession, id: str, language: str, **params) -> dict:
         """
         Calls HERE Search Lookup for a specific id
         :param session:
@@ -156,7 +163,6 @@ class OneBoxBase:
         """
         _params = {'id': id}
         _params.update(params)
-        language = self.get_language()
         if language:
             _params['lang'] = language
         if self.api_key:
@@ -168,11 +174,49 @@ class OneBoxBase:
             result["_params"] =_params
             return result
 
+    async def reverse_geocode(self, session: ClientSession, latitude: float, longitude: float, language: str, **params) -> dict:
+        """
+        Calls HERE Reverese Geocode for a geo position
+        :param session:
+        :param latitude:
+        :param longitude:
+        :param language:
+        :param params:
+        :return:
+        """
+        _params = {'at': f"{latitude},{longitude}"}
+        _params.update(params)
+        if language:
+            _params['lang'] = language
+        if self.api_key:
+            _params['apiKey'] = self.api_key
+
+        async with session.get(self.__class__.rgc_url, params=_params) as response:
+            result = await response.json(loads=loads)
+            result["_url"] = self.__class__.rgc_url
+            result["_params"] =_params
+            return result
+
     async def handle_key_strokes(self):
         """
         This method is called for each key stroke in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True, headers=OneBoxBase.default_headers) as session:
+            if self.latitude is None:
+                self.latitude, self.longitude = await get_lat_lon(session)
+            # log this to debug
+            if self.language is None:
+                local_addresses = await asyncio.ensure_future(self.reverse_geocode(
+                    session,
+                    latitude=self.latitude, longitude=self.longitude,
+                    language=None))
+                #log local address to debug
+                if local_addresses and "items" in local_addresses and len(local_addresses["items"]) > 0:
+                    address_details = await asyncio.ensure_future(self.lookup(session, id=local_addresses["items"][0]["id"], language=None))
+                    self.language = address_details["language"]
+                    # log local language
+                else:
+                    self.language = self.__class__.default_profile_language
             while True:
                 q = await self.wait_for_new_key_stroke()
                 if q is None:
@@ -217,14 +261,32 @@ class OneBoxBase:
                     discover_resp = await asyncio.ensure_future(self.autosuggest_href(session, item["href"]))
                     self.handle_result_list(discover_resp)
                 else:
-                    lookup_resp = await asyncio.ensure_future(self.lookup(session, item["id"], **self.lookup_query_params))
+                    lookup_resp = await asyncio.ensure_future(self.lookup(session, item["id"], language=self.get_language(), **self.lookup_query_params))
                     self.handle_result_details(lookup_resp)
 
     def get_language(self):
         return self.language
 
     def get_search_center(self) -> Tuple[float, float]:
-        raise NotImplementedError()
+        return self.latitude, self.longitude
+
+    async def handle_user_profile_setup(self, **kwargs) -> Awaitable:
+        async with ClientSession(raise_for_status=True) as session:
+            if self.latitude is None:
+                self.latitude, self.longitude = await get_lat_lon(session)
+                # log this to debug
+            if self.language is None:
+                local_addresses = await asyncio.ensure_future(self.reverse_geocode(
+                    session,
+                    latitude=self.latitude, longitude=self.longitude,
+                    language=None))
+                #log local address to debug
+                if local_addresses and "items" in local_addresses and len(local_addresses["items"]) > 0:
+                    address_details = await asyncio.ensure_future(self.lookup(session, id=local_addresses["items"][0]["id"], language=None))
+                    self.language = address_details["language"]
+                    # log local language
+                else:
+                    self.language = self.__class__.default_profile_language
 
     def wait_for_new_key_stroke(self) -> Awaitable:
         raise NotImplementedError()
@@ -238,7 +300,7 @@ class OneBoxBase:
     def handle_suggestion_list(self, response: dict) -> None:
         raise NotImplementedError()
 
-    def handle_empty_text_submission(self) -> None:
+    def handle_empty_text_submission(self, **kwargs) -> None:
         raise NotImplementedError()
 
     def handle_result_list(self, response: dict) -> None:
@@ -246,11 +308,13 @@ class OneBoxBase:
 
     def handle_result_details(self, response: dict) -> None:
         raise NotImplementedError()
-
-    def run(self, 
+    
+    def run(self,
+            handle_user_profile_setup: Callable=None,
             handle_key_strokes: Callable=None, 
             handle_text_submissions: Callable=None, 
             handle_result_selections: Callable=None):
+        asyncio.run((handle_user_profile_setup or self.handle_user_profile_setup)())
         asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
         asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
         asyncio.ensure_future((handle_result_selections or self.handle_result_selections)())

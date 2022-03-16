@@ -4,9 +4,11 @@ from traitlets import observe
 
 from search.core import debounce
 
-from typing import List, Awaitable
+from typing import List, Awaitable, Tuple
 from functools import reduce
 import asyncio
+from dataclasses import dataclass
+from enum import Enum, auto
 
 
 class SubmittableText(Text):
@@ -102,7 +104,6 @@ class TermsButtons(HBox):
     """A HBox containing a list of Buttons"""
     default_layout = {'width': '280px'}
     default_buttons_count = 3
-    css_displayed = False
 
     def __init__(self, buttons_count: int=None, layout: dict=None):
         if not isinstance(buttons_count, int):
@@ -114,9 +115,7 @@ class TermsButtons(HBox):
             button = Button(layout=box_layout)
             buttons.append(button)
         HBox.__init__(self, buttons, layout=layout or TermsButtons.default_layout)
-        if not TermsButtons.css_displayed:
-            TermsButtons.css_displayed = True
-            Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
+        Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
         self.add_class('term-button')
 
     def on_click(self, handler):
@@ -129,3 +128,40 @@ class TermsButtons(HBox):
                 button.description = values[i]
             except IndexError:
                 button.description = ' '
+
+@dataclass
+class QuerySimpleParser:
+    text: str
+    class ConjunctionMode(Enum):
+        no_conjunction = auto()
+        only_conjunction = auto()         # conjunction first or followed by spaces
+        conjunction_last = auto()
+        conjunction_spaces_last = auto()  # conjunction last, followed by spaces
+        conjunction_surrounded = auto()   # conjunction surrounded by tokens
+        incomplete_conjunction = auto()   # tokens followed by first letters of conjunction
+
+    conjunction = {'en': 'near', 'de': 'bei', 'fr': 'pret de'}
+
+    def get_conjunction_mode(self, language: str) -> Tuple[str, ConjunctionMode, str, str]:
+        if not language:
+            return QuerySimpleParser.conjunction_mode.no_conjunction, self.text, ''
+        language = language.split('-')[0].lower()
+        if language not in QuerySimpleParser.conjunction:
+            return QuerySimpleParser.conjunction_mode.no_conjunction, self.text, ''
+        conjunction = QuerySimpleParser.conjunction[language]
+
+        query_parts = self.text.split(' ')
+        query_with_conjunction_head, _, query_with_conjunction_tail = self.text.partition(f' {conjunction} ')
+        if len(query_parts) > 1 and query_parts[-1] == conjunction:
+            conjunction_mode = QuerySimpleParser.ConjunctionMode.conjunction_last
+        elif len(query_parts) > 1 and query_parts[-1] in set(conjunction[:i+1] for i in range(len(conjunction)-1)):
+            conjunction_mode = QuerySimpleParser.ConjunctionMode.incomplete_conjunction
+        elif query_with_conjunction_head.strip() and query_with_conjunction_tail and not query_with_conjunction_tail.strip():
+            conjunction_mode = QuerySimpleParser.ConjunctionMode.conjunction_last
+        elif query_with_conjunction_head.strip() and query_with_conjunction_tail.strip():
+            conjunction_mode = QuerySimpleParser.ConjunctionMode.conjunction_surrounded
+        elif self.text == conjunction or self.text.startswith(f'{conjunction} '):
+            conjunction_mode = QuerySimpleParser.ConjunctionMode.only_conjunction
+        else:
+            conjunction_mode = QuerySimpleParser.ConjunctionMode.no_conjunction
+        return conjunction, conjunction_mode, query_with_conjunction_head, query_with_conjunction_tail

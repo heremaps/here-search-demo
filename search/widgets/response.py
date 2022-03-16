@@ -104,11 +104,8 @@ class SearchResultButton(HBox):
         self.add_class('result-button')
 
 class SearchResultButtons(SearchResultList):
-    css_displayed = False
     def __post_init__(self):
-        if not SearchResultButtons.css_displayed:
-            Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10px; }</style>"))
-            SearchResultButtons.css_displayed = True
+        Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10px; }</style>"))
         super().__post_init__()
 
     def _display(self, resp: dict) -> Widget:

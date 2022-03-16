@@ -61,3 +61,4 @@ The recipe below runs on a macos Monterey machine.
 - [asyncio](https://bbc.github.io/cloudfit-public-docs/asyncio/asyncio-part-1)
 - [Effective Python environment](https://realpython.com/effective-python-environment/)
 - [Launch your OSS](https://opensource.guide/starting-a-project/#launching-your-own-open-source-project)
+- [GeoJS terms of services](https://www.geojs.io/tos/)
