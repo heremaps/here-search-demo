@@ -1,10 +1,11 @@
 from IPython.display import display as Idisplay
 from ipywidgets import Widget, CallbackDispatcher, HBox, VBox, Text, Button, Layout, HTML
+from ipywidgets.widgets.widget import _remove_buffers, __protocol_version__, Comm
 from traitlets import observe
 
-from search.core import debounce
+from ..util import debounce
 
-from typing import List, Awaitable, Tuple
+from typing import List, Awaitable, Tuple, Callable
 from functools import reduce
 import asyncio
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ class SubmittableText(Text):
             return
         self._model_id = self.model_id
         self.comm.on_msg(self.handle_msg)
+        Widget.widgets[self.model_id] = self
 
     def handle_msg(self, msg):
         data = msg['content']['data']
@@ -73,7 +75,7 @@ class SubmittableTextBox(HBox):
         self.text.disabled = False
         self.lens.disabled = False
 
-    def wait_for_new_key_stroke(self) -> Awaitable:
+    def get_key_stroke_future(self) -> Awaitable:
         # This methods allows to control the call to the widget handler outside of the jupyter event loop
         future = asyncio.Future()
         @debounce(200)
@@ -83,7 +85,7 @@ class SubmittableTextBox(HBox):
         self.observe_text(getvalue, 'value')
         return future
 
-    def wait_for_submitted_value(self) -> Awaitable:
+    def get_submitted_value_future(self) -> Awaitable:
         future = asyncio.Future()
         def getvalue(_):
             value = self.text.value
@@ -93,6 +95,7 @@ class SubmittableTextBox(HBox):
         self.on_submit(getvalue)
         self.on_click(getvalue)
         return future
+
 
 class SearchTermsBox(VBox):
     def __init__(self, text: "SubmittableTextBox", terms_buttons: "TermsButtons"):
@@ -105,22 +108,35 @@ class TermsButtons(HBox):
     default_layout = {'width': '280px'}
     default_buttons_count = 3
 
-    def __init__(self, buttons_count: int=None, layout: dict=None):
+    def __init__(self, target_text_box: SubmittableTextBox, buttons_count: int=None, layout: dict=None):
         if not isinstance(buttons_count, int):
             buttons_count = TermsButtons.default_buttons_count
         width = int(100/buttons_count)
         box_layout = Layout(display="flex", justify_content="center", width=f"{width}%", border="solid 1px")
         buttons = []
+        on_click_handler = self.__get_handler(target_text_box)
         for i in range(buttons_count):
             button = Button(layout=box_layout)
+            button.on_click(on_click_handler)
             buttons.append(button)
         HBox.__init__(self, buttons, layout=layout or TermsButtons.default_layout)
         Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
         self.add_class('term-button')
 
-    def on_click(self, handler):
-        for button in self.children:
-            button.on_click(handler)
+
+    def __get_handler(self, target_text_box: SubmittableTextBox) -> Callable:
+        def on_terms_click_handler(button):
+            # replace the last token with the clicked button description and a whitespace
+            if target_text_box.text.value.endswith(' '):
+                target_text_box.text.value = f"{target_text_box.text.value}{button.description.strip()} "
+            else:
+                tokens = target_text_box.text.value.strip().split(' ')
+                if tokens:
+                    head = tokens[:-1]
+                    head.extend([button.description.strip(), ''])
+                    target_text_box.text.value = ' '.join(head)
+            self.set([])
+        return on_terms_click_handler
 
     def set(self, values: list[str]):
         for i, button in enumerate(self.children):

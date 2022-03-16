@@ -11,35 +11,6 @@ import asyncio
 from . import __version__
 
 
-class Timer:
-    def __init__(self, milliseconds, callback):
-        self._timeout = milliseconds
-        self._callback = callback
-
-    async def _job(self):
-        await asyncio.sleep(self._timeout/1000.0)
-        self._callback()
-
-    def start(self):
-        self._task = asyncio.ensure_future(self._job())
-
-    def cancel(self):
-        self._task.cancel()
-
-def debounce(milliseconds):
-    def decorator(fn):
-        timer = None
-        def debounced(*args, **kwargs):
-            nonlocal timer
-            def call_it():
-                fn(*args, **kwargs)
-            if timer is not None:
-                timer.cancel()
-            timer = Timer(milliseconds, call_it)
-            timer.start()
-        return debounced
-    return decorator
-
 class OneBoxBase:
     as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
     ds_url = 'https://discover.search.hereapi.com/v1/discover'
@@ -64,7 +35,8 @@ class OneBoxBase:
                  terms_limit: int=None,
                  autosuggest_query_params: dict=None,
                  discover_query_params: dict=None,
-                 lookup_query_params: dict=None):
+                 lookup_query_params: dict=None,
+                 result_queue: asyncio.Queue=None):
         #self.latitude, self.longitude = (latitude, longitude) if latitude else get_lat_lon()
         self.language = language
         self.latitude, self.longitude = latitude, longitude
@@ -76,7 +48,7 @@ class OneBoxBase:
         self.discover_query_params = discover_query_params or self.__class__.default_discover_query_params
         self.lookup_query_params = lookup_query_params or self.__class__.default_lookup_query_params
 
-        self.result_queue: asyncio.Queue = asyncio.Queue()
+        self.result_queue: asyncio.Queue = result_queue or asyncio.Queue()
 
 
     async def autosuggest(self, session: ClientSession,

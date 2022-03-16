@@ -8,10 +8,12 @@ from .query import SubmittableTextBox, TermsButtons, QuerySimpleParser
 from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson, SearchResultRadioButtons
 from .design import Design
 
-from typing import Callable, ClassVar, Tuple
+from typing import Callable, ClassVar, Tuple, Awaitable
 import asyncio
 
-class OneBoxMap(SubmittableTextBox, OneBoxBase):
+
+class OneBoxMap(OneBoxBase):
+
     default_results_limit = 10
     default_suggestions_limit = 5
     default_terms_limit = 3
@@ -34,11 +36,7 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                  autosuggest_automatic_recenter: bool=False,
                  **kwargs):
 
-        SubmittableTextBox.__init__(self,
-                                    layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
-                                    placeholder=kwargs.pop('placeholder', self.__class__.default_placeholder),
-                                    **kwargs)
-
+        self.result_queue: asyncio.Queue = asyncio.Queue()
         OneBoxBase.__init__(self,
                             language=language,
                             latitude=latitude,
@@ -46,19 +44,27 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                             api_key=api_key,
                             results_limit=results_limit or self.__class__.default_results_limit,
                             suggestions_limit=suggestions_limit or self.__class__.default_suggestions_limit,
-                            terms_limit=terms_limit or self.__class__.default_terms_limit)
+                            terms_limit=terms_limit or self.__class__.default_terms_limit,
+                            result_queue=self.result_queue)
 
+        self.query_box_w = SubmittableTextBox(layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
+                                              placeholder=kwargs.pop('placeholder', self.__class__.default_placeholder),
+                                              **kwargs)
+        self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
         self.result_points_w: SearchFeatureCollection = None
-
-        self.query_terms_w = TermsButtons(self.__class__.default_terms_limit)
-        self.query_terms_w.on_click(self.__get_terms_buttons_handler())
         self.design = design
         self.map_w = None
         self.app_design_w = None
 
         self.result_list_w = (resultlist_class or self.__class__.default_resultlist_class)(widget=Output(), result_queue=self.result_queue)
 
-    def __get_terms_buttons_handler(self):
+    def wait_for_new_key_stroke(self) -> Awaitable:
+        return self.query_box_w.get_key_stroke_future()
+
+    def wait_for_submitted_value(self) -> Awaitable:
+        return self.query_box_w.get_submitted_value_future()
+
+    def __get_terms_buttons_handler(self, query_terms_w: TermsButtons):
         def on_terms_click_handler(button):
             # replace the last token with the clicked button description and a whitespace
             if self.text.value.endswith(' '):
@@ -69,7 +75,7 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
                     head = tokens[:-1]
                     head.extend([button.description.strip(), ''])
                     self.text.value = ' '.join(head)
-            self.query_terms_w.set([])
+            query_terms_w.set([])
         return on_terms_click_handler
 
     def get_search_center(self):
@@ -142,7 +148,7 @@ class OneBoxMap(SubmittableTextBox, OneBoxBase):
     async def __init_map(self):
         await self.handle_user_profile_setup()
         self.map_w = PositionMap(api_key=self.api_key, center=[self.latitude, self.longitude])
-        self.app_design_w = (self.design or self.__class__.default_design)(self, self.map_w, self.query_terms_w, self.result_list_w)
+        self.app_design_w = (self.design or self.__class__.default_design)(self.query_box_w, self.map_w, self.query_terms_w, self.result_list_w)
 
 
     def run(self,
@@ -268,7 +274,7 @@ class OneBoxExt(OneBoxMap):
                         autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
 
                     self.handle_suggestion_list(autosuggest_resp)
-                    if self.text.value.strip().endswith(conjunction):
+                    if self.query_box.text.value.strip().endswith(conjunction):
                         self.query_terms_w.set([])
 
                 else:
