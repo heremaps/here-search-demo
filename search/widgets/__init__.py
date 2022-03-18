@@ -29,8 +29,8 @@ class OneBoxMap(OneBoxBase):
     default_debounce_time = 0
 
     def __init__(self,
+                 user_profile: UserProfile,
                  api: API=None,
-                 user_profile: UserProfile=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
@@ -42,8 +42,8 @@ class OneBoxMap(OneBoxBase):
 
         self.result_queue: asyncio.Queue = asyncio.Queue()
         OneBoxBase.__init__(self,
+                            user_profile,
                             api=api,
-                            user_profile=user_profile,
                             results_limit=results_limit or self.__class__.default_results_limit,
                             suggestions_limit=suggestions_limit or self.__class__.default_suggestions_limit,
                             terms_limit=terms_limit or self.__class__.default_terms_limit,
@@ -170,12 +170,11 @@ class OneBoxMap(OneBoxBase):
                        handle_result_selections or self.handle_result_selections)
 
 
-
-class OneBoxMapCI(OneBoxMap):
-    as_url = 'http://ci.opensearch.dev.api.here.com/v1/autosuggest'
-    ds_url = 'http://ci.opensearch.dev.api.here.com/v1/discover'
-    default_autosuggest_query_params = {'show': 'details,expandedOntologies'}
-    default_discover_query_params = {'show': 'ta,ev'}
+#class OneBoxMapCI(OneBoxMap):
+#    as_url = 'http://ci.opensearch.dev.api.here.com/v1/autosuggest'
+#    ds_url = 'http://ci.opensearch.dev.api.here.com/v1/discover'
+#    default_autosuggest_query_params = {'show': 'details,expandedOntologies'}
+#    default_discover_query_params = {'show': 'ta,ev'}
 
 
 class OneBoxCatNearCat(OneBoxMap):

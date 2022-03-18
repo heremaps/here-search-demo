@@ -27,8 +27,8 @@ class OneBoxBase:
     default_headers = {'User-Agent': f'here-search-notebook-{__version__}'}
 
     def __init__(self,
+                 user_profile: UserProfile,
                  api: API=None,
-                 user_profile: UserProfile=None,
                  suggestions_limit: int=None,
                  results_limit: int=None,
                  terms_limit: int=None,
