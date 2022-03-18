@@ -198,7 +198,7 @@ class OneBoxBase:
                     autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
                     self.handle_suggestion_list(autosuggest_resp)
                 else:
-                    self.handle_empty_text_submission(autosuggest_resp)
+                    self.handle_empty_text_submission()
 
     async def handle_text_submissions(self):
         """

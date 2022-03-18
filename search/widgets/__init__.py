@@ -4,7 +4,7 @@ from aiohttp import ClientSession
 import nest_asyncio
 
 from search.core import OneBoxBase
-from .query import SubmittableTextBox, TermsButtons, QuerySimpleParser
+from .query import SubmittableTextBox, TermsButtons, NearbySimpleParser
 from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson, SearchResultRadioButtons
 from .design import Design
 
@@ -23,6 +23,7 @@ class OneBoxMap(OneBoxBase):
     default_output_format = 'text'
     default_resultlist_class = SearchResultButtons
     default_design = Design.three
+    default_debounce_time = 0
 
     def __init__(self,
                  language: str=None,
@@ -34,6 +35,7 @@ class OneBoxMap(OneBoxBase):
                  design: Callable=None,
                  resultlist_class: ClassVar=None,
                  autosuggest_automatic_recenter: bool=False,
+                 debounce_time: int=None,
                  **kwargs):
 
         self.result_queue: asyncio.Queue = asyncio.Queue()
@@ -47,7 +49,8 @@ class OneBoxMap(OneBoxBase):
                             terms_limit=terms_limit or self.__class__.default_terms_limit,
                             result_queue=self.result_queue)
 
-        self.query_box_w = SubmittableTextBox(layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
+        self.query_box_w = SubmittableTextBox(OneBoxMap.default_debounce_time if debounce_time is None else debounce_time,
+                                              layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
                                               placeholder=kwargs.pop('placeholder', self.__class__.default_placeholder),
                                               **kwargs)
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
@@ -132,7 +135,7 @@ class OneBoxMap(OneBoxBase):
         self.display_result_map({"items": [lookup_resp]}, update_search_center=True)
 
     def clear_query_text(self):
-        self.text.value = ''
+        self.query_box_w.text.value = ''
         self.query_terms_w.set([])
 
     def display_result_map(self, resp, update_search_center=False):
@@ -176,7 +179,7 @@ class OneBoxMapCI(OneBoxMap):
     default_discover_query_params = {'show': 'ta,ev'}
 
 
-class OneBoxExt(OneBoxMap):
+class OneBoxCatNearCat(OneBoxMap):
     default_autosuggest_query_params = {'show': 'ontologyDetails,expandedOntologies'}
 
     def __init__(self,
@@ -193,7 +196,7 @@ class OneBoxExt(OneBoxMap):
 
         super().__init__(language, latitude, longitude, api_key,
                          results_limit, suggestions_limit, terms_limit,
-                         design, resultlist_class, autosuggest_automatic_recenter, **kwargs)
+                         design, resultlist_class, autosuggest_automatic_recenter, debounce_time=0, **kwargs)
         self.find_ontology = None
         self.find_query = None
         self.near_ontology = None
@@ -206,79 +209,63 @@ class OneBoxExt(OneBoxMap):
         params = {"show": 'details,expandedOntologies', "types": "categoryQuery,chainQuery,place,city,country"}
         out = Output()
         async with ClientSession(raise_for_status=True, headers=OneBoxMap.default_headers) as session:
+
+            find_ontology = None
+            get_conjunction_mode = NearbySimpleParser(self.language).conjunction_mode_function()
+
             while True:
                 q = await self.wait_for_new_key_stroke()
                 if q is None:
                     break
-                if q:
+                if q.strip() == '':
+                    self.handle_empty_text_submission()
+                    find_ontology = None
+                    continue
 
-                    latitude, longitude = self.get_search_center()
-                    autosuggest_resp = None
-                    conjunction, conjunction_mode, query_with_conjunction_head, query_with_conjunction_tail = QuerySimpleParser(q).get_conjunction_mode(self.language)
-                    if conjunction_mode == QuerySimpleParser.ConjunctionMode.incomplete_conjunction:
-                        self.find_query = q
-                        autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
-                        if len(autosuggest_resp["items"]) > 0 and autosuggest_resp["items"][0]["resultType"] == "categoryQuery":
-                            self.find_ontology = autosuggest_resp["items"][0]
-                        else:
-                            self.find_ontology = None
-                        self.near_query = None
-                        self.near_ontology = None
-                        autosuggest_resp["queryTerms"] = ([{"term": conjunction}] + autosuggest_resp["queryTerms"])[:OneBoxMap.default_terms_limit]
-                    elif conjunction_mode == QuerySimpleParser.ConjunctionMode.conjunction_surrounded:
-                        if self.find_query is None:
-                            self.find_query = query_with_conjunction_head
-                            find_resp = await asyncio.ensure_future(self.autosuggest(session, query_with_conjunction_head, latitude, longitude, **params))
-                            if len(find_resp["items"]) > 0 and find_resp["items"][0]["resultType"] == "categoryQuery":
-                                self.find_ontology = find_resp["items"][0]
-                            else:
-                                self.find_ontology = None
+                latitude, longitude = self.get_search_center()
+                conjunction_mode, conjunction, query_tail = get_conjunction_mode(q)
+                autosuggest_resp, top_ontology = await self.get_first_category_ontology(session, q, latitude, longitude)
+                if conjunction_mode == NearbySimpleParser.Mode.TOKENS:
+                    find_ontology = top_ontology
+                elif conjunction_mode in (NearbySimpleParser.Mode.TOKENS_SPACES,
+                                          NearbySimpleParser.Mode.TOKENS_CONJUNCTION,
+                                          NearbySimpleParser.Mode.TOKENS_CONJUNCTION_SPACES):
+                    if top_ontology:
+                        find_ontology = top_ontology
+                elif conjunction_mode == NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION:
+                    if top_ontology:
+                        find_ontology = top_ontology
+                    autosuggest_resp["queryTerms"] = ([{"term": conjunction}] + autosuggest_resp["queryTerms"])[:OneBoxMap.default_terms_limit]
 
-                        if self.find_ontology:
-                            near_resp = await asyncio.ensure_future(self.autosuggest(session, query_with_conjunction_tail, latitude, longitude, **params))
-                            if len(near_resp["items"]) > 0 and near_resp["items"][0]["resultType"] == "categoryQuery":
-                                self.near_query = query_with_conjunction_tail
-                                self.near_ontology = near_resp["items"][0]
-                                # Replace the query below with the calls to Location Graph
-                                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
-                                autosuggest_resp["items"] = ([{"title": f"{self.find_ontology['title']} {conjunction} {near_resp['items'][0]['title']}",
-                                                               "id": f"{self.find_ontology['id']}:near:{self.near_ontology['id']}",
-                                                               "resultType": "categoryQuery",
-                                                               "href": f"{self.__class__.ds_url}?at={latitude},{longitude}&lang={self.language}&q={q}",
-                                                               "highlights": {}}] + autosuggest_resp["items"])[:OneBoxMap.default_results_limit]
-                            else:
-                                autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
+                elif conjunction_mode == NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS:
+                    if top_ontology:
+                        find_ontology = top_ontology
+
+                    if find_ontology:
+                        near_resp, near_ontology = await self.get_first_category_ontology(session, query_tail, latitude, longitude)
+                        if near_ontology:
+                            # Replace the query below with the calls to Location Graph
+                            print(f"LG call: {find_ontology['categories']} near {near_ontology['categories']}")
+                            autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
+                            ontology_near_ontology = {"title": f"{find_ontology['title']} {conjunction} {near_ontology['title']}",
+                                                      "id": f"{find_ontology['id']}:near:{near_ontology['id']}",
+                                                      "resultType": "categoryQuery",
+                                                      "href": f"{self.__class__.ds_url}?at={latitude},{longitude}&lang={self.language}&q={q}",
+                                                      "highlights": {}}
+                            autosuggest_resp["items"] = ([ontology_near_ontology] + autosuggest_resp["items"])[:OneBoxMap.default_results_limit]
                             if near_resp["queryTerms"]:
                                 autosuggest_resp["queryTerms"] = ([{"term": near_resp["queryTerms"][0]["term"]}] + autosuggest_resp["queryTerms"])[:OneBoxMap.default_terms_limit]
-                    elif q.endswith(' ') and self.find_ontology and conjunction_mode != QuerySimpleParser.ConjunctionMode.conjunction_spaces_last:
-                        self.find_query = q
-                        autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
-                        if len(autosuggest_resp["items"]) > 0 and autosuggest_resp["items"][0]["resultType"] == "categoryQuery":
-                            self.find_ontology = autosuggest_resp["items"][0]
-                        else:
-                            self.find_ontology = None
-                        self.near_query = None
-                        self.near_ontology = None
-                        autosuggest_resp["queryTerms"] = [{"term": conjunction}]
-                    else:
-                        self.find_query = q
-                        autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
-                        if len(autosuggest_resp["items"]) > 0 and autosuggest_resp["items"][0]["resultType"] == "categoryQuery":
-                            self.find_ontology = autosuggest_resp["items"][0]
-                        else:
-                            self.find_ontology = None
-                        self.near_query = None
-                        self.near_ontology = None
 
-                    if autosuggest_resp is None:
-                        autosuggest_resp = await asyncio.ensure_future(self.autosuggest(session, q, latitude, longitude, **self.autosuggest_query_params))
+                self.handle_suggestion_list(autosuggest_resp)
 
-                    self.handle_suggestion_list(autosuggest_resp)
-                    if self.query_box.text.value.strip().endswith(conjunction):
-                        self.query_terms_w.set([])
-
-                else:
-                    self.handle_empty_text_submission()
+    async def get_first_category_ontology(self, session, query, latitude, longitude):
+        autosuggest_resp = await asyncio.ensure_future(
+            self.autosuggest(session, query, latitude, longitude, **self.autosuggest_query_params))
+        for item in autosuggest_resp["items"]:
+            if item["resultType"] == "categoryQuery" and "relationship" not in item:
+                return autosuggest_resp, item
+        else:
+            return autosuggest_resp, None
 
     def run(self):
         OneBoxMap.run(self, handle_key_strokes=self.handle_key_strokes)

@@ -10,7 +10,8 @@ from functools import reduce
 import asyncio
 from dataclasses import dataclass
 from enum import Enum, auto
-
+from functools import partial
+import re
 
 class SubmittableText(Text):
     """A ipywidgets Text class enhanced with a on_submit() method"""
@@ -49,10 +50,13 @@ class SubmittableTextBox(HBox):
     default_icon = 'fa-search'
     default_button_width = '32px'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, debounce_time: int, *args, **kwargs):
         self.lens = Button(icon=kwargs.pop('icon', SubmittableTextBox.default_icon),
                            layout={'width': SubmittableTextBox.default_button_width})
         self.text = SubmittableText(*args, layout=kwargs.pop('layout', Layout()), **kwargs)
+        self.debounce_time = debounce_time
+        if debounce_time:
+            self.__class__.get_key_stroke_future == self.__get_key_stroke_future_debounce
         super().__init__([self.text, self.lens], **kwargs)
 
     def observe_text(self, *args):
@@ -78,7 +82,15 @@ class SubmittableTextBox(HBox):
     def get_key_stroke_future(self) -> Awaitable:
         # This methods allows to control the call to the widget handler outside of the jupyter event loop
         future = asyncio.Future()
-        @debounce(200)
+        def getvalue(change: dict):
+            future.set_result(change.new)
+            self.unobserve_text(getvalue, 'value')
+        self.observe_text(getvalue, 'value')
+        return future
+
+    def __get_key_stroke_future_debounce(self) -> Awaitable:
+        future = asyncio.Future()
+        @debounce(self.debounce_time)
         def getvalue(change: dict):
             future.set_result(change.new)
             self.unobserve_text(getvalue, 'value')
@@ -114,7 +126,7 @@ class TermsButtons(HBox):
         width = int(100/buttons_count)
         box_layout = Layout(display="flex", justify_content="center", width=f"{width}%", border="solid 1px")
         buttons = []
-        on_click_handler = self.__get_handler(target_text_box)
+        on_click_handler = self.__get_click_handler(target_text_box)
         for i in range(buttons_count):
             button = Button(layout=box_layout)
             button.on_click(on_click_handler)
@@ -124,8 +136,8 @@ class TermsButtons(HBox):
         self.add_class('term-button')
 
 
-    def __get_handler(self, target_text_box: SubmittableTextBox) -> Callable:
-        def on_terms_click_handler(button):
+    def __get_click_handler(self, target_text_box: SubmittableTextBox) -> Callable:
+        def handler(button):
             # replace the last token with the clicked button description and a whitespace
             if target_text_box.text.value.endswith(' '):
                 target_text_box.text.value = f"{target_text_box.text.value}{button.description.strip()} "
@@ -135,8 +147,9 @@ class TermsButtons(HBox):
                     head = tokens[:-1]
                     head.extend([button.description.strip(), ''])
                     target_text_box.text.value = ' '.join(head)
+
             self.set([])
-        return on_terms_click_handler
+        return handler
 
     def set(self, values: list[str]):
         for i, button in enumerate(self.children):
@@ -146,38 +159,115 @@ class TermsButtons(HBox):
                 button.description = ' '
 
 @dataclass
-class QuerySimpleParser:
-    text: str
-    class ConjunctionMode(Enum):
-        no_conjunction = auto()
-        only_conjunction = auto()         # conjunction first or followed by spaces
-        conjunction_last = auto()
-        conjunction_spaces_last = auto()  # conjunction last, followed by spaces
-        conjunction_surrounded = auto()   # conjunction surrounded by tokens
-        incomplete_conjunction = auto()   # tokens followed by first letters of conjunction
+class NearbySimpleParser:
+    language: str
+    class Mode(Enum):
+        TOKENS = auto()
+        TOKENS_SPACES = auto()
+        TOKENS_INCOMPLETE_CONJUNCTION = auto()   # tokens followed by first letters of conjunction
+        CONJUNCTION = auto()         # conjunction first or followed by spaces
+        TOKENS_CONJUNCTION = auto()
+        TOKENS_CONJUNCTION_SPACES = auto()  # conjunction last, followed by spaces
+        TOKENS_CONJUNCTION_TOKENS = auto()   # conjunction surrounded by tokens
 
-    conjunction = {'en': 'near', 'de': 'bei', 'fr': 'pret de'}
+    CONJUNCTIONS = {'cs': ['nedaleko'],
+                    'da': ['nærheden'],
+                    'de': ['bei', 'neben', 'nähe'],
+                    'el': ['κοντά σε'],
+                    'en': ['near', 'nearby', 'close to'],
+                    'es': ['cerca', 'junto'],
+                    'fi': ['lähellä paikkaa'],
+                    'fr': ['près de', 'proche de'],
+                    'it': ['vicino a'],
+                    'no': ['nærheten'],
+                    'pt': ['perto de'],
+                    'ru': ['рядом с'],
+                    'sv': ['nära'],
+                    'th': ['ใกล้กับ'],
+                    'uk': ['біля'],
+                    'vi': ['gần']}
 
-    def get_conjunction_mode(self, language: str) -> Tuple[str, ConjunctionMode, str, str]:
-        if not language:
-            return QuerySimpleParser.conjunction_mode.no_conjunction, self.text, ''
-        language = language.split('-')[0].lower()
-        if language not in QuerySimpleParser.conjunction:
-            return QuerySimpleParser.conjunction_mode.no_conjunction, self.text, ''
-        conjunction = QuerySimpleParser.conjunction[language]
+    CONJUNCTION_PARTS = {}
+    for language, terms in CONJUNCTIONS.items():
+        for term in terms:
+            for i in range(len(term)-1):
+                CONJUNCTION_PARTS.setdefault(language, {}).setdefault(term[:i+1], []).append(term)
 
-        query_parts = self.text.split(' ')
-        query_with_conjunction_head, _, query_with_conjunction_tail = self.text.partition(f' {conjunction} ')
-        if len(query_parts) > 1 and query_parts[-1] == conjunction:
-            conjunction_mode = QuerySimpleParser.ConjunctionMode.conjunction_last
-        elif len(query_parts) > 1 and query_parts[-1] in set(conjunction[:i+1] for i in range(len(conjunction)-1)):
-            conjunction_mode = QuerySimpleParser.ConjunctionMode.incomplete_conjunction
-        elif query_with_conjunction_head.strip() and query_with_conjunction_tail and not query_with_conjunction_tail.strip():
-            conjunction_mode = QuerySimpleParser.ConjunctionMode.conjunction_last
-        elif query_with_conjunction_head.strip() and query_with_conjunction_tail.strip():
-            conjunction_mode = QuerySimpleParser.ConjunctionMode.conjunction_surrounded
-        elif self.text == conjunction or self.text.startswith(f'{conjunction} '):
-            conjunction_mode = QuerySimpleParser.ConjunctionMode.only_conjunction
+    @staticmethod
+    def __no_cunjunction_function(text) -> Tuple[Mode, str, str]:
+        return NearbySimpleParser.conjunction_mode.no_conjunction, ''
+
+    @staticmethod
+    def __get_conjunction_mode(text: str, conjunctions: list, conjunction_parts: dict) -> Tuple[str, Mode, str, str]:
+        """
+        Example of auery parsing:
+        >>> text = '  sep  foo  sep  bar  sep  '
+        >>> for t in [text[:i+1] for i in range(len(text)-1)]:
+        ...   t = t.lstrip()
+        ...   print(f">{t}< {re.sub(' +', ' ', t).split(' ')} {re.sub(' +', ' ', t).partition(' sep ')}")
+        ...
+        >< [''] ('', '', '')                                                                                # TOKENS default
+        >< [''] ('', '', '')                                                                                #   ''
+        >s< ['s'] ('s', '', '')                                                                             #   ''
+        >se< ['se'] ('se', '', '')                                                                          #   ''
+        >sep< ['sep'] ('sep', '', '')                                                                       #   ''
+        >sep < ['sep', ''] ('sep ', '', '')                                                                 # TOKENS_SPACES last_token=='' and middle==''
+        >sep  < ['sep', ''] ('sep ', '', '')                                                                #   ''
+        >sep  f< ['sep', 'f'] ('sep f', '', '')                                                             # TOKENS
+        >sep  fo< ['sep', 'fo'] ('sep fo', '', '')                                                          #   ''
+        >sep  foo< ['sep', 'foo'] ('sep foo', '', '')                                                       #   ''
+        >sep  foo < ['sep', 'foo', ''] ('sep foo ', '', '')                                                 # TOKENS_SPACES
+        >sep  foo  < ['sep', 'foo', ''] ('sep foo ', '', '')                                                #   ''
+        >sep  foo  s< ['sep', 'foo', 's'] ('sep foo s', '', '')                                             # TOKENS_INCOMPLETE_CONJUNCTION middle=='' and last_token in conjunction_parts
+        >sep  foo  se< ['sep', 'foo', 'se'] ('sep foo se', '', '')                                          #   ''
+        >sep  foo  sep< ['sep', 'foo', 'sep'] ('sep foo sep', '', '')                                       # TOKENS_CONJUNCTION len(query_tokens)>2 and query_tokens[-1]==conjunction and middle==''
+        >sep  foo  sep < ['sep', 'foo', 'sep', ''] ('sep foo', ' sep ', '')                                 # TOKENS_CONJUNCTION_SPACES middle!='' and tail==''
+        >sep  foo  sep  < ['sep', 'foo', 'sep', ''] ('sep foo', ' sep ', '')                                #   ''
+        >sep  foo  sep  b< ['sep', 'foo', 'sep', 'b'] ('sep foo', ' sep ', 'b')                             # TOKENS_CONJUNCTION_TOKENS middle!='' and tail!=''
+        >sep  foo  sep  ba< ['sep', 'foo', 'sep', 'ba'] ('sep foo', ' sep ', 'ba')                          #   ''
+        >sep  foo  sep  bar< ['sep', 'foo', 'sep', 'bar'] ('sep foo', ' sep ', 'bar')                       #   ...
+        >sep  foo  sep  bar < ['sep', 'foo', 'sep', 'bar', ''] ('sep foo', ' sep ', 'bar ')
+        >sep  foo  sep  bar  < ['sep', 'foo', 'sep', 'bar', ''] ('sep foo', ' sep ', 'bar ')
+        >sep  foo  sep  bar  s< ['sep', 'foo', 'sep', 'bar', 's'] ('sep foo', ' sep ', 'bar s')
+        >sep  foo  sep  bar  se< ['sep', 'foo', 'sep', 'bar', 'se'] ('sep foo', ' sep ', 'bar se')
+        >sep  foo  sep  bar  sep< ['sep', 'foo', 'sep', 'bar', 'sep'] ('sep foo', ' sep ', 'bar sep')
+        >sep  foo  sep  bar  sep < ['sep', 'foo', 'sep', 'bar', 'sep', ''] ('sep foo', ' sep ', 'bar sep ') #   ''
+        """
+        norm_text = re.sub(' +', ' ', text.lstrip())
+        query_tails = {}
+        for conjunction in conjunctions:
+            query_head, query_middle, query_tail = norm_text.partition(f' {conjunction} ')
+            query_tail = query_tail.strip()
+            if query_middle:
+                query_tails[conjunction] = query_tail
+
+        if not query_tails:
+            query_tokens = text.split(' ')
+            last_token = query_tokens[-1]
+            if last_token=='':
+                return NearbySimpleParser.Mode.TOKENS_SPACES, None, text
+            elif last_token in conjunctions and len(query_tokens)>2:
+                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION, last_token, text
+            elif last_token in conjunction_parts:
+                return NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION, conjunction_parts[last_token][0], text
+            else:
+                return NearbySimpleParser.Mode.TOKENS, None, text
         else:
-            conjunction_mode = QuerySimpleParser.ConjunctionMode.no_conjunction
-        return conjunction, conjunction_mode, query_with_conjunction_head, query_with_conjunction_tail
+            conjunction = min(query_tails)
+            query_tail = query_tails[conjunction]
+            if query_tail == '':
+                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION_SPACES, None, ''
+            else:
+                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS, conjunction, query_tail
+
+    def conjunction_mode_function(self) -> Callable:
+        if not self.language:
+            return self.__no_cunjunction_function
+        language = self.language.split('-')[0].lower()
+        if language not in NearbySimpleParser.CONJUNCTIONS:
+            return self.__no_cunjunction_function
+
+        conjunctions = NearbySimpleParser.CONJUNCTIONS[language]
+        conjunction_parts = NearbySimpleParser.CONJUNCTION_PARTS[language]
+
+        return partial(self.__get_conjunction_mode, conjunctions=conjunctions, conjunction_parts=conjunction_parts)
