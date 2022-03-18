@@ -4,18 +4,18 @@ from aiohttp import ClientSession
 from .util import get_lat_lon
 
 from getpass import getpass
-from typing import Tuple, Awaitable, Callable
+from typing import Tuple, Awaitable, Callable, Mapping
 import os
 import asyncio
-
+from collections import OrderedDict
 from . import __version__
 
 
 class OneBoxBase:
-    as_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
-    ds_url = 'https://discover.search.hereapi.com/v1/discover'
-    l_url = 'https://lookup.search.hereapi.com/v1/lookup'
-    rgc_url = 'https://revgeocode.search.hereapi.com/v1/revgeocode'
+    autosuggest_url = 'https://autosuggest.search.hereapi.com/v1/autosuggest'
+    discover_url = 'https://discover.search.hereapi.com/v1/discover'
+    lookup_url = 'https://lookup.search.hereapi.com/v1/lookup'
+    revgeocode_url = 'https://revgeocode.search.hereapi.com/v1/revgeocode'
 
     default_results_limit = 20
     default_suggestions_limit = 5
@@ -49,6 +49,19 @@ class OneBoxBase:
         self.lookup_query_params = lookup_query_params or self.__class__.default_lookup_query_params
 
         self.result_queue: asyncio.Queue = result_queue or asyncio.Queue()
+        self.cache = {}
+
+    async def uncache_or_get(self, session: ClientSession, url: str, params: OrderedDict) -> dict:
+        cache_key = (url, tuple(params.items()))
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        async with session.get(url, params=params) as response:
+            result = await response.json(loads=loads)
+            result["_url"] =url
+            result["_params"] = params
+            self.cache[cache_key] = result
+            return result
 
 
     async def autosuggest(self, session: ClientSession,
@@ -64,10 +77,10 @@ class OneBoxBase:
         :param longitude: search center longitude
         :return: a tuple made of the input query text and the response dictionary
         """
-        _params = {'q': q,
-                  'at': f'{latitude},{longitude}',
-                  'limit': self.suggestions_limit,
-                  'termsLimit': self.terms_limit}
+        _params = OrderedDict(q=q,
+                              at=f'{latitude},{longitude}',
+                              limit=self.suggestions_limit,
+                              termsLimit=self.terms_limit)
         _params.update(params)
         language = self.get_language()
         if language:
@@ -75,8 +88,7 @@ class OneBoxBase:
         if self.api_key:
             _params['apiKey'] = self.api_key
 
-        async with session.get(self.__class__.as_url, params=_params) as response:
-            return await response.json(loads=loads)
+        return await self.uncache_or_get(session, self.__class__.autosuggest_url, _params)
 
     async def autosuggest_href(self, session: ClientSession, href: str, **params) -> dict:
         """
@@ -86,15 +98,11 @@ class OneBoxBase:
         :param params:
         :return:
         """
-        _params = {'limit': self.results_limit}
+        _params = OrderedDict(limit=self.results_limit)
         if self.api_key:
             _params['apiKey'] = self.api_key
 
-        async with session.get(href, params=_params) as response:
-            result = await response.json(loads=loads)
-            result["_url"] = href
-            result["_params"] =_params
-            return result
+        return await self.uncache_or_get(session, href, _params)
 
     async def discover(self, session: ClientSession,
                        q: str, latitude: float, longitude: float,
@@ -109,9 +117,9 @@ class OneBoxBase:
         :param longitude: search center longitude
         :return: a response dictionary
         """
-        _params = {'q': q,
-                  'at': f'{latitude},{longitude}',
-                  'limit': self.results_limit}
+        _params = OrderedDict(q=q,
+                              at=f'{latitude},{longitude}',
+                              limit=self.results_limit)
         _params.update(params)
         language = self.get_language()
         if language:
@@ -119,11 +127,7 @@ class OneBoxBase:
         if self.api_key:
             _params['apiKey'] = self.api_key
 
-        async with session.get(self.__class__.ds_url, params=_params) as response:
-            result = await response.json(loads=loads)
-            result["_url"] = self.__class__.ds_url
-            result["_params"] =_params
-            return result
+        return await self.uncache_or_get(session, self.__class__.discover_url, _params)
 
     async def lookup(self, session: ClientSession, id: str, language: str, **params) -> dict:
         """
@@ -133,18 +137,14 @@ class OneBoxBase:
         :param params:
         :return:
         """
-        _params = {'id': id}
+        _params = OrderedDict(id=id)
         _params.update(params)
         if language:
             _params['lang'] = language
         if self.api_key:
             _params['apiKey'] = self.api_key
 
-        async with session.get(self.__class__.l_url, params=_params) as response:
-            result = await response.json(loads=loads)
-            result["_url"] = self.__class__.l_url
-            result["_params"] =_params
-            return result
+        return await self.uncache_or_get(session, self.__class__.lookup_url, _params)
 
     async def reverse_geocode(self, session: ClientSession, latitude: float, longitude: float, language: str, **params) -> dict:
         """
@@ -156,18 +156,14 @@ class OneBoxBase:
         :param params:
         :return:
         """
-        _params = {'at': f"{latitude},{longitude}"}
+        _params = OrderedDict(at=f"{latitude},{longitude}")
         _params.update(params)
         if language:
             _params['lang'] = language
         if self.api_key:
             _params['apiKey'] = self.api_key
 
-        async with session.get(self.__class__.rgc_url, params=_params) as response:
-            result = await response.json(loads=loads)
-            result["_url"] = self.__class__.rgc_url
-            result["_params"] =_params
-            return result
+        return await self.uncache_or_get(session, self.__class__.revgeocode_url, _params)
 
     async def handle_key_strokes(self):
         """
