@@ -27,9 +27,15 @@ class UserProfile:
                  api: API=None,
                  languages: dict=None,
                  name: str=None):
-
+        """
+        :param use_my_position: Mandatory opt-in/out about position usage
+        :param store_my_activity: Mandatory opt-in/out about activity usage
+        :param api: Optional API instance
+        :param languages: Optional user language preferences
+        :param name: Optional user name
+        """
         self.__use_my_position = use_my_position
-        self.__share_my_activity = share_my_activity
+        self.__store_my_activity = store_my_activity
 
         self.api = api or API()
         self.languages = languages or {}
@@ -43,8 +49,11 @@ class UserProfile:
         return self.__use_my_position
 
     @property
-    def share_my_activity(self):
-        return self.__share_my_activity
+    def store_my_activity(self):
+        return self.__store_my_activity
+
+    def send_signal(self, body: list):
+        pass
 
     def set_position(self, latitude, longitude):
         self.current_latitude = latitude
@@ -87,6 +96,7 @@ class UserProfile:
         if self.current_country_code in self.languages:
             return self.languages[self.current_country_code]
         return self.languages[UserProfile.default_all_countries]
+
 
 permissive = UserProfile(use_my_position=True, store_my_activity=True)
 restricted = UserProfile(use_my_position=False, store_my_activity=False)

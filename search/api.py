@@ -32,6 +32,8 @@ class API:
             result = await response.json(loads=loads)
             result["_url"] =url
             result["_params"] = params
+            result["_response_headers"] = {"X-Request-Id": response.headers["X-Request-Id"],
+                                           "X-Correlation-ID": response.headers["X-Correlation-ID"]}
             self.cache[cache_key] = result
             return result
 
