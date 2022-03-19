@@ -4,7 +4,7 @@ import nest_asyncio
 
 from . import __version__
 from .user import UserProfile
-from .api import API
+from .api import API, Response, Endpoint
 
 from getpass import getpass
 from typing import Tuple, Awaitable, Callable, Mapping
@@ -12,7 +12,7 @@ import os
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
-
+import uuid
 
 
 class OneBoxBase:
@@ -52,25 +52,37 @@ class OneBoxBase:
 
         self.result_queue: asyncio.Queue = result_queue or asyncio.Queue()
 
+        self.x_headers =  None
+        self.headers = OneBoxBase.default_headers
+        if self.user_profile.store_my_activity:
+            self.x_headers = {'X-User-ID': self.user_profile.id}
+            self.headers.update(self.x_headers)
+
+        self.as_session_id = str(uuid.uuid4())
+
+
     async def handle_key_strokes(self):
         """
         This method is called for each key stroke in the one box search Text form.
         """
-        async with ClientSession(raise_for_status=True, headers=OneBoxBase.default_headers) as session:
+        async with ClientSession(raise_for_status=True, headers=self.headers) as session:
+            x_headers = self.x_headers
             while True:
                 query_text = await self.wait_for_new_key_stroke()
                 if query_text is None:
                     break
                 if query_text:
                     latitude, longitude = self.get_search_center()
+                    x_headers['X-AS-Session-ID'] = self.as_session_id
                     autosuggest_resp = await asyncio.ensure_future(
-                        self.api.autosuggest(session, 
-                                             query_text, 
-                                             latitude, 
-                                             longitude, 
-                                             lang=self.get_language(), 
+                        self.api.autosuggest(session,
+                                             query_text,
+                                             latitude,
+                                             longitude,
+                                             lang=self.get_language(),
                                              limit=self.results_limit,
                                              termsLimit=self.terms_limit,
+                                             x_headers=x_headers,
                                              **self.autosuggest_query_params))
                     self.handle_suggestion_list(autosuggest_resp)
                 else:
@@ -80,50 +92,76 @@ class OneBoxBase:
         """
         This method is called for each key stroke in the one box search Text form.
         """
-        async with ClientSession(raise_for_status=True, headers=OneBoxBase.default_headers) as session:
+        async with ClientSession(raise_for_status=True, headers=self.headers) as session:
+            x_headers = self.x_headers
             while True:
                 query_text = await self.wait_for_submitted_value()
-                print(query_text)
                 if query_text is None:
                     break
                 if query_text:
 
                     latitude, longitude = self.get_search_center()
-                    discover_resp = await asyncio.ensure_future(
+                    x_headers['X-AS-Session-ID'] = self.as_session_id
+                    discover_task = asyncio.ensure_future(
                         self.api.discover(session, 
                                           query_text, 
                                           latitude, 
                                           longitude, 
                                           lang=self.get_language(),
                                           limit=self.results_limit,
+                                          x_headers=x_headers,
                                           **self.discover_query_params))
-
+                    discover_resp = await discover_task
                     self.handle_result_list(discover_resp)
 
     async def handle_result_selections(self):
         """
         This method is called for each search result selected.
         """
-        async with ClientSession(raise_for_status=True, headers=OneBoxBase.default_headers) as session:
+        async with ClientSession(raise_for_status=True, headers=self.headers) as session:
+            x_headers = self.x_headers
             while True:
-                item: dict = await self.wait_for_selected_result()
+                item: ResponseItem = await self.wait_for_selected_result()
                 if item is None:
                     break
                 if not item:
                     continue
 
-                if item["resultType"] in ("categoryQuery", "chainQuery"):
+                # TO be used for signals
+                signal = {'id': item.data['id'],
+                          'rank': item.rank,
+                          'correlation_id': item.resp.x_headers['X-Correlation-ID'],
+                          'action': 'tap'}
+
+                if item.data["resultType"] in ("categoryQuery", "chainQuery"):
+                    signal['as_session_id'] = self.as_session_id
+                    print(f"send signal {signal}")
+                    x_headers['X-AS-Session-ID'] = self.as_session_id
                     discover_resp = await asyncio.ensure_future(
-                        self.api.autosuggest_href(session, 
-                                                  item["href"],
-                                                  limit=self.results_limit))
+                        self.api.autosuggest_href(session,
+                                                  item.data["href"],
+                                                  limit=self.results_limit,
+                                                  x_headers=x_headers))
                     self.handle_result_list(discover_resp)
                 else:
-                    lookup_resp = await asyncio.ensure_future(
-                        self.api.lookup(session, 
-                                        item["id"], 
-                                        lang=self.get_language(), 
-                                        **self.lookup_query_params))
+                    if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
+                        x_headers['X-AS-Session-ID'] = self.as_session_id
+                        signal['as_session_id'] = self.as_session_id
+                        print(f"send signal {signal}")
+                        lookup_resp = await asyncio.ensure_future(
+                            self.api.lookup(session,
+                                            item.data["id"],
+                                            lang=self.get_language(),
+                                            x_headers=x_headers,
+                                            **self.lookup_query_params))
+                    else:
+                        print(f"send signal {signal}")
+                        lookup_resp = await asyncio.ensure_future(
+                            self.api.lookup(session,
+                                            item.data["id"],
+                                            lang=self.get_language(),
+                                            x_headers=None,
+                                            **self.lookup_query_params))
                     self.handle_result_details(lookup_resp)
 
     def get_language(self):
@@ -131,6 +169,10 @@ class OneBoxBase:
 
     def get_search_center(self) -> Tuple[float, float]:
         return self.latitude, self.longitude
+
+    def renew_session_id(self):
+        self.as_session_id = str(uuid.uuid4())
+        print(f"new as session id: {self.as_session_id}\n")
 
     def wait_for_new_key_stroke(self) -> Awaitable:
         raise NotImplementedError()
@@ -141,16 +183,16 @@ class OneBoxBase:
     def wait_for_selected_result(self) -> Awaitable:
         return self.result_queue.get()
 
-    def handle_suggestion_list(self, response: dict) -> None:
+    def handle_suggestion_list(self, response: Response) -> None:
         raise NotImplementedError()
 
     def handle_empty_text_submission(self, **kwargs) -> None:
         raise NotImplementedError()
 
-    def handle_result_list(self, response: dict) -> None:
+    def handle_result_list(self, response: Response) -> None:
         raise NotImplementedError()
 
-    def handle_result_details(self, response: dict) -> None:
+    def handle_result_details(self, response: Response) -> None:
         raise NotImplementedError()
     
     def run(self,
@@ -162,4 +204,3 @@ class OneBoxBase:
         asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
         asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
         asyncio.ensure_future((handle_result_selections or self.handle_result_selections)())
-

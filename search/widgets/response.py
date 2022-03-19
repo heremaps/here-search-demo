@@ -5,6 +5,8 @@ from here_map_widget import GeoJSON
 from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
 
+from search.api import Response, ResponseItem, Endpoint
+
 from typing import Callable, Tuple, List
 from dataclasses import dataclass
 import asyncio
@@ -49,10 +51,10 @@ class SearchResultList(VBox):
     def get_image(cls, place_item) -> str:
         return place_item["media"]["images"]["items"][0]["href"]
 
-    def _display(self, resp: dict) -> Widget:
+    def _display(self, resp: Response) -> Widget:
         out = Output(layout=self.layout)
         text = ['| | |', '|:-|:-|']
-        for i, item in enumerate(resp["items"]):
+        for i, item in enumerate(resp.data["items"]):
             if "contacts" in item:
                 category_id, category_name = self.get_primary_category(item)
                 www = self.get_www(item, category_id)
@@ -78,28 +80,33 @@ class SearchResultList(VBox):
         old_out.close()
 
 class SearchResultJson(SearchResultList):
-    def _display(self, resp: dict) -> Widget:
+    def _display(self, resp: Response) -> Widget:
         out = Output(layout=self.layout)
-        out.append_display_data(IJSON(data=resp, expanded=False, root='response'))
+        out.append_display_data(IJSON(data={"data": resp.data, "x_headers": resp.x_headers,
+                                            "request": {"url": resp.req.url,
+                                                        "params": resp.req.params,
+                                                        "x_headers": resp.req.x_headers}},
+                                            expanded=False, root='response'))
         return out
 
 class SearchResultSelectMultiple(SearchResultList):
-    def _display(self, resp: dict) -> Widget:
-        return SelectMultiple(options=[item["title"] for item in resp["items"]],
+    def _display(self, resp: Response) -> Widget:
+        return SelectMultiple(options=[item["title"] for item in resp.data["items"]],
                               rows = len(resp["items"]),
                               disabled=False)
 
 class SearchResultButton(HBox):
     default_layout = {'display': 'flex', 'width': '270px', 'justify_content': 'flex-start'}
 
-    def __init__(self, item: dict, rank: int, **kvargs):
-        #self.item = item
-        label = Label(value=f'{rank+1: <2}', layout={'width': '20px'})
-        icon = 'search' if item["resultType"] in ("categoryQuery", "chainQuery") else ''
-        self.button = Button(description=item["title"],
+    def __init__(self, item: ResponseItem, **kvargs):
+        label = Label(value=f'{item.rank+1: <2}', layout={'width': '20px'})
+        icon = 'search' if item.data["resultType"] in ("categoryQuery", "chainQuery") else ''
+        
+        # TODO: create a class derived from Both Button and ResponseItem
+        self.button = Button(description=item.data["title"],
                              icon=icon,
                              layout=kvargs.pop('layout', self.__class__.default_layout))
-        self.button.item = item
+        self.button.value = item
         HBox.__init__(self, [label, self.button], **kvargs)
         self.add_class('result-button')
 
@@ -108,15 +115,15 @@ class SearchResultButtons(SearchResultList):
         Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10px; }</style>"))
         super().__post_init__()
 
-    def _display(self, resp: dict) -> Widget:
+    def _display(self, resp: Response) -> Widget:
         out = []
         self.tasks = []
-        for rank, item in enumerate(resp["items"]):
-            search_result = SearchResultButton(item=item, rank=rank)
-            future = asyncio.Future()
+        headers = resp.x_headers
+        items = [resp.data] if resp.req.endpoint == Endpoint.LOOKUP else resp.data["items"]
+        for rank, data in enumerate(items):
+            search_result = SearchResultButton(item=ResponseItem(data=data, rank=rank, resp=resp))
             def getvalue(button: Button):
-                value = button.item
-                self.result_queue.put_nowait(value)
+                self.result_queue.put_nowait(button.value)
             search_result.button.on_click(getvalue)
             out.append(search_result)
         return VBox(out)
@@ -129,8 +136,8 @@ class SearchResultRadioButtons(SearchResultList):
             SearchResultButtons.css_displayed = True
         super().__post_init__()
 
-    def _display(self, resp: dict) -> Widget:
-        buttons = RadioButtons(options=[item["title"] for item in resp["items"]],
+    def _display(self, resp: Response) -> Widget:
+        buttons = RadioButtons(options=[item["title"] for item in resp.data["items"]],
                                disabled=False)
         buttons.add_class('result-radio')
         # TODO: create a class derived from RadioButtons, able to host an item (A SearchResultRadioButton class)
@@ -140,11 +147,11 @@ class SearchResultRadioButtons(SearchResultList):
 class SearchFeatureCollection(GeoJSON):
     bbox: Tuple[float, float, float, float]
 
-    def __init__(self, results: dict):
+    def __init__(self, resp: Response):
         collection = {"type": "FeatureCollection", "features": []}
         latitudes, longitudes = [], []
         south, west, north, east = None, None, None, None
-        for item in results["items"]:
+        for item in resp.data["items"]:
             if "position" not in item:
                 continue
             longitude, latitude = item["position"]["lng"], item["position"]["lat"]

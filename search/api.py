@@ -7,39 +7,73 @@ import asyncio
 from collections import OrderedDict
 from typing import Mapping
 import os
+from dataclasses import dataclass
+from enum import IntEnum, Enum, auto
 
 
+class Endpoint(IntEnum):
+    AUTOSUGGEST = auto()
+    AUTOSUGGEST_HREF = auto()
+    DISCOVER = auto()
+    LOOKUP = auto()
+    REVGEOCODE = auto()
+
+base_url = {ep:f'https://{eps}.search.hereapi.com/v1/{eps}'
+            for ep, eps in {Endpoint.AUTOSUGGEST:'autosuggest',
+                            Endpoint.AUTOSUGGEST_HREF:'discover',
+                            Endpoint.DISCOVER:'discover',
+                            Endpoint.LOOKUP:'lookup',
+                            Endpoint.REVGEOCODE:'revgeocode'}.items()}
+@dataclass
+class Request:
+    endpoint: Endpoint
+    url: str
+    params: dict
+    x_headers: dict
+
+    def key(self):
+        return (self.endpoint, tuple(self.params.items()))
+
+@dataclass
+class Response:
+    req: Request
+    data: dict
+    x_headers: dict
+
+@dataclass
+class ResponseItem:
+    resp: Response
+    data: dict
+    rank: int
+    
+    
 class API:
     api_key: str
     cache: Mapping[str, str]
-
-    domain = 'search.hereapi.com'
-    autosuggest_url = f'https://autosuggest.{domain}/v1/autosuggest'
-    discover_url = f'https://discover.{domain}/v1/discover'
-    lookup_url = f'https://lookup.{domain}/v1/lookup'
-    revgeocode_url = f'https://revgeocode.{domain}/v1/revgeocode'
 
     def __init__(self, api_key: str=None, cache: Mapping[str, str]=None):
         self.api_key = api_key or os.environ.get('API_KEY')
         self.cache = cache or {}
 
-    async def uncache_or_get(self, session: ClientSession, url: str, params: OrderedDict) -> dict:
-        cache_key = (url, tuple(params.items()))
+    async def uncache_or_get(self, session: ClientSession, req: Request) -> Response:
+        cache_key = req.key()
         if cache_key in self.cache:
             return self.cache[cache_key]
 
-        async with session.get(url, params=params) as response:
-            result = await response.json(loads=loads)
-            result["_url"] =url
-            result["_params"] = params
-            result["_response_headers"] = {"X-Request-Id": response.headers["X-Request-Id"],
-                                           "X-Correlation-ID": response.headers["X-Correlation-ID"]}
+        async with session.get(req.url, params=req.params, headers=req.x_headers) as response:
+            x_headers = {"X-Request-Id": response.headers["X-Request-Id"],
+                         "X-Correlation-ID": response.headers["X-Correlation-ID"]}
+            result = Response(data=await response.json(loads=loads),
+                              req=req,
+                              x_headers = {"X-Request-Id": response.headers["X-Request-Id"],
+                                           "X-Correlation-ID": response.headers["X-Correlation-ID"]})
             self.cache[cache_key] = result
             return result
 
     async def autosuggest(self, session: ClientSession,
                           q: str, latitude: float, longitude: float,
-                          **params) -> dict:
+                          x_headers: dict=None,
+                          **kwargs) -> Response:
         """
         Calls HERE Search Autosuggest endpoint
         https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
@@ -50,12 +84,18 @@ class API:
         :param longitude: search center longitude
         :return: a tuple made of the input query text and the response dictionary
         """
-        _params = OrderedDict(q=q, at=f'{latitude},{longitude}')
-        _params.update(params)
-        _params['apiKey'] = self.api_key
-        return await self.uncache_or_get(session, self.__class__.autosuggest_url, _params)
+        params = OrderedDict(q=q, at=f'{latitude},{longitude}', apiKey=self.api_key)
+        params.update(kwargs)
+        return await self.uncache_or_get(session, Request(endpoint=Endpoint.AUTOSUGGEST,
+                                                              url=base_url[Endpoint.AUTOSUGGEST],
+                                                              params=params,
+                                                              x_headers=x_headers))
 
-    async def autosuggest_href(self, session: ClientSession, href: str, **params) -> dict:
+
+    async def autosuggest_href(self, session: ClientSession,
+                               href: str,
+                               x_headers: dict=None,
+                               **kwargs) -> Response:
         """
         Blindly calls Autosuggest href
         :param session:
@@ -63,13 +103,15 @@ class API:
         :param params:
         :return:
         """
-        _params.update(params)
-        _params['apiKey'] = self.api_key
-        return await self.uncache_or_get(session, href, _params)
+        params = {'apiKey': self.api_key}
+        params.update(kwargs)
+        return await self.uncache_or_get(session, Request(endpoint=Endpoint.AUTOSUGGEST_HREF,
+                                                          url=href, params=params, x_headers=x_headers))
 
     async def discover(self, session: ClientSession,
                        q: str, latitude: float, longitude: float,
-                       **params) -> dict:
+                       x_headers: dict=None,
+                       **kwargs) -> Response:
         """
         Calls HERE Search Discover endpoint
         https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
@@ -80,12 +122,17 @@ class API:
         :param longitude: search center longitude
         :return: a response dictionary
         """
-        _params = OrderedDict(q=q, at=f'{latitude},{longitude}')
-        _params.update(params)
-        _params['apiKey'] = self.api_key
-        return await self.uncache_or_get(session, self.__class__.discover_url, _params)
+        params = OrderedDict(q=q, at=f'{latitude},{longitude}', apiKey=self.api_key)
+        params.update(params)
+        return await self.uncache_or_get(session, Request(endpoint=Endpoint.DISCOVER,
+                                                          url=base_url[Endpoint.DISCOVER],
+                                                          params=params,
+                                                          x_headers=x_headers))
 
-    async def lookup(self, session: ClientSession, id: str, **params) -> dict:
+    async def lookup(self, session: ClientSession,
+                     id: str,
+                     x_headers: dict=None,
+                     **kwargs) -> Response:
         """
         Calls HERE Search Lookup for a specific id
         :param session:
@@ -93,12 +140,17 @@ class API:
         :param params:
         :return:
         """
-        _params = OrderedDict(id=id)
-        _params.update(params)
-        _params['apiKey'] = self.api_key
-        return await self.uncache_or_get(session, self.__class__.lookup_url, _params)
+        params = OrderedDict(id=id, apiKey=self.api_key)
+        params.update(params)
+        return await self.uncache_or_get(session, Request(endpoint=Endpoint.LOOKUP,
+                                                          url=base_url[Endpoint.LOOKUP],
+                                                          params=params,
+                                                          x_headers=x_headers))
 
-    async def reverse_geocode(self, session: ClientSession, latitude: float, longitude: float, **params) -> dict:
+    async def reverse_geocode(self, session: ClientSession,
+                              latitude: float, longitude: float,
+                              x_headers: dict=None,
+                              **kwargs) -> Response:
         """
         Calls HERE Reverese Geocode for a geo position
         :param session:
@@ -108,7 +160,10 @@ class API:
         :param params:
         :return:
         """
-        _params = OrderedDict(at=f"{latitude},{longitude}")
-        _params.update(params)
-        _params['apiKey'] = self.api_key
-        return await self.uncache_or_get(session, self.__class__.revgeocode_url, _params)
+        params = OrderedDict(at=f"{latitude},{longitude}", apiKey=self.api_key)
+        params.update(params)
+        return await self.uncache_or_get(session, Request(endpoint=Endpoint.REVGEOCODE,
+                                                          url=base_url[Endpoint.REVGEOCODE],
+                                                          params=params,
+                                                          x_headers=x_headers))
+    

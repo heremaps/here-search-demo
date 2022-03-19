@@ -1,3 +1,5 @@
+import traceback
+
 from IPython.display import display as Idisplay
 from ipywidgets import Output
 from aiohttp import ClientSession
@@ -5,7 +7,7 @@ import nest_asyncio
 
 from search.core import OneBoxBase
 from search.user import UserProfile
-from search.api import API
+from search.api import API, Response, base_url, Endpoint
 from .query import SubmittableTextBox, TermsButtons, NearbySimpleParser
 from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson, SearchResultRadioButtons
 from .design import Design
@@ -84,11 +86,11 @@ class OneBoxMap(OneBoxBase):
     def get_search_center(self):
         return self.map_w.center
 
-    def display_terms(self, autosuggest_resp: dict):
-        terms = [term['term'] for term in autosuggest_resp.get('queryTerms', [])]
+    def display_terms(self, autosuggest_resp: Response):
+        terms = [term['term'] for term in autosuggest_resp.data.get('queryTerms', [])]
         self.query_terms_w.set(terms)
 
-    def display_suggestions(self, autosuggest_resp: dict) -> None:
+    def display_suggestions(self, autosuggest_resp: Response) -> None:
         self.result_list_w.display(autosuggest_resp)
 
         search_feature = SearchFeatureCollection(autosuggest_resp)
@@ -99,7 +101,7 @@ class OneBoxMap(OneBoxBase):
             self.map_w.add_layer(self.result_points_w)
         #self.display_result_map(autosuggest_resp, update_search_center=False)
 
-    def handle_suggestion_list(self, autosuggest_resp):
+    def handle_suggestion_list(self, autosuggest_resp: Response):
         """
         Typically called by OneBoxBase.handle_key_strokes()
         :param autosuggest_resp:
@@ -116,7 +118,7 @@ class OneBoxMap(OneBoxBase):
         """
         self.query_terms_w.set([])
 
-    def handle_result_list(self, discover_resp):
+    def handle_result_list(self, discover_resp: Response):
         """
         Typically called by OneBoxBase.handle_text_submissions()
         :param autosuggest_resp:
@@ -125,27 +127,29 @@ class OneBoxMap(OneBoxBase):
         self.result_list_w.display(discover_resp)
         self.display_result_map(discover_resp, update_search_center=True)
         self.clear_query_text()
+        self.renew_session_id()
 
-    def handle_result_details(self, lookup_resp: dict):
+    def handle_result_details(self, lookup_resp: Response):
         """
         Typically called by OneBoxBase.handle_result_selections()
         :param autosuggest_resp:
         :return: None
         """
-        self.display_result_map({"items": [lookup_resp]}, update_search_center=True)
+        lookup_resp.data = {"items": [lookup_resp.data]}
+        self.display_result_map(lookup_resp, update_search_center=True)
 
     def clear_query_text(self):
         self.query_box_w.text.value = ''
         self.query_terms_w.set([])
 
-    def display_result_map(self, resp, update_search_center=False):
+    def display_result_map(self, resp: Response, update_search_center: bool=False):
         if self.result_points_w:
             self.map_w.remove_layer(self.result_points_w)
         self.result_points_w = SearchFeatureCollection(resp)
         self.map_w.add_layer(self.result_points_w)
         if self.result_points_w.bbox:
             self.map_w.bounds = self.result_points_w.bbox
-            if len(resp["items"]) == 1:
+            if len(resp.data["items"]) == 1:
                 self.map_w.zoom = OneBoxMap.minimum_zoom_level
 
     async def __init_map(self):
@@ -211,7 +215,7 @@ class OneBoxCatNearCat(OneBoxMap):
                 elif conjunction_mode == NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION:
                     if top_ontology:
                         find_ontology = top_ontology
-                    autosuggest_resp["queryTerms"] = ([{"term": conjunction}] + autosuggest_resp["queryTerms"])[:OneBoxMap.default_terms_limit]
+                    autosuggest_resp.data["queryTerms"] = ([{"term": conjunction}] + autosuggest_resp.data["queryTerms"])[:OneBoxMap.default_terms_limit]
 
                 elif conjunction_mode == NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS:
                     if top_ontology:
@@ -234,15 +238,16 @@ class OneBoxCatNearCat(OneBoxMap):
                             ontology_near_ontology = {"title": f"{find_ontology['title']} {conjunction} {near_ontology['title']}",
                                                       "id": f"{find_ontology['id']}:near:{near_ontology['id']}",
                                                       "resultType": "categoryQuery",
-                                                      "href": f"{self.api.discover_url}?at={latitude},{longitude}&lang={self.get_language()}&q={query_text}",
+                                                      "href": f"{base_url[Endpoint.DISCOVER]}?at={latitude},{longitude}&lang={self.get_language()}&q={query_text}",
                                                       "highlights": {}}
-                            autosuggest_resp["items"] = ([ontology_near_ontology] + autosuggest_resp["items"])[:OneBoxMap.default_results_limit]
-                            if near_resp["queryTerms"]:
-                                autosuggest_resp["queryTerms"] = ([{"term": near_resp["queryTerms"][0]["term"]}] + autosuggest_resp["queryTerms"])[:OneBoxMap.default_terms_limit]
+                            autosuggest_resp.data["items"] = ([ontology_near_ontology] + autosuggest_resp.data["items"])[:OneBoxMap.default_results_limit]
+                            if near_resp.data["queryTerms"]:
+                                autosuggest_resp.data["queryTerms"] = ([{"term": near_resp.data["queryTerms"][0]["term"]}] + autosuggest_resp.data["queryTerms"])[:OneBoxMap.default_terms_limit]
 
                 self.handle_suggestion_list(autosuggest_resp)
 
-    async def get_first_category_ontology(self, session, query, latitude, longitude):
+    async def get_first_category_ontology(self, session: ClientSession,
+                                          query: str, latitude: float, longitude: float) -> Tuple[Response, dict]:
         autosuggest_resp = await asyncio.ensure_future(
             self.api.autosuggest(session,
                                  query,
@@ -251,8 +256,9 @@ class OneBoxCatNearCat(OneBoxMap):
                                  lang=self.get_language(),
                                  limit=self.suggestions_limit,
                                  termsLimit=self.terms_limit,
+                                 x_headers=None,
                                  **self.autosuggest_query_params))
-        for item in autosuggest_resp["items"]:
+        for item in autosuggest_resp.data["items"]:
             if item["resultType"] == "categoryQuery" and "relationship" not in item:
                 return autosuggest_resp, item
         else:

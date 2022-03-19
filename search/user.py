@@ -7,6 +7,9 @@ from .api import API
 from dataclasses import dataclass
 from typing import Tuple
 import asyncio
+import uuid
+import json
+
 
 class UserProfile:
     languages: dict
@@ -34,12 +37,14 @@ class UserProfile:
         :param languages: Optional user language preferences
         :param name: Optional user name
         """
+        self.name = name or UserProfile.default_name
+        self.id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{self.name}{uuid.getnode()}'))
+
         self.__use_my_position = use_my_position
         self.__store_my_activity = store_my_activity
 
         self.api = api or API()
         self.languages = languages or {}
-        self.name = UserProfile.default_name
 
         nest_asyncio.apply()
         asyncio.get_running_loop().run_until_complete(self.__init_locale())
@@ -70,11 +75,11 @@ class UserProfile:
                 latitude=self.current_latitude,
                 longitude=self.current_longitude))
 
-            if local_addresses and "items" in local_addresses and len(local_addresses["items"]) > 0:
-                country_code = local_addresses["items"][0]["address"]["countryCode"]
+            if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
+                country_code = local_addresses.data["items"][0]["address"]["countryCode"]
                 address_details = await asyncio.ensure_future(self.api.lookup(session,
-                                                                              id=local_addresses["items"][0]["id"]))
-                language = address_details["language"]
+                                                                              id=local_addresses.data["items"][0]["id"]))
+                language = address_details.data["language"]
                     
             return country_code, language
 
