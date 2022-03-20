@@ -5,4 +5,5 @@ aiohttp
 nest_asyncio
 ujson
 traitlets
+pyinstrument
 here-map-widget-for-jupyter

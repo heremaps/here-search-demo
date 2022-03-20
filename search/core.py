@@ -1,6 +1,7 @@
 from ujson import loads
 from aiohttp import ClientSession
 import nest_asyncio
+from pyinstrument import Profiler
 
 from . import __version__
 from .user import UserProfile
@@ -35,8 +36,15 @@ class OneBoxBase:
                  autosuggest_query_params: dict=None,
                  discover_query_params: dict=None,
                  lookup_query_params: dict=None,
-                 result_queue: asyncio.Queue=None):
+                 result_queue: asyncio.Queue=None,
+                 **kwargs):
 
+        profiling = kwargs.pop("profiling", None)
+        if profiling:
+            self.profiler = Profiler(async_mode="enabled")
+            self.profiler.start()
+        else:
+            self.profiler = False
         self.api = api or API()
         self.user_profile = user_profile or UserProfile(api=self.api)
         self.latitude = self.user_profile.current_latitude
@@ -69,6 +77,7 @@ class OneBoxBase:
             while True:
                 query_text = await self.wait_for_new_key_stroke()
                 if query_text is None:
+                    self.result_queue.put_nowait(None)
                     break
                 if query_text:
                     latitude, longitude = self.get_search_center()
@@ -95,6 +104,10 @@ class OneBoxBase:
             while True:
                 query_text = await self.wait_for_submitted_value()
                 if query_text is None:
+                    if self.profiler:
+                        self.profiler.stop()
+                        #self.profiler.print(show_all=True)
+                        self.profiler.open_in_browser()
                     break
                 if query_text:
 

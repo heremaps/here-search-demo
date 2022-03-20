@@ -52,7 +52,7 @@ class OneBoxMap(OneBoxBase):
                             results_limit=results_limit or OneBoxMap.default_results_limit,
                             suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
                             terms_limit=terms_limit or OneBoxMap.default_terms_limit,
-                            result_queue=self.result_queue)
+                            result_queue=self.result_queue, **kwargs)
 
         self.query_box_w = SubmittableTextBox(OneBoxMap.default_debounce_time if debounce_time is None else debounce_time,
                                               layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
@@ -167,7 +167,11 @@ class OneBoxMap(OneBoxBase):
             handle_result_selections: Callable=None):
 
         nest_asyncio.apply()
-        asyncio.get_running_loop().run_until_complete(self.__init_map())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.__init_map())
         Idisplay(self.app_design_w)
 
         OneBoxBase.run(self,

@@ -83,7 +83,8 @@ class SubmittableTextBox(HBox):
         # This methods allows to control the call to the widget handler outside of the jupyter event loop
         future = asyncio.Future()
         def getvalue(change: dict):
-            future.set_result(change.new)
+            value = change.new
+            future.set_result(value if not value.endswith("~") else None)
             self.unobserve_text(getvalue, 'value')
         self.observe_text(getvalue, 'value')
         return future
@@ -92,7 +93,8 @@ class SubmittableTextBox(HBox):
         future = asyncio.Future()
         @debounce(self.debounce_time)
         def getvalue(change: dict):
-            future.set_result(change.new)
+            value = change.new
+            future.set_result(value if not value.endswith("~") else None)
             self.unobserve_text(getvalue, 'value')
         self.observe_text(getvalue, 'value')
         return future
@@ -101,7 +103,7 @@ class SubmittableTextBox(HBox):
         future = asyncio.Future()
         def getvalue(_):
             value = self.text.value
-            future.set_result(value)
+            future.set_result(value if not value.endswith("~") else None)
             self.on_submit(getvalue, remove=True)
             self.on_click(getvalue, remove=True)
         self.on_submit(getvalue)
