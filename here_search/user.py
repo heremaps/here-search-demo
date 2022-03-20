@@ -4,11 +4,9 @@ import nest_asyncio
 from .util import get_lat_lon
 from .api import API
 
-from dataclasses import dataclass
 from typing import Tuple
 import asyncio
 import uuid
-import json
 
 
 class UserProfile:
@@ -25,7 +23,7 @@ class UserProfile:
     default_profile_languages = {default_all_countries: "en"}
     
     def __init__(self,
-                 use_position: bool,
+                 use_positioning: bool,
                  share_experience: bool,
                  api: API=None,
                  languages: dict=None,
@@ -40,7 +38,7 @@ class UserProfile:
         self.name = name or UserProfile.default_name
         self.id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{self.name}{uuid.getnode()}'))
 
-        self.__use_position = use_position
+        self.__use_positioning = use_positioning
         self.__share_experience = share_experience
 
         self.api = api or API()
@@ -70,7 +68,7 @@ class UserProfile:
         self.current_country_code, language = asyncio.get_running_loop().run_until_complete(self.__get_position_locale())
         return self
 
-    async def __get_position_locale(self) -> Tuple[str, str]:        
+    async def __get_position_locale(self) -> Tuple[str, str]:
         country_code, language = None, None
         async with ClientSession(raise_for_status=True) as session:
 
@@ -84,7 +82,7 @@ class UserProfile:
                 address_details = await asyncio.ensure_future(self.api.lookup(session,
                                                                               id=local_addresses.data["items"][0]["id"]))
                 language = address_details.data["language"]
-                    
+
             return country_code, language
 
     async def __init_locale(self):

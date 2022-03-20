@@ -1,8 +1,8 @@
-from search.core import OneBoxBase
-from search.user import UserProfile
-from search.api import API, Response, base_url, Endpoint
+from here_search.base import OneBoxBase
+from here_search.user import UserProfile
+from here_search.api import API, Response
 
-from typing import Tuple, Awaitable
+from typing import Awaitable
 import asyncio
 import contextlib
 import sys
@@ -19,7 +19,6 @@ class OneBoxConsole(OneBoxBase):
                  api: API=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
-                 terms_limit: int=None,
                  term_keys: bytes=None,
                  **kwargs):
         self.term_keys = array('B', term_keys)
@@ -65,7 +64,7 @@ class OneBoxConsole(OneBoxBase):
         :param autosuggest_resp:
         :return: None
         """
-        self.display_terms({"queryTerms": []})
+        self.display_terms(Response(data={"queryTerms": []}))
 
     def handle_result_list(self, response: Response) -> None:
         """

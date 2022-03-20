@@ -1,13 +1,14 @@
-import requests
 from aiohttp import ClientSession
 
 from typing import Tuple
 import asyncio
 
-async def get_lat_lon(session: ClientSession) -> Tuple[float, float, str]:
+
+async def get_lat_lon(session: ClientSession) -> Tuple[float, float]:
     async with session.get('https://get.geojs.io/v1/ip/geo.json') as response:
         geo = await response.json()
         return float(geo["latitude"]), float(geo["longitude"])
+
 
 class Timer:
     def __init__(self, milliseconds, callback):
@@ -23,6 +24,7 @@ class Timer:
 
     def cancel(self):
         self._task.cancel()
+
 
 def debounce(milliseconds):
     def decorator(fn):

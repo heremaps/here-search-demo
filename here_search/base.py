@@ -1,18 +1,12 @@
-from ujson import loads
 from aiohttp import ClientSession
-import nest_asyncio
 from pyinstrument import Profiler
 
 from . import __version__
 from .user import UserProfile
 from .api import API, Response, Endpoint
 
-from getpass import getpass
-from typing import Tuple, Awaitable, Callable, Mapping
-import os
+from typing import Tuple, Awaitable, Callable
 import asyncio
-from collections import OrderedDict
-from dataclasses import dataclass
 import uuid
 
 

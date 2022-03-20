@@ -5,7 +5,7 @@ from here_map_widget import GeoJSON
 from here_map_widget import Platform, MapTile, TileLayer, Map
 from here_map_widget import ServiceNames, MapTileUrl
 
-from search.api import Response, ResponseItem, Endpoint
+from here_search.api import Response, ResponseItem, Endpoint
 
 from typing import Callable, Tuple, List
 from dataclasses import dataclass

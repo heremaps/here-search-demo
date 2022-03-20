@@ -1,1 +1,5 @@
-jupyter lab $(python -c "import search, pathlib, os.path; print(pathlib.Path(os.path.dirname(search.__file__), '..', 'demo.ipynb'))")
+(cd $(cat << eof | python -
+import here_search, pathlib, os.path
+print(pathlib.Path(os.path.dirname(here_search.__file__), '..', 'docs'))
+eof
+); jupyter lab)

@@ -1,17 +1,17 @@
 from IPython.display import display as Idisplay
 from ipywidgets import Widget, CallbackDispatcher, HBox, VBox, Text, Button, Layout, HTML
-from ipywidgets.widgets.widget import _remove_buffers, __protocol_version__, Comm
 from traitlets import observe
 
-from ..util import debounce
+from here_search.util import debounce
 
-from typing import List, Awaitable, Tuple, Callable
+from typing import Awaitable, Tuple, Callable, Optional
 from functools import reduce
 import asyncio
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
 import re
+
 
 class SubmittableText(Text):
     """A ipywidgets Text class enhanced with a on_submit() method"""
@@ -44,6 +44,7 @@ class SubmittableText(Text):
             self.send_state()
         elif method == 'custom' and 'content' in data and data['content'].get('event') == 'submit':
             self._submission_callbacks(self)
+
 
 class SubmittableTextBox(HBox):
     """A ipywidgets HBox made of a SubmittableText and a lens Button"""
@@ -117,6 +118,7 @@ class SearchTermsBox(VBox):
         self.terms_buttons = terms_buttons
         VBox.__init__(self, [text, terms_buttons])
 
+
 class TermsButtons(HBox):
     """A HBox containing a list of Buttons"""
     default_layout = {'width': '280px'}
@@ -136,7 +138,6 @@ class TermsButtons(HBox):
         HBox.__init__(self, buttons, layout=layout or TermsButtons.default_layout)
         Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
         self.add_class('term-button')
-
 
     def __get_click_handler(self, target_text_box: SubmittableTextBox) -> Callable:
         def handler(button):
@@ -160,9 +161,11 @@ class TermsButtons(HBox):
             except IndexError:
                 button.description = ' '
 
+
 @dataclass
 class NearbySimpleParser:
     language: str
+
     class Mode(Enum):
         TOKENS = auto()
         TOKENS_SPACES = auto()
@@ -197,10 +200,10 @@ class NearbySimpleParser:
 
     @staticmethod
     def __no_cunjunction_function(text) -> Tuple[Mode, str, str]:
-        return NearbySimpleParser.conjunction_mode.no_conjunction, ''
+        return NearbySimpleParser.Mode.no_conjunction, '', ''
 
     @staticmethod
-    def __get_conjunction_mode(text: str, conjunctions: list, conjunction_parts: dict) -> Tuple[str, Mode, str, str]:
+    def __get_conjunction_mode(text: str, conjunctions: list, conjunction_parts: dict) -> Tuple[Mode, Optional[str], str]:
         """
         Example of auery parsing:
         >>> text = '  sep  foo  sep  bar  sep  '
@@ -248,7 +251,7 @@ class NearbySimpleParser:
             last_token = query_tokens[-1]
             if last_token=='':
                 return NearbySimpleParser.Mode.TOKENS_SPACES, None, text
-            elif last_token in conjunctions and len(query_tokens)>2:
+            elif last_token in conjunctions and len(query_tokens) > 2:
                 return NearbySimpleParser.Mode.TOKENS_CONJUNCTION, last_token, text
             elif last_token in conjunction_parts:
                 return NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION, conjunction_parts[last_token][0], text
