@@ -26,10 +26,10 @@ base_url = {ep:f'https://{eps}.search.hereapi.com/v1/{eps}'
 
 @dataclass
 class Request:
-    endpoint: Endpoint
-    url: str
-    params: Dict[str, str]
-    x_headers: dict
+    endpoint: Endpoint=None
+    url: str=None
+    params: Dict[str, str]=None
+    x_headers: dict=None
 
     def key(self) -> Tuple[Endpoint, Tuple[str]]:
         return self.endpoint, tuple(self.params.items())
@@ -37,9 +37,9 @@ class Request:
 
 @dataclass
 class Response:
-    req: Request
-    data: dict
-    x_headers: dict
+    req: Request=None
+    data: dict=None
+    x_headers: dict=None
 
 
 @dataclass

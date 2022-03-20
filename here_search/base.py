@@ -3,7 +3,7 @@ from pyinstrument import Profiler
 
 from . import __version__
 from .user import UserProfile
-from .api import API, Response, Endpoint
+from .api import API, Response, Endpoint, ResponseItem
 
 from typing import Tuple, Awaitable, Callable
 import asyncio

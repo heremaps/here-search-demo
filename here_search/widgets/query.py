@@ -199,11 +199,11 @@ class NearbySimpleParser:
                 CONJUNCTION_PARTS.setdefault(language, {}).setdefault(term[:i+1], []).append(term)
 
     @staticmethod
-    def __no_cunjunction_function(text) -> Tuple[Mode, str, str]:
-        return NearbySimpleParser.Mode.no_conjunction, '', ''
+    def __no_cunjunction_function(text) -> Tuple[Mode, str, str, str]:
+        return NearbySimpleParser.Mode.no_conjunction, '', '', ''
 
     @staticmethod
-    def __get_conjunction_mode(text: str, conjunctions: list, conjunction_parts: dict) -> Tuple[Mode, Optional[str], str]:
+    def __get_conjunction_mode(text: str, conjunctions: list, conjunction_parts: dict) -> Tuple[Mode, Optional[str], str, str]:
         """
         Example of auery parsing:
         >>> text = '  sep  foo  sep  bar  sep  '
@@ -225,7 +225,7 @@ class NearbySimpleParser:
         >sep  foo  < ['sep', 'foo', ''] ('sep foo ', '', '')                                                #   ''
         >sep  foo  s< ['sep', 'foo', 's'] ('sep foo s', '', '')                                             # TOKENS_INCOMPLETE_CONJUNCTION middle=='' and last_token in conjunction_parts
         >sep  foo  se< ['sep', 'foo', 'se'] ('sep foo se', '', '')                                          #   ''
-        >sep  foo  sep< ['sep', 'foo', 'sep'] ('sep foo sep', '', '')                                       # TOKENS_CONJUNCTION len(query_tokens)>2 and query_tokens[-1]==conjunction and middle==''
+        >sep  foo  sep< ['sep', 'foo', 'sep'] ('sep foo sep', '', '')                                       # TOKENS_CONJUNCTION len(query_tokens)>1 and query_tokens[-1]==conjunction and middle==''
         >sep  foo  sep < ['sep', 'foo', 'sep', ''] ('sep foo', ' sep ', '')                                 # TOKENS_CONJUNCTION_SPACES middle!='' and tail==''
         >sep  foo  sep  < ['sep', 'foo', 'sep', ''] ('sep foo', ' sep ', '')                                #   ''
         >sep  foo  sep  b< ['sep', 'foo', 'sep', 'b'] ('sep foo', ' sep ', 'b')                             # TOKENS_CONJUNCTION_TOKENS middle!='' and tail!=''
@@ -240,30 +240,33 @@ class NearbySimpleParser:
         """
         norm_text = re.sub(' +', ' ', text.lstrip())
         query_tails = {}
+        query_heads = {}
         for conjunction in conjunctions:
             query_head, query_middle, query_tail = norm_text.partition(f' {conjunction} ')
             query_tail = query_tail.strip()
             if query_middle:
                 query_tails[conjunction] = query_tail
+                query_heads[conjunction] = query_head
 
         if not query_tails:
             query_tokens = text.split(' ')
             last_token = query_tokens[-1]
             if last_token=='':
-                return NearbySimpleParser.Mode.TOKENS_SPACES, None, text
-            elif last_token in conjunctions and len(query_tokens) > 2:
-                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION, last_token, text
+                return NearbySimpleParser.Mode.TOKENS_SPACES, None, '', text
+            elif last_token in conjunctions and (query_head, query_middle, query_tail) == (norm_text, '', ''):
+                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION, last_token, '', text
             elif last_token in conjunction_parts:
-                return NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION, conjunction_parts[last_token][0], text
+                return NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION, conjunction_parts[last_token][0], '', text
             else:
-                return NearbySimpleParser.Mode.TOKENS, None, text
+                return NearbySimpleParser.Mode.TOKENS, None, '', text
         else:
             conjunction = min(query_tails)
             query_tail = query_tails[conjunction]
+            query_head = query_heads[conjunction]
             if query_tail == '':
-                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION_SPACES, None, ''
+                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION_SPACES, None, '', ''
             else:
-                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS, conjunction, query_tail
+                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS, conjunction, query_head, query_tail
 
     def conjunction_mode_function(self) -> Callable:
         if not self.language:

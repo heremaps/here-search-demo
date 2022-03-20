@@ -16,6 +16,7 @@ class Design(Widget):
         widget_control = WidgetControl(widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=False)
         map.add_control(widget_control)
         map.zoom_control_instance.alignment = "RIGHT_TOP"
+        out.layout = {'width': "500px"}
         return HBox([map, out])
 
     @classmethod

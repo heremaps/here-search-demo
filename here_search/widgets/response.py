@@ -119,14 +119,14 @@ class SearchResultButton(HBox):
         HBox.__init__(self, [self.label, self.button], **kvargs)
         self.add_class('result-button')
 
-    def set_result(self, data: dict, rank: int, resp:Response):
+    def set_result(self, data: dict, rank: int, resp: Response):
         item = self.button.value
         item.data = data
         item.rank = rank or 0
         item.resp = resp
         self.button.description = data["title"]
         self.label.value = f'{item.rank+1: <2}'
-        self.button.icon = 'search' if data["resultType"] in ("categoryQuery", "chainQuery") else ''
+        self.button.icon = 'search' if "Query" in data["resultType"] else '' # That's a hack...
 
 
 class SearchResultButtons(SearchResultList):
