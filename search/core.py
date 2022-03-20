@@ -55,10 +55,9 @@ class OneBoxBase:
         self.x_headers =  None
         self.headers = OneBoxBase.default_headers
         if self.user_profile.store_my_activity:
-            self.x_headers = {'X-User-ID': self.user_profile.id}
+            self.x_headers = {'X-User-ID': self.user_profile.id,
+                              'X-AS-Session-ID': str(uuid.uuid4())}
             self.headers.update(self.x_headers)
-
-        self.as_session_id = str(uuid.uuid4())
 
 
     async def handle_key_strokes(self):
@@ -73,7 +72,6 @@ class OneBoxBase:
                     break
                 if query_text:
                     latitude, longitude = self.get_search_center()
-                    x_headers['X-AS-Session-ID'] = self.as_session_id
                     autosuggest_resp = await asyncio.ensure_future(
                         self.api.autosuggest(session,
                                              query_text,
@@ -101,7 +99,6 @@ class OneBoxBase:
                 if query_text:
 
                     latitude, longitude = self.get_search_center()
-                    x_headers['X-AS-Session-ID'] = self.as_session_id
                     discover_task = asyncio.ensure_future(
                         self.api.discover(session, 
                                           query_text, 
@@ -134,9 +131,9 @@ class OneBoxBase:
                           'action': 'tap'}
 
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    signal['as_session_id'] = self.as_session_id
-                    print(f"send signal {signal}")
-                    x_headers['X-AS-Session-ID'] = self.as_session_id
+                    if self.user_profile.store_my_activity:
+                        signal['asSessionID'] = x_headers['X-AS-Session-ID']
+                        print(f"send signal {signal}")
                     discover_resp = await asyncio.ensure_future(
                         self.api.autosuggest_href(session,
                                                   item.data["href"],
@@ -145,9 +142,9 @@ class OneBoxBase:
                     self.handle_result_list(discover_resp)
                 else:
                     if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
-                        x_headers['X-AS-Session-ID'] = self.as_session_id
-                        signal['as_session_id'] = self.as_session_id
-                        print(f"send signal {signal}")
+                        if self.user_profile.store_my_activity:
+                            signal['asSessionID'] = x_headers['X-AS-Session-ID']
+                            print(f"send signal {signal}")
                         lookup_resp = await asyncio.ensure_future(
                             self.api.lookup(session,
                                             item.data["id"],
@@ -171,8 +168,9 @@ class OneBoxBase:
         return self.latitude, self.longitude
 
     def renew_session_id(self):
-        self.as_session_id = str(uuid.uuid4())
-        print(f"new as session id: {self.as_session_id}\n")
+        if self.user_profile.store_my_activity:
+            self.x_headers['X-AS-Session-ID'] = str(uuid.uuid4())
+            print(f"new as session id: {self.x_headers['X-AS-Session-ID']}\n")
 
     def wait_for_new_key_stroke(self) -> Awaitable:
         raise NotImplementedError()
