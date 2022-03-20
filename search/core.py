@@ -42,7 +42,10 @@ class OneBoxBase:
         profiling = kwargs.pop("profiling", None)
         if profiling:
             self.profiler = Profiler(async_mode="enabled")
-            self.profiler.start()
+            try:
+                self.profiler.start()
+            except RuntimeError: # Previous self.profiler.stop() is not completely stopping the profiler....
+                pass
         else:
             self.profiler = False
         self.api = api or API()
@@ -62,7 +65,7 @@ class OneBoxBase:
 
         self.x_headers =  None
         self.headers = OneBoxBase.default_headers
-        if self.user_profile.store_my_activity:
+        if self.user_profile.share_experience:
             self.x_headers = {'X-User-ID': self.user_profile.id,
                               'X-AS-Session-ID': str(uuid.uuid4())}
             self.headers.update(self.x_headers)
@@ -105,9 +108,11 @@ class OneBoxBase:
                 query_text = await self.wait_for_submitted_value()
                 if query_text is None:
                     if self.profiler:
-                        self.profiler.stop()
-                        #self.profiler.print(show_all=True)
-                        self.profiler.open_in_browser()
+                        try:
+                            self.profiler.stop()
+                            self.profiler.open_in_browser()
+                        except RuntimeError:
+                            pass
                     break
                 if query_text:
 
@@ -144,7 +149,7 @@ class OneBoxBase:
                           'action': 'tap'}
 
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    if self.user_profile.store_my_activity:
+                    if self.user_profile.share_experience:
                         signal['asSessionID'] = x_headers['X-AS-Session-ID']
                         print(f"send signal {signal}")
                     discover_resp = await asyncio.ensure_future(
@@ -155,7 +160,7 @@ class OneBoxBase:
                     self.handle_result_list(discover_resp)
                 else:
                     if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
-                        if self.user_profile.store_my_activity:
+                        if self.user_profile.share_experience:
                             signal['asSessionID'] = x_headers['X-AS-Session-ID']
                             print(f"send signal {signal}")
                         lookup_resp = await asyncio.ensure_future(
@@ -181,7 +186,7 @@ class OneBoxBase:
         return self.latitude, self.longitude
 
     def renew_session_id(self):
-        if self.user_profile.store_my_activity:
+        if self.user_profile.share_experience:
             self.x_headers['X-AS-Session-ID'] = str(uuid.uuid4())
             print(f"new as session id: {self.x_headers['X-AS-Session-ID']}\n")
 

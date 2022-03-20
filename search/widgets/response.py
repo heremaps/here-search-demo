@@ -13,8 +13,9 @@ import asyncio
 
 
 @dataclass
-class SearchResultList(VBox):
+class SearchResultList(HBox):
     widget: Widget
+    max_results_number: int
     result_queue: asyncio.Queue=None
     layout: dict=None
 
@@ -72,10 +73,19 @@ class SearchResultList(VBox):
         out.append_display_data(Markdown("\n".join(text)))
         return out
 
-    def display(self, resp: dict):
+    def _clear(self):
+        return Output(layout=self.layout)
+
+    def display(self, resp: Response):
         # https://stackoverflow.com/questions/66704546/why-cannot-i-print-in-jupyter-lab-using-ipywidgets-class
         old_out = self.children[0]
         out = self._display(resp)
+        self.children = [out]
+        old_out.close()
+
+    def clear(self):
+        old_out = self.children[0]
+        out = self._clear()
         self.children = [out]
         old_out.close()
 
@@ -99,34 +109,48 @@ class SearchResultButton(HBox):
     default_layout = {'display': 'flex', 'width': '270px', 'justify_content': 'flex-start'}
 
     def __init__(self, item: ResponseItem, **kvargs):
-        label = Label(value=f'{item.rank+1: <2}', layout={'width': '20px'})
-        icon = 'search' if item.data["resultType"] in ("categoryQuery", "chainQuery") else ''
-        
+        self.label = Label(value='', layout={'width': '20px'})
         # TODO: create a class derived from Both Button and ResponseItem
-        self.button = Button(description=item.data["title"],
-                             icon=icon,
+        self.button = Button(description='',  icon='',
                              layout=kvargs.pop('layout', self.__class__.default_layout))
         self.button.value = item
-        HBox.__init__(self, [label, self.button], **kvargs)
+        if item.data is not None:
+            self.set_result(item.data, item.rank, item.resp)
+        HBox.__init__(self, [self.label, self.button], **kvargs)
         self.add_class('result-button')
 
+    def set_result(self, data: dict, rank: int, resp:Response):
+        item = self.button.value
+        item.data = data
+        item.rank = rank or 0
+        item.resp = resp
+        self.button.description = data["title"]
+        self.label.value = f'{item.rank+1: <2}'
+        self.button.icon = 'search' if data["resultType"] in ("categoryQuery", "chainQuery") else ''
+
+
 class SearchResultButtons(SearchResultList):
+    buttons: List[SearchResultButton]=[]
+
     def __post_init__(self):
+        for i in range(self.max_results_number):
+            search_result = SearchResultButton(item=ResponseItem())
+            def getvalue(button: Button):
+                self.result_queue.put_nowait(button.value)
+            search_result.button.on_click(getvalue)
+            self.buttons.append(search_result)
         Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10px; }</style>"))
         super().__post_init__()
 
     def _display(self, resp: Response) -> Widget:
-        out = []
-        self.tasks = []
-        headers = resp.x_headers
         items = [resp.data] if resp.req.endpoint == Endpoint.LOOKUP else resp.data["items"]
         for rank, data in enumerate(items):
-            search_result = SearchResultButton(item=ResponseItem(data=data, rank=rank, resp=resp))
-            def getvalue(button: Button):
-                self.result_queue.put_nowait(button.value)
-            search_result.button.on_click(getvalue)
-            out.append(search_result)
+            self.buttons[rank].set_result(data, rank, resp)
+        out = self.buttons[:len(items)]
         return VBox(out)
+
+    def _clear(self):
+        return VBox([])
 
 class SearchResultRadioButtons(SearchResultList):
     css_displayed = False

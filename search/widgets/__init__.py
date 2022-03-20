@@ -64,7 +64,9 @@ class OneBoxMap(OneBoxBase):
         self.map_w = None
         self.app_design_w = None
 
-        self.result_list_w = (resultlist_class or self.__class__.default_resultlist_class)(widget=Output(), result_queue=self.result_queue)
+        self.result_list_w = (resultlist_class or self.__class__.default_resultlist_class)(widget=Output(),
+                                                                                           max_results_number=max(self.results_limit, self.suggestions_limit),
+                                                                                           result_queue=self.result_queue)
 
     def get_search_center(self):
         return self.map_w.center

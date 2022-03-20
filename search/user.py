@@ -25,14 +25,14 @@ class UserProfile:
     default_profile_languages = {default_all_countries: "en"}
     
     def __init__(self,
-                 use_my_position: bool,
-                 store_my_activity: bool,
+                 use_position: bool,
+                 share_experience: bool,
                  api: API=None,
                  languages: dict=None,
                  name: str=None):
         """
-        :param use_my_position: Mandatory opt-in/out about position usage
-        :param store_my_activity: Mandatory opt-in/out about activity usage
+        :param use_position: Mandatory opt-in/out about position usage
+        :param share_experience: Mandatory opt-in/out about activity usage
         :param api: Optional API instance
         :param languages: Optional user language preferences
         :param name: Optional user name
@@ -40,8 +40,8 @@ class UserProfile:
         self.name = name or UserProfile.default_name
         self.id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{self.name}{uuid.getnode()}'))
 
-        self.__use_my_position = use_my_position
-        self.__store_my_activity = store_my_activity
+        self.__use_position = use_position
+        self.__share_experience = share_experience
 
         self.api = api or API()
         self.languages = languages or {}
@@ -54,12 +54,12 @@ class UserProfile:
         loop.run_until_complete(self.__init_locale())
 
     @property
-    def use_my_position(self):
-        return self.__use_my_position
+    def use_positioning(self):
+        return self.__use_positioning
 
     @property
-    def store_my_activity(self):
-        return self.__store_my_activity
+    def share_experience(self):
+        return self.__share_experience
 
     def send_signal(self, body: list):
         pass
@@ -88,7 +88,7 @@ class UserProfile:
             return country_code, language
 
     async def __init_locale(self):
-        if not self.__use_my_position:
+        if not self.__use_positioning:
             self.current_latitude = UserProfile.default_current_latitude
             self.current_longitude = UserProfile.default_current_longitude
             self.current_country_code = UserProfile.default_country_code
@@ -107,5 +107,5 @@ class UserProfile:
         return self.languages[UserProfile.default_all_countries]
 
 
-permissive = UserProfile(use_my_position=True, store_my_activity=True)
-restricted = UserProfile(use_my_position=False, store_my_activity=False)
+permissive = UserProfile(use_positioning=True, share_experience=True)
+restricted = UserProfile(use_positioning=False, share_experience=False)

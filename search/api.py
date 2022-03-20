@@ -42,9 +42,9 @@ class Response:
 
 @dataclass
 class ResponseItem:
-    resp: Response
-    data: dict
-    rank: int
+    resp: Response=None
+    data: dict=None
+    rank: int=None
     
     
 class API:
