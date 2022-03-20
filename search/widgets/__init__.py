@@ -36,6 +36,9 @@ class OneBoxMap(OneBoxBase):
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
+                 autosuggest_query_params: dict=None,
+                 discover_query_params: dict=None,
+                 lookup_query_params: dict=None,
                  design: Callable=None,
                  resultlist_class: ClassVar=None,
                  autosuggest_automatic_recenter: bool=False,
@@ -46,9 +49,9 @@ class OneBoxMap(OneBoxBase):
         OneBoxBase.__init__(self,
                             user_profile,
                             api=api,
-                            results_limit=results_limit or self.__class__.default_results_limit,
-                            suggestions_limit=suggestions_limit or self.__class__.default_suggestions_limit,
-                            terms_limit=terms_limit or self.__class__.default_terms_limit,
+                            results_limit=results_limit or OneBoxMap.default_results_limit,
+                            suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
+                            terms_limit=terms_limit or OneBoxMap.default_terms_limit,
                             result_queue=self.result_queue)
 
         self.query_box_w = SubmittableTextBox(OneBoxMap.default_debounce_time if debounce_time is None else debounce_time,
@@ -63,43 +66,14 @@ class OneBoxMap(OneBoxBase):
 
         self.result_list_w = (resultlist_class or self.__class__.default_resultlist_class)(widget=Output(), result_queue=self.result_queue)
 
+    def get_search_center(self):
+        return self.map_w.center
+
     def wait_for_new_key_stroke(self) -> Awaitable:
         return self.query_box_w.get_key_stroke_future()
 
     def wait_for_submitted_value(self) -> Awaitable:
         return self.query_box_w.get_submitted_value_future()
-
-    def __get_terms_buttons_handler(self, query_terms_w: TermsButtons):
-        def on_terms_click_handler(button):
-            # replace the last token with the clicked button description and a whitespace
-            if self.text.value.endswith(' '):
-                self.text.value = f"{self.text.value}{button.description.strip()} "
-            else:
-                tokens = self.text.value.strip().split(' ')
-                if tokens:
-                    head = tokens[:-1]
-                    head.extend([button.description.strip(), ''])
-                    self.text.value = ' '.join(head)
-            query_terms_w.set([])
-        return on_terms_click_handler
-
-    def get_search_center(self):
-        return self.map_w.center
-
-    def display_terms(self, autosuggest_resp: Response):
-        terms = [term['term'] for term in autosuggest_resp.data.get('queryTerms', [])]
-        self.query_terms_w.set(terms)
-
-    def display_suggestions(self, autosuggest_resp: Response) -> None:
-        self.result_list_w.display(autosuggest_resp)
-
-        search_feature = SearchFeatureCollection(autosuggest_resp)
-        if search_feature.bbox:
-            if self.result_points_w:
-                self.map_w.remove_layer(self.result_points_w)
-            self.result_points_w = search_feature
-            self.map_w.add_layer(self.result_points_w)
-        #self.display_result_map(autosuggest_resp, update_search_center=False)
 
     def handle_suggestion_list(self, autosuggest_resp: Response):
         """
@@ -137,6 +111,35 @@ class OneBoxMap(OneBoxBase):
         """
         lookup_resp.data = {"items": [lookup_resp.data]}
         self.display_result_map(lookup_resp, update_search_center=True)
+
+    def display_terms(self, autosuggest_resp: Response):
+        terms = [term['term'] for term in autosuggest_resp.data.get('queryTerms', [])]
+        self.query_terms_w.set(terms)
+
+    def display_suggestions(self, autosuggest_resp: Response) -> None:
+        self.result_list_w.display(autosuggest_resp)
+
+        search_feature = SearchFeatureCollection(autosuggest_resp)
+        if search_feature.bbox:
+            if self.result_points_w:
+                self.map_w.remove_layer(self.result_points_w)
+            self.result_points_w = search_feature
+            self.map_w.add_layer(self.result_points_w)
+        #self.display_result_map(autosuggest_resp, update_search_center=False)
+
+    def __get_terms_buttons_handler(self, query_terms_w: TermsButtons):
+        def on_terms_click_handler(button):
+            # replace the last token with the clicked button description and a whitespace
+            if self.text.value.endswith(' '):
+                self.text.value = f"{self.text.value}{button.description.strip()} "
+            else:
+                tokens = self.text.value.strip().split(' ')
+                if tokens:
+                    head = tokens[:-1]
+                    head.extend([button.description.strip(), ''])
+                    self.text.value = ' '.join(head)
+            query_terms_w.set([])
+        return on_terms_click_handler
 
     def clear_query_text(self):
         self.query_box_w.text.value = ''

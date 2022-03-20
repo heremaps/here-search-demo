@@ -1,4 +1,6 @@
-from ..core import OneBoxBase
+from search.core import OneBoxBase
+from search.user import UserProfile
+from search.api import API, Response, base_url, Endpoint
 
 from typing import Tuple, Awaitable
 import asyncio
@@ -9,20 +11,27 @@ from array import array
 
 
 class OneBoxConsole(OneBoxBase):
+
     default_results_limit = 5
 
     def __init__(self,
-                 language: str=None,
-                 latitude: float=None, longitude: float=None,
-                 api_key: str=None,
+                 user_profile: UserProfile,
+                 api: API=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
-                 term_keys: bytes=None):
+                 terms_limit: int=None,
+                 term_keys: bytes=None,
+                 **kwargs):
         self.term_keys = array('B', term_keys)
         self.key_queue = None
         self.line_queue = None
         self.reset()
-        super().__init__(language, latitude, longitude, api_key, results_limit=results_limit, suggestions_limit=suggestions_limit, terms_limit=len(term_keys))
+        OneBoxBase.__init__(self,
+                            user_profile,
+                            api=api,
+                            results_limit=results_limit or OneBoxConsole.default_results_limit,
+                            suggestions_limit=suggestions_limit or OneBoxConsole.default_results_limit,
+                            terms_limit=len(term_keys))
 
     def reset(self):
         # TODO: this function needs to be awaited... Check a better way to have the b.run() reantrant
@@ -33,39 +42,15 @@ class OneBoxConsole(OneBoxBase):
         except AttributeError:
             pass
         self.keys = array('B')
-        self.terms = []
+        self.query_terms = []
 
-    def handle_result_list(self, response: dict) -> None:
-        """
-        Typically called by OneBoxBase.handle_text_submissions()
-        :param response:
-        :return: None
-        """
-        out = [f"{'->' :<100s}", ' '*100]
-        i = -1
-        for i, item in enumerate(response["items"]):
-            out.append(f'{item["title"]: <100s}')
-        for j in range(self.results_limit-i-1):
-            out.append(' '*100)
-        out.append(f"\r\033[{self.results_limit+2}A")
-        print('\n'.join(out), end="")
+    def wait_for_new_key_stroke(self) -> Awaitable:
+        return self.key_queue.get()
 
-    def display_terms(self, response: dict):
-        self.terms = [term['term'].strip() for term in response["queryTerms"]]
-        terms_line = f'| {" | ".join(self.terms)} |'
-        print(f'{terms_line: <100s}')
+    def wait_for_submitted_value(self) -> Awaitable:
+        return self.line_queue.get()
 
-    def display_suggestions(self, response: dict):
-        out = []
-        i = -1
-        for i, item in enumerate(response["items"]):
-            out.append(f'{item["title"]: <100s}')
-        for j in range(self.results_limit-i-1):
-            out.append(' '*100)
-        out.append(f"\r\033[{self.results_limit+2}A")
-        print('\n'.join(out), end="")
-
-    def handle_suggestion_list(self, response: dict) -> None:
+    def handle_suggestion_list(self, response: Response) -> None:
         """
         Typically called by OneBoxBase.handle_key_strokes()
         :param response:
@@ -82,11 +67,35 @@ class OneBoxConsole(OneBoxBase):
         """
         self.display_terms({"queryTerms": []})
 
-    def wait_for_new_key_stroke(self) -> Awaitable:
-        return self.key_queue.get()
+    def handle_result_list(self, response: Response) -> None:
+        """
+        Typically called by OneBoxBase.handle_text_submissions()
+        :param response:
+        :return: None
+        """
+        out = [f"{'->' :<100s}", ' '*100]
+        i = -1
+        for i, item in enumerate(response.data["items"]):
+            out.append(f'{item["title"]: <100s}')
+        for j in range(self.results_limit-i-1):
+            out.append(' '*100)
+        out.append(f"\r\033[{self.results_limit+2}A")
+        print('\n'.join(out), end="")
 
-    def wait_for_submitted_value(self) -> Awaitable:
-        return self.line_queue.get()
+    def display_terms(self, response: Response):
+        self.query_terms = [term['term'].strip() for term in response.data["queryTerms"]]
+        terms_line = f'| {" | ".join(self.query_terms)} |'
+        print(f'{terms_line: <100s}')
+
+    def display_suggestions(self, response: Response):
+        out = []
+        i = -1
+        for i, item in enumerate(response.data["items"]):
+            out.append(f'{item["title"]: <100s}')
+        for j in range(self.results_limit-i-1):
+            out.append(' '*100)
+        out.append(f"\r\033[{self.results_limit+2}A")
+        print('\n'.join(out), end="")
 
     @staticmethod
     @contextlib.contextmanager
@@ -125,7 +134,7 @@ class OneBoxConsole(OneBoxBase):
                         except IndexError:
                             pass
                         self.keys.frombytes(b' ')
-                        self.keys.frombytes(self.terms[term_index].strip().encode())
+                        self.keys.frombytes(self.query_terms[term_index].strip().encode())
                         self.keys.frombytes(b' ')
                     except ValueError:
                         self.keys.frombytes(ch)

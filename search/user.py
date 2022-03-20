@@ -47,7 +47,11 @@ class UserProfile:
         self.languages = languages or {}
 
         nest_asyncio.apply()
-        asyncio.get_running_loop().run_until_complete(self.__init_locale())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.__init_locale())
 
     @property
     def use_my_position(self):
