@@ -23,8 +23,6 @@ class OneBoxBase:
 
     def __init__(self,
                  user_profile: UserProfile,
-                 api_key: str=None,
-                 api: API=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
@@ -43,8 +41,8 @@ class OneBoxBase:
                 pass
         else:
             self.profiler = False
-        self.api = api or API(api_key=api_key)
-        self.user_profile = user_profile or UserProfile(api=self.api)
+        self.user_profile = user_profile
+        self.api: API = user_profile.api
         self.latitude = self.user_profile.current_latitude
         self.longitude = self.user_profile.current_longitude
         self.language = self.user_profile.get_current_language()
@@ -65,7 +63,6 @@ class OneBoxBase:
                               'X-AS-Session-ID': str(uuid.uuid4())}
             self.headers.update(self.x_headers)
 
-
     async def handle_key_strokes(self):
         """
         This method is called for each key stroke in the one box search Text form.
@@ -85,7 +82,7 @@ class OneBoxBase:
                                              latitude,
                                              longitude,
                                              lang=self.get_language(),
-                                             limit=self.results_limit,
+                                             limit=self.suggestions_limit,
                                              termsLimit=self.terms_limit,
                                              x_headers=x_headers,
                                              **self.autosuggest_query_params))
@@ -165,13 +162,15 @@ class OneBoxBase:
                                             x_headers=x_headers,
                                             **self.lookup_query_params))
                     else:
-                        print(f"send signal {signal}")
+                        if self.user_profile.share_experience:
+                            print(f"send signal {signal}")
                         lookup_resp = await asyncio.ensure_future(
                             self.api.lookup(session,
                                             item.data["id"],
                                             lang=self.get_language(),
                                             x_headers=None,
                                             **self.lookup_query_params))
+
                     self.handle_result_details(lookup_resp)
 
     def get_language(self):

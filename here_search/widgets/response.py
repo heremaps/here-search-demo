@@ -1,4 +1,6 @@
-from IPython.display import display as Idisplay, JSON as IJSON, Markdown
+import panel
+from panel.pane import JSON as IJSON
+from IPython.display import display as Idisplay, Markdown
 from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML
 
 from here_map_widget import GeoJSON
@@ -12,6 +14,9 @@ from dataclasses import dataclass
 import asyncio
 
 
+panel.extension()
+
+
 @dataclass
 class SearchResultList(HBox):
     widget: Widget
@@ -23,7 +28,7 @@ class SearchResultList(HBox):
 
     def __post_init__(self):
         if self.layout is None:
-            self.layout = SearchResultList.default_layout
+            self.layout = self.__class__.default_layout
         VBox.__init__(self, [self.widget])
         self.futures = []
 
@@ -89,21 +94,27 @@ class SearchResultList(HBox):
         self.children = [out]
         old_out.close()
 
+
 class SearchResultJson(SearchResultList):
     def _display(self, resp: Response) -> Widget:
-        out = Output(layout=self.layout)
-        out.append_display_data(IJSON(data={"data": resp.data, "x_headers": resp.x_headers,
+        out = self._clear()
+        out.append_display_data(IJSON({"data": resp.data, "x_headers": resp.x_headers,
                                             "request": {"url": resp.req.url,
                                                         "params": resp.req.params,
                                                         "x_headers": resp.req.x_headers}},
-                                            expanded=False, root='response'))
+                                            height=700, theme="light", depth=3))
         return out
+
+    def _clear(self) -> Widget:
+        return Output(layout=self.layout)
+
 
 class SearchResultSelectMultiple(SearchResultList):
     def _display(self, resp: Response) -> Widget:
         return SelectMultiple(options=[item["title"] for item in resp.data["items"]],
                               rows = len(resp["items"]),
                               disabled=False)
+
 
 class SearchResultButton(HBox):
     default_layout = {'display': 'flex', 'width': '270px', 'justify_content': 'flex-start'}
@@ -130,7 +141,7 @@ class SearchResultButton(HBox):
 
 
 class SearchResultButtons(SearchResultList):
-    buttons: List[SearchResultButton]=[]
+    buttons: List[SearchResultButton] = []
 
     def __post_init__(self):
         for i in range(self.max_results_number):
@@ -149,11 +160,13 @@ class SearchResultButtons(SearchResultList):
         out = self.buttons[:len(items)]
         return VBox(out)
 
-    def _clear(self):
+    def _clear(self) -> Widget:
         return VBox([])
+
 
 class SearchResultRadioButtons(SearchResultList):
     css_displayed = False
+
     def __post_init__(self):
         if not SearchResultButtons.css_displayed:
             Idisplay(HTML("<style>.result-radio label { font-size: 10px; }</style>"))
@@ -225,6 +238,7 @@ class SearchFeatureCollection(GeoJSON):
                              "radius": 7}
                          )
 
+
 class PositionMap(Map):
     default_zoom_level = 12
     default_layout = {'height': '700px'}
@@ -256,7 +270,8 @@ class PositionMap(Map):
                      basemap=maptile_layer,
                      layout = kvargs.pop('layout', PositionMap.default_layout))
         if position_handler:
-            self.set_position_handler(position_handler)
+            #self.set_position_handler(position_handler)
+            self.observe(position_handler)
 
     def set_position_handler(self, position_handler: Callable[[float, float], None]):
         def observe(change):

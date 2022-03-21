@@ -30,9 +30,6 @@ class LGAPI:
     api_key: str
     cache: dict
 
-    base_url = 'https://locationgraph.hereapi.com/v2'
-    place_url = f'{base_url}/data/HEREPlace/{{place_id}}?apiKey={{self.api_key}}'
-
     default_radius = 10000
     default_pair_distance = 200
     default_result_limit = 20
@@ -63,6 +60,7 @@ class LGAPI:
                               ('distance', distance or LGAPI.default_pair_distance),
                               ('in', in_),
                               ('limit', limit or LGAPI.default_result_limit),
+                              ('t', 's'),
                               ('apiKey', self.api_key)))
         params.update(kwargs)
         return await self.uncache_or_get(session, lg_base_url[LGEndpoint.PLACES_CAT_NEAR_CAT], params)
@@ -75,8 +73,6 @@ class OneBoxCatNearCat(OneBoxMap):
 
     def __init__(self,
                  user_profile: UserProfile,
-                 api_key: str=None,
-                 api: API=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
@@ -84,7 +80,6 @@ class OneBoxCatNearCat(OneBoxMap):
                  discover_query_params: dict=None,
                  lookup_query_params: dict=None,
                  design: Callable=None,
-                 resultlist_class: ClassVar=None,
                  autosuggest_automatic_recenter: bool=False,
                  debounce_time: int=None,
                  lg_radius: int=None,
@@ -95,8 +90,6 @@ class OneBoxCatNearCat(OneBoxMap):
 
         OneBoxMap.__init__(self,
                            user_profile,
-                           api_key=api_key,
-                           api=api,
                            results_limit=results_limit,
                            suggestions_limit=suggestions_limit,
                            terms_limit=terms_limit,
@@ -104,7 +97,6 @@ class OneBoxCatNearCat(OneBoxMap):
                            discover_query_params=discover_query_params,
                            lookup_query_params=lookup_query_params,
                            design=design,
-                           resultlist_class=resultlist_class,
                            autosuggest_automatic_recenter=autosuggest_automatic_recenter,
                            debounce_time=debounce_time,
                            **kwargs)
@@ -313,14 +305,22 @@ class OneBoxCatNearCat(OneBoxMap):
                                     lang=self.get_language(),
                                     x_headers=self.x_headers,
                                     **self.lookup_query_params))
+                find_lookup_resp.data = find_lookup_resp.data.copy()
                 find_lookup_resp.data['children'] = [{'association': 'nearby', 'id': f'here:pds:place:{near_id}'}]
                 if self.lg_children_details:
+                    title = find_lookup_resp.data["title"]
                     near_lookup_resp = await asyncio.ensure_future(
                         self.api.lookup(session, f'here:pds:place:{near_id}',
                                         lang=self.get_language(),
                                         x_headers=self.x_headers,
                                         **self.lookup_query_params))
-                    find_lookup_resp.data["title"] = f'{find_lookup_resp.data["title"]} ({conjunction} {near_lookup_resp.data["title"]})'
+                    find_lookup_resp.data["titleDetails"] = {
+                        "findTitle": title,
+                        "conjunction": conjunction,
+                        "nearTitle": near_lookup_resp.data['title']
+                    }
+                    #find_lookup_resp.data["title"] = f'{title} ({conjunction} {near_lookup_resp.data["title"]})'
+
                     find_lookup_resp.data['children'][0].update(near_lookup_resp.data)
             except:
                 continue

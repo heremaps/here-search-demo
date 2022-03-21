@@ -136,7 +136,7 @@ class API:
         :return: a Response object
         """
         params = OrderedDict(q=q, at=f'{latitude},{longitude}', apiKey=self.api_key)
-        params.update(params)
+        params.update(kwargs)
         return await self.uncache_or_get(session, Request(endpoint=Endpoint.DISCOVER,
                                                           url=base_url[Endpoint.DISCOVER],
                                                           params=params,
@@ -155,7 +155,7 @@ class API:
         :return: a Response object
         """
         params = OrderedDict(id=id, apiKey=self.api_key)
-        params.update(params)
+        params.update(kwargs)
         return await self.uncache_or_get(session, Request(endpoint=Endpoint.LOOKUP,
                                                           url=base_url[Endpoint.LOOKUP],
                                                           params=params,
@@ -175,7 +175,7 @@ class API:
         :return: a Response object
         """
         params = OrderedDict(at=f"{latitude},{longitude}", apiKey=self.api_key)
-        params.update(params)
+        params.update(kwargs)
         return await self.uncache_or_get(session, Request(endpoint=Endpoint.REVGEOCODE,
                                                           url=base_url[Endpoint.REVGEOCODE],
                                                           params=params,

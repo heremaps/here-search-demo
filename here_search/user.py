@@ -19,8 +19,7 @@ class UserProfile:
     default_current_latitude = 52.518333
     default_current_longitude = 13.408333
     default_country_code = "DEU"
-    default_all_countries = "all"
-    default_profile_languages = {default_all_countries: "en"}
+    default_profile_languages = {default_name: "en"}
     
     def __init__(self,
                  use_positioning: bool,
@@ -41,7 +40,7 @@ class UserProfile:
         self.__use_positioning = use_positioning
         self.__share_experience = share_experience
 
-        self.api = api or API()
+        self._api = api
         self.languages = languages or {}
 
         nest_asyncio.apply()
@@ -58,6 +57,12 @@ class UserProfile:
     @property
     def share_experience(self):
         return self.__share_experience
+
+    @property
+    def api(self) -> API:
+        if self._api is None:
+            self._api = API()
+        return self._api
 
     def send_signal(self, body: list):
         pass
@@ -90,20 +95,21 @@ class UserProfile:
             self.current_latitude = UserProfile.default_current_latitude
             self.current_longitude = UserProfile.default_current_longitude
             self.current_country_code = UserProfile.default_country_code
-            if UserProfile.default_all_countries not in self.languages:
+            if UserProfile.default_name not in self.languages:
                 self.languages.update(self.__class__.default_profile_languages)
         else:
             async with ClientSession(raise_for_status=True) as session:
                 self.current_latitude, self.current_longitude = await get_lat_lon(session)
             self.current_country_code, language = await self.__get_position_locale()
-            if UserProfile.default_all_countries not in self.languages:
-                self.languages.update({self.__class__.default_all_countries: language})
+            if UserProfile.default_name not in self.languages:
+                self.languages.update({self.__class__.default_name: language})
 
     def get_current_language(self):
         if self.current_country_code in self.languages:
             return self.languages[self.current_country_code]
-        return self.languages[UserProfile.default_all_countries]
+        return self.languages[UserProfile.default_name]
 
 
-permissive = UserProfile(use_positioning=True, share_experience=True)
-restricted = UserProfile(use_positioning=False, share_experience=False)
+class Permissive(UserProfile):
+    def __init__(self, api: API=None):
+        UserProfile.__init__(self, use_positioning=True, share_experience=True, api=api)

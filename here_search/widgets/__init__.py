@@ -7,7 +7,7 @@ from here_search.user import UserProfile
 from here_search.api import API, Response
 from .query import SubmittableTextBox, TermsButtons, NearbySimpleParser
 from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson, SearchResultRadioButtons
-from .design import Design
+import here_search.widgets.design as design
 
 from typing import Callable, ClassVar, Awaitable
 import asyncio
@@ -22,14 +22,11 @@ class OneBoxMap(OneBoxBase):
     default_search_box_layout = {'width': '240px'}
     default_placeholder = "free text"
     default_output_format = 'text'
-    default_resultlist_class = SearchResultButtons
-    default_design = Design.three
+    default_design = design.EmbeddedList
     default_debounce_time = 0
 
     def __init__(self,
                  user_profile: UserProfile,
-                 api_key: str=None,
-                 api: API=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
@@ -37,7 +34,6 @@ class OneBoxMap(OneBoxBase):
                  discover_query_params: dict=None,
                  lookup_query_params: dict=None,
                  design: Callable=None,
-                 resultlist_class: ClassVar=None,
                  autosuggest_automatic_recenter: bool=False,
                  debounce_time: int=None,
                  **kwargs):
@@ -45,8 +41,6 @@ class OneBoxMap(OneBoxBase):
         self.result_queue: asyncio.Queue = asyncio.Queue()
         OneBoxBase.__init__(self,
                             user_profile,
-                            api_key=api_key,
-                            api=api,
                             results_limit=results_limit or OneBoxMap.default_results_limit,
                             suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
                             terms_limit=terms_limit or OneBoxMap.default_terms_limit,
@@ -58,17 +52,26 @@ class OneBoxMap(OneBoxBase):
                                               **kwargs)
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
         self.result_points_w: SearchFeatureCollection = None
-        self.design = design
+        self.design = design or self.__class__.default_design
         self.map_w = None
         self.app_design_w = None
 
-        self.result_list_w = (resultlist_class or
-                              self.__class__.default_resultlist_class)(widget=Output(),
-                                                                       max_results_number=max(self.results_limit, self.suggestions_limit),
-                                                                       result_queue=self.result_queue)
+        self.result_list_w = [out_class(widget=Output(),
+                                               max_results_number=max(self.results_limit, self.suggestions_limit),
+                                               result_queue=self.result_queue)
+                              for out_class in self.design.out_classes]
 
     def get_search_center(self):
-        return self.map_w.center
+        return self.latitude, self.longitude
+
+    def search_center_observer(self):
+        def observe(change):
+            if change.type == "change":
+                if change.name in "center":
+                    self.latitude, self.longitude = change.new[:2]
+                elif change.name == "zoom":
+                    self.latitude, self.longitude = self.map_w.center
+        return observe
 
     def wait_for_new_key_stroke(self) -> Awaitable:
         return self.query_box_w.get_key_stroke_future()
@@ -99,7 +102,8 @@ class OneBoxMap(OneBoxBase):
         :param autosuggest_resp:
         :return: None
         """
-        self.result_list_w.display(discover_resp)
+        for result_list_w in self.result_list_w:
+            result_list_w.display(discover_resp)
         self.display_result_map(discover_resp, update_search_center=True)
         self.clear_query_text()
         self.renew_session_id()
@@ -110,6 +114,8 @@ class OneBoxMap(OneBoxBase):
         :param autosuggest_resp:
         :return: None
         """
+        if len(self.result_list_w) > 1:
+            self.result_list_w[1].display(lookup_resp)
         lookup_resp.data = {"items": [lookup_resp.data]}
         self.display_result_map(lookup_resp, update_search_center=True)
 
@@ -118,7 +124,8 @@ class OneBoxMap(OneBoxBase):
         self.query_terms_w.set(terms)
 
     def display_suggestions(self, autosuggest_resp: Response) -> None:
-        self.result_list_w.display(autosuggest_resp)
+        for result_list_w in self.result_list_w:
+            result_list_w.display(autosuggest_resp)
 
         search_feature = SearchFeatureCollection(autosuggest_resp)
         if search_feature.bbox:
@@ -142,9 +149,9 @@ class OneBoxMap(OneBoxBase):
             if len(resp.data["items"]) == 1:
                 self.map_w.zoom = OneBoxMap.minimum_zoom_level
 
-    async def __init_map(self):
-        self.map_w = PositionMap(api_key=self.api.api_key, center=[self.latitude, self.longitude])
-        self.app_design_w = (self.design or self.__class__.default_design)(self.query_box_w, self.map_w, self.query_terms_w, self.result_list_w)
+    async def __ainit_map(self):
+        self.map_w = PositionMap(api_key=self.api.api_key, center=[self.latitude, self.longitude], position_handler=self.search_center_observer())
+        self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.result_list_w)
 
     def run(self,
             handle_user_profile_setup: Callable=None,
@@ -157,7 +164,7 @@ class OneBoxMap(OneBoxBase):
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
-        loop.run_until_complete(self.__init_map())
+        loop.run_until_complete(self.__ainit_map())
         Idisplay(self.app_design_w)
 
         OneBoxBase.run(self,
