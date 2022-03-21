@@ -75,6 +75,7 @@ class OneBoxCatNearCat(OneBoxMap):
 
     def __init__(self,
                  user_profile: UserProfile,
+                 api_key: str=None,
                  api: API=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
@@ -94,6 +95,7 @@ class OneBoxCatNearCat(OneBoxMap):
 
         OneBoxMap.__init__(self,
                            user_profile,
+                           api_key=api_key,
                            api=api,
                            results_limit=results_limit,
                            suggestions_limit=suggestions_limit,

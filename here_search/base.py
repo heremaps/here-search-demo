@@ -23,6 +23,7 @@ class OneBoxBase:
 
     def __init__(self,
                  user_profile: UserProfile,
+                 api_key: str=None,
                  api: API=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
@@ -42,7 +43,7 @@ class OneBoxBase:
                 pass
         else:
             self.profiler = False
-        self.api = api or API()
+        self.api = api or API(api_key=api_key)
         self.user_profile = user_profile or UserProfile(api=self.api)
         self.latitude = self.user_profile.current_latitude
         self.longitude = self.user_profile.current_longitude

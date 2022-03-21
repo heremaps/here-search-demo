@@ -28,6 +28,7 @@ class OneBoxMap(OneBoxBase):
 
     def __init__(self,
                  user_profile: UserProfile,
+                 api_key: str=None,
                  api: API=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
@@ -44,6 +45,7 @@ class OneBoxMap(OneBoxBase):
         self.result_queue: asyncio.Queue = asyncio.Queue()
         OneBoxBase.__init__(self,
                             user_profile,
+                            api_key=api_key,
                             api=api,
                             results_limit=results_limit or OneBoxMap.default_results_limit,
                             suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
