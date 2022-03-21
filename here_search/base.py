@@ -69,6 +69,11 @@ class OneBoxBase:
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             x_headers = self.x_headers
+            if self.user_profile.share_experience:
+                await asyncio.ensure_future(
+                    self.api.signals(session,
+                                     resource_id="application", rank=0, correlation_id="noCorrelationID",
+                                     action="start", userId=x_headers['X-User-ID']))
             while True:
                 query_text = await self.wait_for_new_key_stroke()
                 if query_text is None:
@@ -106,20 +111,19 @@ class OneBoxBase:
                         except RuntimeError:
                             pass
                     break
-                if query_text:
 
+                if query_text:
                     latitude, longitude = self.get_search_center()
                     discover_task = asyncio.ensure_future(
-                        self.api.discover(session, 
-                                          query_text, 
-                                          latitude, 
-                                          longitude, 
+                        self.api.discover(session, query_text, latitude, longitude,
                                           lang=self.get_language(),
                                           limit=self.results_limit,
                                           x_headers=x_headers,
                                           **self.discover_query_params))
                     discover_resp = await discover_task
                     self.handle_result_list(discover_resp)
+
+        await self.__astop()
 
     async def handle_result_selections(self):
         """
@@ -134,41 +138,35 @@ class OneBoxBase:
                 if not item:
                     continue
 
-                # TO be used for signals
-                signal = {'id': item.data['id'],
-                          'rank': item.rank,
-                          'correlation_id': item.resp.x_headers['X-Correlation-ID'],
-                          'action': 'tap'}
-
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
                     if self.user_profile.share_experience:
-                        signal['asSessionID'] = x_headers['X-AS-Session-ID']
-                        print(f"send signal {signal}")
+                        await asyncio.ensure_future(
+                            self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
+                                             correlation_id=item.resp.x_headers['X-Correlation-ID'],
+                                             action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
+                                             userId=x_headers['X-AS-Session-ID']))
                     discover_resp = await asyncio.ensure_future(
-                        self.api.autosuggest_href(session,
-                                                  item.data["href"],
-                                                  limit=self.results_limit,
-                                                  x_headers=x_headers))
+                        self.api.autosuggest_href(session,  item.data["href"], limit=self.results_limit,  x_headers=x_headers))
                     self.handle_result_list(discover_resp)
                 else:
                     if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
                         if self.user_profile.share_experience:
-                            signal['asSessionID'] = x_headers['X-AS-Session-ID']
-                            print(f"send signal {signal}")
+                            await asyncio.ensure_future(
+                                self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
+                                                 correlation_id=item.resp.x_headers['X-Correlation-ID'],
+                                                 action="here:gs:action:view",  asSessionId=x_headers['X-AS-Session-ID'],
+                                                 userId=x_headers['X-AS-Session-ID']))
                         lookup_resp = await asyncio.ensure_future(
-                            self.api.lookup(session,
-                                            item.data["id"],
-                                            lang=self.get_language(),
-                                            x_headers=x_headers,
+                            self.api.lookup(session, item.data["id"], lang=self.get_language(), x_headers=x_headers,
                                             **self.lookup_query_params))
                     else:
                         if self.user_profile.share_experience:
-                            print(f"send signal {signal}")
-                        lookup_resp = await asyncio.ensure_future(
-                            self.api.lookup(session,
-                                            item.data["id"],
-                                            lang=self.get_language(),
-                                            x_headers=None,
+                            await asyncio.ensure_future(
+                                self.api.signals(session, resource_id=item.data['id'],  rank=item.rank,
+                                                 correlation_id=item.resp.x_headers['X-Correlation-ID'],
+                                                 action="here:gs:action:view", userId=x_headers['X-AS-Session-ID']))
+                            lookup_resp = await asyncio.ensure_future(
+                                self.api.lookup(session, item.data["id"], lang=self.get_language(), x_headers=None,
                                             **self.lookup_query_params))
 
                     self.handle_result_details(lookup_resp)
@@ -214,3 +212,18 @@ class OneBoxBase:
         asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
         asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
         asyncio.ensure_future((handle_result_selections or self.handle_result_selections)())
+
+    async def __astop(self):
+        async with ClientSession(raise_for_status=True, headers=self.headers) as session:
+            await asyncio.ensure_future(
+                    self.api.signals(session, resource_id="application", rank=0, correlation_id="noCorrelationID",
+                                     action="end", userId=self.x_headers['X-User-ID']))
+
+    def __del__(self):
+        if self.user_profile.share_experience:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+            loop.run_until_complete(self.__astop())
+

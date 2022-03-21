@@ -15,14 +15,16 @@ class Endpoint(IntEnum):
     DISCOVER = auto()
     LOOKUP = auto()
     REVGEOCODE = auto()
+    SIGNALS = auto()
 
 
-base_url = {ep:f'https://{eps}.search.hereapi.com/v1/{eps}'
+base_url = {ep: f'https://{eps}.search.hereapi.com/v1/{eps}'
             for ep, eps in {Endpoint.AUTOSUGGEST:'autosuggest',
                             Endpoint.AUTOSUGGEST_HREF:'discover',
                             Endpoint.DISCOVER:'discover',
                             Endpoint.LOOKUP:'lookup',
-                            Endpoint.REVGEOCODE:'revgeocode'}.items()}
+                            Endpoint.REVGEOCODE:'revgeocode',
+                            Endpoint.SIGNALS:'signals'}.items()}
 
 @dataclass
 class Request:
@@ -30,6 +32,7 @@ class Request:
     url: str=None
     params: Dict[str, str]=None
     x_headers: dict=None
+    post: bool=False
 
     def key(self) -> Tuple[Endpoint, Tuple[str]]:
         return self.endpoint, tuple(self.params.items())
@@ -93,7 +96,7 @@ class API:
         :param q: query text
         :param latitude: search center latitude
         :param longitude: search center longitude
-        :param x_headers: Optional X-* headers (X-Request-Id, X-Correlation-ID, ...)
+        :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
         params = OrderedDict(q=q, at=f'{latitude},{longitude}', apiKey=self.api_key)
@@ -113,7 +116,7 @@ class API:
         Blindly calls Autosuggest href
         :param session: instance of ClientSession
         :param href: href value returned in Autosuggest categoryQyery/chainQuery results
-        :param x_headers: Optional X-* headers (X-Request-Id, X-Correlation-ID, ...)
+        :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
         params = {'apiKey': self.api_key}
@@ -132,7 +135,7 @@ class API:
         :param q: query text
         :param latitude: search center latitude
         :param longitude: search center longitude
-        :param x_headers: Optional X-* headers (X-Request-Id, X-Correlation-ID, ...)
+        :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
         params = OrderedDict(q=q, at=f'{latitude},{longitude}', apiKey=self.api_key)
@@ -151,7 +154,7 @@ class API:
 
         :param session: instance of ClientSession
         :param id: location record ID
-        :param x_headers: Optional X-* headers (X-Request-Id, X-Correlation-ID, ...)
+        :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
         params = OrderedDict(id=id, apiKey=self.api_key)
@@ -171,7 +174,7 @@ class API:
         :param session: instance of ClientSession
         :param latitude: input position latitude
         :param longitude: input position longitude
-        :param x_headers: Optional X-* headers (X-Request-Id, X-Correlation-ID, ...)
+        :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
         params = OrderedDict(at=f"{latitude},{longitude}", apiKey=self.api_key)
@@ -180,4 +183,32 @@ class API:
                                                           url=base_url[Endpoint.REVGEOCODE],
                                                           params=params,
                                                           x_headers=x_headers))
-    
+
+    async def signals(self, session: ClientSession,
+                      resource_id: str,
+                      correlation_id: str,
+                      rank: int,
+                      action: str,
+                      x_headers: dict=None,
+                      **kwargs) -> None:
+        """
+        Calls HERE signals endpoint with some user action
+
+        :param session: instance of ClientSession
+        :param resource_id: the HERE result id on which the action is performed
+        :param rank: the rank of the result in its result list
+        :param action: the action performed by the user on the result
+        :param x_headers: Optional X-* headers (X-Request-Id, ...)
+        :return: a Response object
+        """
+        data = OrderedDict(version=1,
+                           resourceId=resource_id,
+                           correlationId=correlation_id,
+                           rank=rank, action=action)
+        data.update(kwargs)
+        print(f"send signals{data}")
+        async with session.post(base_url[Endpoint.SIGNALS],
+                                params=OrderedDict(apiKey=self.api_key),
+                                data=data,
+                                headers=x_headers) as response:
+            await response.text()
