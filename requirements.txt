@@ -6,4 +6,5 @@ nest_asyncio
 ujson
 traitlets
 pyinstrument
+panel
 here-map-widget-for-jupyter

@@ -206,7 +206,6 @@ class API:
                            correlationId=correlation_id,
                            rank=rank, action=action)
         data.update(kwargs)
-        print(f"send signals{data}")
         async with session.post(base_url[Endpoint.SIGNALS],
                                 params=OrderedDict(apiKey=self.api_key),
                                 data=data,
