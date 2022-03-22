@@ -297,8 +297,8 @@ class OneBoxCatNearCat(OneBoxMap):
                                                            limit=OneBoxCatNearCat.default_results_limit)
         search_items = []
         for item in lg_resp.get('items', []):
-            find_id = item['findPlace']['properties']['HEREPlace']['placeId']
-            near_id = item['nearPlace']['properties']['HEREPlace']['placeId']
+            find_id = item['findPlace']['properties']['SearchPlace']['placeId']
+            near_id = item['nearPlace']['properties']['SearchPlace']['placeId']
             try:
                 find_lookup_resp = await asyncio.ensure_future(
                     self.api.lookup(session, f'here:pds:place:{find_id}',
@@ -319,7 +319,7 @@ class OneBoxCatNearCat(OneBoxMap):
                         "conjunction": conjunction,
                         "nearTitle": near_lookup_resp.data['title']
                     }
-                    #find_lookup_resp.data["title"] = f'{title} ({conjunction} {near_lookup_resp.data["title"]})'
+                    find_lookup_resp.data["title"] = f'{title} ({conjunction} {near_lookup_resp.data["title"]})'
 
                     find_lookup_resp.data['children'][0].update(near_lookup_resp.data)
             except:

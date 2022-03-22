@@ -9,7 +9,7 @@ A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/
 
 ## Installation
 
-    pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search-notebook
+    pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search
 
 ### step-by-step for non developers
 
@@ -24,7 +24,7 @@ The recipe below runs on a macos Monterey machine.
    mkdir virtualenv
    python3 -m venv virtualenv
    source virtualenv/bin/activate
-   pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search-notebook
+   pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search
    jupyter nbextension enable --py widgetsnbextension
    jupyter labextension install @jupyterlab/geojson-extension
    python3 -m ipykernel install --user --name search_notebook --display-name "demo search"
