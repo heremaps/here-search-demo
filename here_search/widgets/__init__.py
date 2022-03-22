@@ -35,6 +35,7 @@ class OneBoxMap(OneBoxBase):
                  lookup_query_params: dict=None,
                  design: Callable=None,
                  autosuggest_automatic_recenter: bool=False,
+                 initial_query: str=None,
                  debounce_time: int=None,
                  **kwargs):
 
@@ -44,6 +45,7 @@ class OneBoxMap(OneBoxBase):
                             results_limit=results_limit or OneBoxMap.default_results_limit,
                             suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
                             terms_limit=terms_limit or OneBoxMap.default_terms_limit,
+                            initial_query=initial_query,
                             result_queue=self.result_queue, **kwargs)
 
         self.query_box_w = SubmittableTextBox(OneBoxMap.default_debounce_time if debounce_time is None else debounce_time,

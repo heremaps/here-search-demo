@@ -127,28 +127,18 @@ class OneBoxCatNearCat(OneBoxMap):
                 latitude, longitude = self.get_search_center()
                 conjunction_mode, conjunction, query_head, query_tail = self.get_conjunction_mode(query_text)
                 autosuggest_resp, top_ontology = await self.get_first_category_ontology(session, query_text, latitude, longitude)
-                if conjunction_mode == NearbySimpleParser.Mode.TOKENS:
+                if conjunction_mode == NearbySimpleParser.Mode.TOKENS or top_ontology:
                     find_ontology = top_ontology
-                elif conjunction_mode in (NearbySimpleParser.Mode.TOKENS_SPACES,
-                                          NearbySimpleParser.Mode.TOKENS_CONJUNCTION,
-                                          NearbySimpleParser.Mode.TOKENS_CONJUNCTION_SPACES):
-                    if top_ontology:
-                        find_ontology = top_ontology
-                elif conjunction_mode == NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION:
-                    if top_ontology:
-                        find_ontology = top_ontology
+
+                if conjunction_mode == NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION:
                     autosuggest_resp.data["queryTerms"] = ([{"term": conjunction}] + autosuggest_resp.data["queryTerms"])[:OneBoxMap.default_terms_limit]
 
-                elif conjunction_mode == NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS:
-                    if top_ontology:
-                        find_ontology = top_ontology
-
-                    if find_ontology:
-                        near_resp, near_ontology = await self.get_first_category_ontology(session, query_tail, latitude, longitude)
-                        if near_ontology:
-                            # Replace the query below with the calls to Location Graph
-                            self.add_cat_near_cat_suggestion(autosuggest_resp, conjunction, find_ontology,
-                                                                   latitude, longitude, near_ontology, near_resp)
+                elif conjunction_mode == NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS and find_ontology:
+                    near_resp, near_ontology = await self.get_first_category_ontology(session, query_tail, latitude, longitude)
+                    if near_ontology:
+                        # Replace the query below with the calls to Location Graph
+                        self.add_cat_near_cat_suggestion(autosuggest_resp, conjunction, find_ontology,
+                                                               latitude, longitude, near_ontology, near_resp)
 
                 self.handle_suggestion_list(autosuggest_resp)
 
@@ -184,47 +174,29 @@ class OneBoxCatNearCat(OneBoxMap):
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             x_headers = self.x_headers
+
+            if self.initial_query:
+                if self.lg_text_submission:
+                    await self._do_lg_discover(session, self.initial_query, x_headers)
+                else:
+                    await self._do_discover(session, self.initial_query, x_headers)
+
             while True:
                 query_text = await self.wait_for_submitted_value()
+
                 if query_text is None:
-                    if self.profiler:
-                        try:
-                            self.profiler.stop()
-                            self.profiler.open_in_browser()
-                        except RuntimeError:
-                            pass
+                    self._do_profiler_stop()
                     break
-                if query_text.strip() == '':
+                elif query_text.strip() == '':
                     self.handle_empty_text_submission()
                     continue
 
-                latitude, longitude = self.get_search_center()
-                response = Response()
                 if self.lg_text_submission:
-                    conjunction_mode, conjunction, query_head, query_tail = self.get_conjunction_mode(query_text)
-                    if conjunction_mode == NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS:
-                        find_resp, find_ontology = await self.get_first_category_ontology(session, query_head, latitude, longitude)
-                        if find_ontology:
-                            near_resp, near_ontology = await self.get_first_category_ontology(session, query_tail, latitude, longitude)
-                            if near_ontology:
-                                find_categories = [cat["id"] for cat in find_ontology['categories']]
-                                near_categories = [cat["id"] for cat in near_ontology['categories']]
-                                response = await self.lg_to_search_response(session,
-                                                                            latitude=latitude,
-                                                                            longitude=longitude,
-                                                                            find_categories=find_categories,
-                                                                            near_categories=near_categories,
-                                                                            conjunction=conjunction)
-                if not response.data:
-                    response = await asyncio.ensure_future(
-                        self.api.discover(session,
-                                          query_text, latitude, longitude,
-                                          lang=self.get_language(),
-                                          limit=self.results_limit,
-                                          x_headers=x_headers,
-                                          **self.discover_query_params))
+                    await self._do_lg_discover(session, query_text, x_headers)
+                else:
+                    await self._do_discover(session, query_text, x_headers)
 
-                self.handle_result_list(response)
+        await self.__astop()
 
     async def handle_result_selections(self):
         """
@@ -239,21 +211,8 @@ class OneBoxCatNearCat(OneBoxMap):
                 if not item:
                     continue
 
-                # TO be used for signals
-                signal = {'id': item.data['id'],
-                          'rank': item.rank,
-                          'correlation_id': item.resp.x_headers['X-Correlation-ID'],
-                          'action': 'tap'}
-
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    if self.user_profile.share_experience:
-                        signal['asSessionID'] = x_headers['X-AS-Session-ID']
-                        print(f"send signal {signal}")
-                    discover_resp = await asyncio.ensure_future(
-                        self.api.autosuggest_href(session, item.data["href"],
-                                                  limit=self.results_limit,
-                                                  x_headers=x_headers))
-                    self.handle_result_list(discover_resp)
+                    await self._do_autosuggest_href(session, item, self.user_profile.share_experience, x_headers)
                 elif item.data["resultType"] == "categoryNearCategoryQuery":
                     follow_up = item.data["followUpDetails"]
                     response = await self.lg_to_search_response(session,
@@ -263,26 +222,34 @@ class OneBoxCatNearCat(OneBoxMap):
                                                                 near_categories=follow_up["nearCategories"],
                                                                 conjunction=item.data["titleDetails"]["conjunction"])
                     self.handle_result_list(response)
+                elif item.resp.req.endpoint == LGEndpoint.PLACES_CAT_NEAR_CAT:
+                    response = Response(req=item.resp.req, data=item.data, x_headers=item.resp.req.x_headers)
+                    self.handle_result_details(response)
                 else:
-                    if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
-                        if self.user_profile.share_experience:
-                            signal['asSessionID'] = x_headers['X-AS-Session-ID']
-                            print(f"send signal {signal}")
-                        lookup_resp = await asyncio.ensure_future(
-                            self.api.lookup(session,
-                                            item.data["id"],
-                                            lang=self.get_language(),
-                                            x_headers=x_headers,
-                                            **self.lookup_query_params))
-                    else:
-                        print(f"send signal {signal}")
-                        lookup_resp = await asyncio.ensure_future(
-                            self.api.lookup(session,
-                                            item.data["id"],
-                                            lang=self.get_language(),
-                                            x_headers=None,
-                                            **self.lookup_query_params))
-                    self.handle_result_details(lookup_resp)
+                    await self._do_lookup(session, item, self.user_profile.share_experience, x_headers)
+
+    async def _do_lg_discover(self, session, query_text, x_headers):
+        response = Response(req=Request())
+        latitude, longitude = self.get_search_center()
+        conjunction_mode, conjunction, query_head, query_tail = self.get_conjunction_mode(query_text)
+        if conjunction_mode == NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS:
+            find_resp, find_ontology = await self.get_first_category_ontology(session, query_head, latitude, longitude)
+            if find_ontology:
+                near_resp, near_ontology = await self.get_first_category_ontology(session, query_tail, latitude,
+                                                                                  longitude)
+                if near_ontology:
+                    find_categories = [cat["id"] for cat in find_ontology['categories']]
+                    near_categories = [cat["id"] for cat in near_ontology['categories']]
+                    response = await self.lg_to_search_response(session,
+                                                                latitude=latitude,
+                                                                longitude=longitude,
+                                                                find_categories=find_categories,
+                                                                near_categories=near_categories,
+                                                                conjunction=conjunction)
+        if response.data is None:
+            await self._do_discover(session, query_text, x_headers)
+        else:
+            self.handle_result_list(response)
 
     async def lg_to_search_response(self, session: ClientSession,
                                     latitude: float, longitude: float,
@@ -305,28 +272,34 @@ class OneBoxCatNearCat(OneBoxMap):
                                     lang=self.get_language(),
                                     x_headers=self.x_headers,
                                     **self.lookup_query_params))
-                find_lookup_resp.data = find_lookup_resp.data.copy()
-                find_lookup_resp.data['children'] = [{'association': 'nearby', 'id': f'here:pds:place:{near_id}'}]
+                find_lookup_resp_copy = Response(req=find_lookup_resp.req, data=find_lookup_resp.data.copy(), x_headers=find_lookup_resp.x_headers)
+                find_lookup_resp_copy.data['children'] = [{'association': 'nearby', 'id': f'here:pds:place:{near_id}'}]
                 if self.lg_children_details:
-                    title = find_lookup_resp.data["title"]
+                    title = find_lookup_resp_copy.data["title"]
                     near_lookup_resp = await asyncio.ensure_future(
                         self.api.lookup(session, f'here:pds:place:{near_id}',
                                         lang=self.get_language(),
                                         x_headers=self.x_headers,
                                         **self.lookup_query_params))
-                    find_lookup_resp.data["titleDetails"] = {
+                    find_lookup_resp_copy.data["titleDetails"] = {
                         "findTitle": title,
                         "conjunction": conjunction,
                         "nearTitle": near_lookup_resp.data['title']
                     }
-                    find_lookup_resp.data["title"] = f'{title} ({conjunction} {near_lookup_resp.data["title"]})'
+                    find_lookup_resp_copy.data["title"] = f'{title} ({conjunction} {near_lookup_resp.data["title"]})'
 
-                    find_lookup_resp.data['children'][0].update(near_lookup_resp.data)
+                    find_lookup_resp_copy.data['children'][0].update(near_lookup_resp.data)
             except:
                 continue
+            else:
+                search_items.append(find_lookup_resp_copy.data)
 
-            search_items.append(find_lookup_resp.data)
-        return Response(data={'items': search_items}, req=Request())
+        if search_items:
+            response = Response(data={'items': search_items}, req=Request(endpoint=LGEndpoint.PLACES_CAT_NEAR_CAT))
+        else:
+            response = Response()
+
+        return response
 
     async def get_first_category_ontology(self, session: ClientSession,
                                           query: str, latitude: float, longitude: float) -> Tuple[Response, Optional[dict]]:

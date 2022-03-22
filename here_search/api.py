@@ -76,14 +76,14 @@ class API:
         if cache_key in self.cache:
             return self.cache[cache_key]
 
-        async with session.get(req.url, params=req.params, headers=req.x_headers) as response:
-            x_headers = {"X-Request-Id": response.headers["X-Request-Id"],
-                         "X-Correlation-ID": response.headers["X-Correlation-ID"]}
-            result = Response(data=await response.json(loads=loads),
+        async with session.get(req.url, params=req.params, headers=req.x_headers) as get_response:
+            x_headers = {"X-Request-Id": get_response.headers["X-Request-Id"],
+                         "X-Correlation-ID": get_response.headers["X-Correlation-ID"]}
+            response = Response(data=await get_response.json(loads=loads),
                               req=req,
                               x_headers=x_headers)
-            self.cache[cache_key] = result
-            return result
+            self.cache[cache_key] = response
+            return response
 
     async def autosuggest(self, session: ClientSession,
                           q: str, latitude: float, longitude: float,

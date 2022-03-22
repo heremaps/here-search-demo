@@ -70,17 +70,16 @@ class UserProfile:
     def set_position(self, latitude, longitude):
         self.current_latitude = latitude
         self.current_longitude = longitude
-        self.current_country_code, language = asyncio.get_running_loop().run_until_complete(self.__get_position_locale())
-        return self
+        self.current_country_code, language = asyncio.get_running_loop().run_until_complete(self.get_preferred_locale(latitude, longitude))
 
-    async def __get_position_locale(self) -> Tuple[str, str]:
+    async def get_preferred_locale(self, latitude: float, longitude: float) -> Tuple[str, str]:
         country_code, language = None, None
         async with ClientSession(raise_for_status=True) as session:
 
             local_addresses = await asyncio.ensure_future(self.api.reverse_geocode(
                 session,
-                latitude=self.current_latitude,
-                longitude=self.current_longitude))
+                latitude=latitude,
+                longitude=longitude))
 
             if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
                 country_code = local_addresses.data["items"][0]["address"]["countryCode"]
@@ -100,7 +99,7 @@ class UserProfile:
         else:
             async with ClientSession(raise_for_status=True) as session:
                 self.current_latitude, self.current_longitude = await get_lat_lon(session)
-            self.current_country_code, language = await self.__get_position_locale()
+            self.current_country_code, language = await self.get_preferred_locale(self.current_latitude, self.current_longitude)
             if UserProfile.default_name not in self.languages:
                 self.languages.update({self.__class__.default_name: language})
 

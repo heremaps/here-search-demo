@@ -170,7 +170,6 @@ class NearbySimpleParser:
         TOKENS = auto()
         TOKENS_SPACES = auto()
         TOKENS_INCOMPLETE_CONJUNCTION = auto()   # tokens followed by first letters of conjunction
-        CONJUNCTION = auto()         # conjunction first or followed by spaces
         TOKENS_CONJUNCTION = auto()
         TOKENS_CONJUNCTION_SPACES = auto()  # conjunction last, followed by spaces
         TOKENS_CONJUNCTION_TOKENS = auto()   # conjunction surrounded by tokens

@@ -29,6 +29,7 @@ class OneBoxBase:
                  autosuggest_query_params: dict=None,
                  discover_query_params: dict=None,
                  lookup_query_params: dict=None,
+                 initial_query: str=None,
                  result_queue: asyncio.Queue=None,
                  **kwargs):
 
@@ -41,12 +42,13 @@ class OneBoxBase:
                 pass
         else:
             self.profiler = False
+
         self.user_profile = user_profile
         self.api: API = user_profile.api
         self.latitude = self.user_profile.current_latitude
         self.longitude = self.user_profile.current_longitude
         self.language = self.user_profile.get_current_language()
-
+        self.initial_query = initial_query
         self.results_limit = results_limit or self.__class__.default_results_limit
         self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
         self.terms_limit = terms_limit or self.__class__.default_terms_limit
@@ -56,7 +58,7 @@ class OneBoxBase:
 
         self.result_queue: asyncio.Queue = result_queue or asyncio.Queue()
 
-        self.x_headers =  None
+        self.x_headers = None
         self.headers = OneBoxBase.default_headers
         if self.user_profile.share_experience:
             self.x_headers = {'X-User-ID': self.user_profile.id,
@@ -79,19 +81,9 @@ class OneBoxBase:
                 if query_text is None:
                     self.result_queue.put_nowait(None)
                     break
+
                 if query_text:
-                    latitude, longitude = self.get_search_center()
-                    autosuggest_resp = await asyncio.ensure_future(
-                        self.api.autosuggest(session,
-                                             query_text,
-                                             latitude,
-                                             longitude,
-                                             lang=self.get_language(),
-                                             limit=self.suggestions_limit,
-                                             termsLimit=self.terms_limit,
-                                             x_headers=x_headers,
-                                             **self.autosuggest_query_params))
-                    self.handle_suggestion_list(autosuggest_resp)
+                    await self._do_autosuggest(session, query_text, x_headers)
                 else:
                     self.handle_empty_text_submission()
 
@@ -101,27 +93,19 @@ class OneBoxBase:
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             x_headers = self.x_headers
+            if self.initial_query:
+                await self._do_discover(self.initial_query, session, x_headers)
             while True:
                 query_text = await self.wait_for_submitted_value()
-                if query_text is None:
-                    if self.profiler:
-                        try:
-                            self.profiler.stop()
-                            self.profiler.open_in_browser()
-                        except RuntimeError:
-                            pass
-                    break
 
-                if query_text:
-                    latitude, longitude = self.get_search_center()
-                    discover_task = asyncio.ensure_future(
-                        self.api.discover(session, query_text, latitude, longitude,
-                                          lang=self.get_language(),
-                                          limit=self.results_limit,
-                                          x_headers=x_headers,
-                                          **self.discover_query_params))
-                    discover_resp = await discover_task
-                    self.handle_result_list(discover_resp)
+                if query_text is None:
+                    self._do_profiler_stop()
+                    break
+                elif query_text.strip() == '':
+                    self.handle_empty_text_submission()
+                    continue
+
+                await self._do_discover(session, query_text, x_headers)
 
         await self.__astop()
 
@@ -139,37 +123,9 @@ class OneBoxBase:
                     continue
 
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    if self.user_profile.share_experience:
-                        await asyncio.ensure_future(
-                            self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
-                                             correlation_id=item.resp.x_headers['X-Correlation-ID'],
-                                             action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
-                                             userId=x_headers['X-AS-Session-ID']))
-                    discover_resp = await asyncio.ensure_future(
-                        self.api.autosuggest_href(session,  item.data["href"], limit=self.results_limit,  x_headers=x_headers))
-                    self.handle_result_list(discover_resp)
+                    await self._do_autosuggest_href(session, item, self.user_profile.share_experience, x_headers)
                 else:
-                    if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
-                        if self.user_profile.share_experience:
-                            await asyncio.ensure_future(
-                                self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
-                                                 correlation_id=item.resp.x_headers['X-Correlation-ID'],
-                                                 action="here:gs:action:view",  asSessionId=x_headers['X-AS-Session-ID'],
-                                                 userId=x_headers['X-AS-Session-ID']))
-                        lookup_resp = await asyncio.ensure_future(
-                            self.api.lookup(session, item.data["id"], lang=self.get_language(), x_headers=x_headers,
-                                            **self.lookup_query_params))
-                    else:
-                        if self.user_profile.share_experience:
-                            await asyncio.ensure_future(
-                                self.api.signals(session, resource_id=item.data['id'],  rank=item.rank,
-                                                 correlation_id=item.resp.x_headers['X-Correlation-ID'],
-                                                 action="here:gs:action:view", userId=x_headers['X-AS-Session-ID']))
-                            lookup_resp = await asyncio.ensure_future(
-                                self.api.lookup(session, item.data["id"], lang=self.get_language(), x_headers=None,
-                                            **self.lookup_query_params))
-
-                    self.handle_result_details(lookup_resp)
+                    await self._do_lookup(session, item, self.user_profile.share_experience, x_headers)
 
     def get_language(self):
         return self.language
@@ -177,10 +133,75 @@ class OneBoxBase:
     def get_search_center(self) -> Tuple[float, float]:
         return self.latitude, self.longitude
 
+    async def _do_discover(self, session, query_text, x_headers):
+        latitude, longitude = self.get_search_center()
+        discover_task = asyncio.ensure_future(
+            self.api.discover(session, query_text, latitude, longitude,
+                              lang=self.get_language(),
+                              limit=self.results_limit,
+                              x_headers=x_headers,
+                              **self.discover_query_params))
+        discover_resp = await discover_task
+        self.handle_result_list(discover_resp)
+
+    async def _do_autosuggest(self, query_text, session, x_headers):
+        latitude, longitude = self.get_search_center()
+        autosuggest_resp = await asyncio.ensure_future(
+            self.api.autosuggest(session,
+                                 query_text,
+                                 latitude,
+                                 longitude,
+                                 lang=self.get_language(),
+                                 limit=self.suggestions_limit,
+                                 termsLimit=self.terms_limit,
+                                 x_headers=x_headers,
+                                 **self.autosuggest_query_params))
+        self.handle_suggestion_list(autosuggest_resp)
+
+    async def _do_autosuggest_href(self, session, item, send_signals_action, x_headers):
+        if send_signals_action:
+            await asyncio.ensure_future(
+                self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
+                                 correlation_id=item.resp.x_headers['X-Correlation-ID'],
+                                 action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
+                                 userId=x_headers['X-AS-Session-ID']))
+        discover_resp = await asyncio.ensure_future(
+            self.api.autosuggest_href(session, item.data["href"], limit=self.results_limit, x_headers=x_headers))
+        self.handle_result_list(discover_resp)
+
+    async def _do_lookup(self, session, item, send_signals_action, x_headers):
+        if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
+            if send_signals_action:
+                await asyncio.ensure_future(
+                    self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
+                                     correlation_id=item.resp.x_headers['X-Correlation-ID'],
+                                     action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
+                                     userId=x_headers['X-AS-Session-ID']))
+            lookup_resp = await asyncio.ensure_future(
+                self.api.lookup(session, item.data["id"], lang=self.get_language(), x_headers=x_headers,
+                                **self.lookup_query_params))
+        else:
+            if send_signals_action and item.resp.x_headers:
+                await asyncio.ensure_future(
+                    self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
+                                     correlation_id=item.resp.x_headers['X-Correlation-ID'],
+                                     action="here:gs:action:view", userId=x_headers['X-AS-Session-ID']))
+            lookup_resp = await asyncio.ensure_future(
+                self.api.lookup(session, item.data["id"], lang=self.get_language(), x_headers=None,
+                                **self.lookup_query_params))
+        self.handle_result_details(lookup_resp)
+
+    def _do_profiler_stop(self):
+        if self.profiler:
+            try:
+                self.profiler.stop()
+                self.profiler.open_in_browser()
+            except RuntimeError:
+                pass
+
     def renew_session_id(self):
         if self.user_profile.share_experience:
             self.x_headers['X-AS-Session-ID'] = str(uuid.uuid4())
-            print(f"new as session id: {self.x_headers['X-AS-Session-ID']}\n")
 
     def wait_for_new_key_stroke(self) -> Awaitable:
         raise NotImplementedError()
