@@ -90,14 +90,18 @@ class OneBoxCatNearCat(OneBoxMap):
         self.lg_pair_distance = lg_pair_distance or self.lg_api.default_pair_distance
         self.lg_text_submission = lg_text_submission or OneBoxCatNearCat.default_lg_text_submission
         self.lg_children_details = lg_children_details or OneBoxCatNearCat.lg_children_details
-        self.get_conjunction_mode = NearbySimpleParser(self.language).conjunction_mode_function()
+        self.get_conjunction_mode = None
 
     async def handle_key_strokes(self):
         """
         This method is called for each key stroke in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True, headers=OneBoxMap.default_headers) as session:
-
+            if not self.initial_query and self.language is None:
+                language = self.language
+                self.language = await self.get_preferred_location_language(session)
+                if language != self.language:
+                    self.get_conjunction_mode = NearbySimpleParser(self.language).conjunction_mode_function()
             find_ontology = None
             while True:
                 query_text = await self.wait_for_new_key_stroke()
@@ -127,37 +131,6 @@ class OneBoxCatNearCat(OneBoxMap):
 
                 self.handle_suggestion_list(autosuggest_resp)
 
-    def add_cat_near_cat_suggestion(self, autosuggest_resp, conjunction, find_ontology, latitude, longitude,
-                                          near_ontology, near_resp) -> Response:
-        find_categories = [cat["id"] for cat in find_ontology['categories']]
-        near_categories = [cat["id"] for cat in near_ontology['categories']]
-        ontology_near_ontology = {"clientSideAddition": True,
-                                  "title": f"{find_ontology['title']} {conjunction} {near_ontology['title']}",
-                                  "id": f"{find_ontology['id']}:near:{near_ontology['id']}",
-                                  "resultType": "categoryNearCategoryQuery",
-                                  "relationship": "nearby",
-                                  "titleDetails": {
-                                      "findTitle": find_ontology['title'],
-                                      "conjunction": conjunction,
-                                      "nearTitle": near_ontology['title']
-                                  },
-                                  "followUpDetails": {"findCategories": find_categories,
-                                                      "nearCategories": near_categories,
-                                                      "searchLocus": {"latitude": latitude,
-                                                                      "longitude": longitude,
-                                                                      "radius": self.lg_radius},
-                                                      "distance": self.lg_pair_distance,
-                                                      "limit": OneBoxCatNearCat.default_results_limit}}
-        data = {"items": [ontology_near_ontology], "queryTerms": []}
-        data["items"].extend(autosuggest_resp.data["items"].copy())
-        data["items"] = data["items"][:OneBoxMap.default_suggestions_limit]
-        new_autosugest_resp = Response(data=data, x_headers=autosuggest_resp.x_headers, req=autosuggest_resp.req)
-        if near_resp.data["queryTerms"]:
-            new_autosugest_resp.data["queryTerms"].append({"term": near_resp.data["queryTerms"][0]["term"]})
-        new_autosugest_resp.data["queryTerms"].extend(autosuggest_resp.data["queryTerms"])
-        new_autosugest_resp.data["queryTerms"] = new_autosugest_resp.data["queryTerms"][:OneBoxMap.default_terms_limit]
-        return new_autosugest_resp
-
     async def handle_text_submissions(self):
         """
         This method is called for each key stroke in the one box search Text form.
@@ -166,6 +139,9 @@ class OneBoxCatNearCat(OneBoxMap):
             x_headers = self.x_headers
 
             if self.initial_query:
+                if self.language is None:
+                    self.language = await self.get_preferred_location_language(session)
+                    self.get_conjunction_mode = NearbySimpleParser(self.language).conjunction_mode_function()
                 if self.lg_text_submission:
                     await self._do_lg_discover(session, self.initial_query, x_headers)
                 else:
@@ -182,9 +158,16 @@ class OneBoxCatNearCat(OneBoxMap):
                     continue
 
                 if self.lg_text_submission:
-                    await self._do_lg_discover(session, query_text, x_headers)
+                    country_codes = await self._do_lg_discover(session, query_text, x_headers)
                 else:
-                    await self._do_discover(session, query_text, x_headers)
+                    country_codes = await self._do_discover(session, query_text, x_headers)
+
+                preferred_languages = {self.user_profile.get_preferred_language(country_code) for country_code in country_codes}
+                if len(preferred_languages) == 1:
+                    language = preferred_languages.pop()
+                    if language != self.language:
+                        self.language = language
+                        self.get_conjunction_mode = NearbySimpleParser(language).conjunction_mode_function()
 
         await self.__astop()
 
@@ -218,9 +201,41 @@ class OneBoxCatNearCat(OneBoxMap):
                 else:
                     await self._do_lookup(session, item, self.user_profile.share_experience, x_headers)
 
+    def add_cat_near_cat_suggestion(self, autosuggest_resp, conjunction, find_ontology, latitude, longitude,
+                                    near_ontology, near_resp) -> Response:
+        find_categories = [cat["id"] for cat in find_ontology.get('categories', [])]
+        near_categories = [cat["id"] for cat in near_ontology.get('categories', [])]
+        ontology_near_ontology = {"clientSideAddition": True,
+                                  "title": f"{find_ontology['title']} {conjunction} {near_ontology['title']}",
+                                  "id": f"{find_ontology['id']}:near:{near_ontology['id']}",
+                                  "resultType": "categoryNearCategoryQuery",
+                                  "relationship": "nearby",
+                                  "titleDetails": {
+                                      "findTitle": find_ontology['title'],
+                                      "conjunction": conjunction,
+                                      "nearTitle": near_ontology['title']
+                                  },
+                                  "followUpDetails": {"findCategories": find_categories,
+                                                      "nearCategories": near_categories,
+                                                      "searchLocus": {"latitude": latitude,
+                                                                      "longitude": longitude,
+                                                                      "radius": self.lg_radius},
+                                                      "distance": self.lg_pair_distance,
+                                                      "limit": OneBoxCatNearCat.default_results_limit}}
+        data = {"items": [ontology_near_ontology], "queryTerms": []}
+        data["items"].extend(autosuggest_resp.data["items"].copy())
+        data["items"] = data["items"][:OneBoxMap.default_suggestions_limit]
+        new_autosugest_resp = Response(data=data, x_headers=autosuggest_resp.x_headers, req=autosuggest_resp.req)
+        if near_resp.data["queryTerms"]:
+            new_autosugest_resp.data["queryTerms"].append({"term": near_resp.data["queryTerms"][0]["term"]})
+        new_autosugest_resp.data["queryTerms"].extend(autosuggest_resp.data["queryTerms"])
+        new_autosugest_resp.data["queryTerms"] = new_autosugest_resp.data["queryTerms"][:OneBoxMap.default_terms_limit]
+        return new_autosugest_resp
+
     async def _do_lg_discover(self, session, query_text, x_headers):
         response = Response(req=Request())
         latitude, longitude = self.get_search_center()
+        country_codes = set()
         conjunction_mode, conjunction, query_head, query_tail = self.get_conjunction_mode(query_text)
         if conjunction_mode == NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS:
             find_resp, find_ontology = await self.get_first_category_ontology(session, query_head, latitude, longitude)
@@ -236,10 +251,12 @@ class OneBoxCatNearCat(OneBoxMap):
                                                                 find_categories=find_categories,
                                                                 near_categories=near_categories,
                                                                 conjunction=conjunction)
+                    country_codes.update({item["address"]["countryCode"] for item in response.data["items"]})
         if response.data is None:
-            await self._do_discover(session, query_text, x_headers)
+            country_codes = await self._do_discover(session, query_text, x_headers)
         else:
             self.handle_result_list(response)
+        return country_codes
 
     async def lg_to_search_response(self, session: ClientSession,
                                     latitude: float, longitude: float,
@@ -259,7 +276,7 @@ class OneBoxCatNearCat(OneBoxMap):
             try:
                 find_lookup_resp = await asyncio.ensure_future(
                     self.api.lookup(session, f'here:pds:place:{find_id}',
-                                    lang=self.get_language(),
+                                    lang=self.language,
                                     x_headers=self.x_headers,
                                     **self.lookup_query_params))
                 data = {"clientSideAddition": True}
@@ -270,7 +287,7 @@ class OneBoxCatNearCat(OneBoxMap):
                     title = find_lookup_resp_copy.data["title"]
                     near_lookup_resp = await asyncio.ensure_future(
                         self.api.lookup(session, f'here:pds:place:{near_id}',
-                                        lang=self.get_language(),
+                                        lang=self.language,
                                         x_headers=self.x_headers,
                                         **self.lookup_query_params))
                     find_lookup_resp_copy.data["titleDetails"] = {
@@ -301,7 +318,7 @@ class OneBoxCatNearCat(OneBoxMap):
                                  query,
                                  latitude,
                                  longitude,
-                                 lang=self.get_language(),
+                                 lang=self.language,
                                  limit=self.suggestions_limit,
                                  termsLimit=self.terms_limit,
                                  x_headers=None,

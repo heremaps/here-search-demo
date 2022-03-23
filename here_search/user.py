@@ -10,7 +10,7 @@ import uuid
 
 
 class UserProfile:
-    languages: dict
+    preferred_languages: dict
     current_latitude: float
     current_longitude: float
     current_country_code: str
@@ -41,7 +41,8 @@ class UserProfile:
         self.__share_experience = share_experience
 
         self._api = api
-        self.languages = languages or {}
+        self.preferred_languages = languages or {}
+        self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [UserProfile.default_name])
 
         nest_asyncio.apply()
         try:
@@ -72,6 +73,9 @@ class UserProfile:
         self.current_longitude = longitude
         self.current_country_code, language = asyncio.get_running_loop().run_until_complete(self.get_preferred_locale(latitude, longitude))
 
+    def get_preferred_language(self, country_code: str):
+        return self.preferred_languages.get(country_code, self.preferred_languages.get(self.__class__.default_name, None))
+
     async def get_preferred_locale(self, latitude: float, longitude: float) -> Tuple[str, str]:
         country_code, language = None, None
         async with ClientSession(raise_for_status=True) as session:
@@ -94,19 +98,15 @@ class UserProfile:
             self.current_latitude = UserProfile.default_current_latitude
             self.current_longitude = UserProfile.default_current_longitude
             self.current_country_code = UserProfile.default_country_code
-            if UserProfile.default_name not in self.languages:
-                self.languages.update(self.__class__.default_profile_languages)
         else:
             async with ClientSession(raise_for_status=True) as session:
                 self.current_latitude, self.current_longitude = await get_lat_lon(session)
             self.current_country_code, language = await self.get_preferred_locale(self.current_latitude, self.current_longitude)
-            if UserProfile.default_name not in self.languages:
-                self.languages.update({self.__class__.default_name: language})
 
     def get_current_language(self):
-        if self.current_country_code in self.languages:
-            return self.languages[self.current_country_code]
-        return self.languages[UserProfile.default_name]
+        if self.current_country_code in self.preferred_languages:
+            return self.preferred_languages[self.current_country_code]
+        return self.preferred_languages[UserProfile.default_name]
 
 
 class Permissive(UserProfile):

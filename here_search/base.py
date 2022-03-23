@@ -47,7 +47,7 @@ class OneBoxBase:
         self.api: API = user_profile.api
         self.latitude = self.user_profile.current_latitude
         self.longitude = self.user_profile.current_longitude
-        self.language = self.user_profile.get_current_language()
+        self.language = None
         self.initial_query = initial_query
         self.results_limit = results_limit or self.__class__.default_results_limit
         self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
@@ -76,6 +76,9 @@ class OneBoxBase:
                     self.api.signals(session,
                                      resource_id="application", rank=0, correlation_id="noCorrelationID",
                                      action="start", userId=x_headers['X-User-ID']))
+            if not self.initial_query:
+                if self.language is None:
+                    self.language = await self.get_preferred_location_language(session)
             while True:
                 query_text = await self.wait_for_new_key_stroke()
                 if query_text is None:
@@ -94,7 +97,10 @@ class OneBoxBase:
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             x_headers = self.x_headers
             if self.initial_query:
+                if self.language is None:
+                    self.language = await self.get_preferred_location_language(session)
                 await self._do_discover(self.initial_query, session, x_headers)
+
             while True:
                 query_text = await self.wait_for_submitted_value()
 
@@ -105,9 +111,37 @@ class OneBoxBase:
                     self.handle_empty_text_submission()
                     continue
 
-                await self._do_discover(session, query_text, x_headers)
+                country_codes = await self._do_discover(session, query_text, x_headers)
+                preferred_languages = {self.user_profile.get_preferred_language(country_code) for country_code in country_codes}
+                if len(preferred_languages) == 1 and preferred_languages != {None}:
+                    language = preferred_languages.pop()
+                    if language != self.language:
+                        self.language = language
 
         await self.__astop()
+
+    async def get_preferred_location_language(self, session) -> str:
+        if self.user_profile.preferred_languages is None:
+            country_code, language = await self.get_position_locale(session)
+        elif list(self.user_profile.preferred_languages.keys()) == [UserProfile.default_name]:
+            language = self.user_profile.preferred_languages[UserProfile.default_name]
+        else:
+            country_code, country_language = await self.get_position_locale(session)
+            preferred_language = self.user_profile.get_preferred_language(country_code)
+            language = preferred_language or country_language
+        return language
+
+    async def get_position_locale(self, session):
+        country_code, language = None, None
+        local_addresses = await asyncio.ensure_future(self.api.reverse_geocode(
+            session, latitude=self.latitude, longitude=self.longitude))
+        if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
+            country_code = local_addresses.data["items"][0]["address"]["countryCode"]
+            address_details = await asyncio.ensure_future(
+                self.api.lookup(session,
+                                id=local_addresses.data["items"][0]["id"]))
+            language = address_details.data["language"]
+        return country_code, language
 
     async def handle_result_selections(self):
         """
@@ -127,31 +161,29 @@ class OneBoxBase:
                 else:
                     await self._do_lookup(session, item, self.user_profile.share_experience, x_headers)
 
-    def get_language(self):
-        return self.language
-
     def get_search_center(self) -> Tuple[float, float]:
         return self.latitude, self.longitude
 
-    async def _do_discover(self, session, query_text, x_headers):
+    async def _do_discover(self, session, query_text, x_headers) -> set:
         latitude, longitude = self.get_search_center()
         discover_task = asyncio.ensure_future(
             self.api.discover(session, query_text, latitude, longitude,
-                              lang=self.get_language(),
+                              lang=self.language,
                               limit=self.results_limit,
                               x_headers=x_headers,
                               **self.discover_query_params))
         discover_resp = await discover_task
         self.handle_result_list(discover_resp)
+        return {item["address"]["countryCode"] for item in discover_resp.data["items"]}
 
-    async def _do_autosuggest(self, query_text, session, x_headers):
+    async def _do_autosuggest(self, session, query_text, x_headers):
         latitude, longitude = self.get_search_center()
         autosuggest_resp = await asyncio.ensure_future(
             self.api.autosuggest(session,
                                  query_text,
                                  latitude,
                                  longitude,
-                                 lang=self.get_language(),
+                                 lang=self.language,
                                  limit=self.suggestions_limit,
                                  termsLimit=self.terms_limit,
                                  x_headers=x_headers,
@@ -178,7 +210,7 @@ class OneBoxBase:
                                      action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
                                      userId=x_headers['X-AS-Session-ID']))
             lookup_resp = await asyncio.ensure_future(
-                self.api.lookup(session, item.data["id"], lang=self.get_language(), x_headers=x_headers,
+                self.api.lookup(session, item.data["id"], lang=self.language, x_headers=x_headers,
                                 **self.lookup_query_params))
         else:
             if send_signals_action and item.resp.x_headers:
@@ -187,7 +219,7 @@ class OneBoxBase:
                                      correlation_id=item.resp.x_headers['X-Correlation-ID'],
                                      action="here:gs:action:view", userId=x_headers['X-AS-Session-ID']))
             lookup_resp = await asyncio.ensure_future(
-                self.api.lookup(session, item.data["id"], lang=self.get_language(), x_headers=None,
+                self.api.lookup(session, item.data["id"], lang=self.language, x_headers=None,
                                 **self.lookup_query_params))
         self.handle_result_details(lookup_resp)
 

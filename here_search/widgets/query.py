@@ -199,7 +199,7 @@ class NearbySimpleParser:
 
     @staticmethod
     def __no_cunjunction_function(text) -> Tuple[Mode, str, str, str]:
-        return NearbySimpleParser.Mode.no_conjunction, '', '', ''
+        return NearbySimpleParser.Mode.TOKENS, '', '', ''
 
     @staticmethod
     def __get_conjunction_mode(text: str, conjunctions: list, conjunction_parts: dict) -> Tuple[Mode, Optional[str], str, str]:
