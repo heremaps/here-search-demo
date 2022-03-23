@@ -112,7 +112,7 @@ class SearchResultJson(SearchResultList):
 class SearchResultSelectMultiple(SearchResultList):
     def _display(self, resp: Response) -> Widget:
         return SelectMultiple(options=[item["title"] for item in resp.data["items"]],
-                              rows = len(resp["items"]),
+                              rows=len(resp["items"]),
                               disabled=False)
 
 
@@ -131,12 +131,9 @@ class SearchResultButton(HBox):
         self.add_class('result-button')
 
     def set_result(self, data: dict, rank: int, resp: Response):
-        item = self.button.value
-        item.data = data
-        item.rank = rank or 0
-        item.resp = resp
+        self.button.value = ResponseItem(data=data, rank=rank or 0, resp=resp)
         self.button.description = data["title"]
-        self.label.value = f'{item.rank+1: <2}'
+        self.label.value = f'{self.button.value.rank+1: <2}'
         self.button.icon = 'search' if "Query" in data["resultType"] else '' # That's a hack...
 
 
@@ -155,8 +152,8 @@ class SearchResultButtons(SearchResultList):
 
     def _display(self, resp: Response) -> Widget:
         items = [resp.data] if resp.req.endpoint == Endpoint.LOOKUP else resp.data["items"]
-        for rank, data in enumerate(items):
-            self.buttons[rank].set_result(data, rank, resp)
+        for rank, item_data in enumerate(items):
+            self.buttons[rank].set_result(item_data, rank, resp)
         out = self.buttons[:len(items)]
         return VBox(out)
 

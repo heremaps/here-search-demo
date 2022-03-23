@@ -30,12 +30,7 @@ class OneBoxMap(OneBoxBase):
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
-                 autosuggest_query_params: dict=None,
-                 discover_query_params: dict=None,
-                 lookup_query_params: dict=None,
                  design: Callable=None,
-                 autosuggest_automatic_recenter: bool=False,
-                 initial_query: str=None,
                  debounce_time: int=None,
                  **kwargs):
 
@@ -45,7 +40,6 @@ class OneBoxMap(OneBoxBase):
                             results_limit=results_limit or OneBoxMap.default_results_limit,
                             suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
                             terms_limit=terms_limit or OneBoxMap.default_terms_limit,
-                            initial_query=initial_query,
                             result_queue=self.result_queue, **kwargs)
 
         self.query_box_w = SubmittableTextBox(OneBoxMap.default_debounce_time if debounce_time is None else debounce_time,
@@ -150,6 +144,7 @@ class OneBoxMap(OneBoxBase):
             self.map_w.bounds = self.result_points_w.bbox
             if len(resp.data["items"]) == 1:
                 self.map_w.zoom = OneBoxMap.minimum_zoom_level
+            self.latitude, self.longitude = self.map_w.center
 
     async def __ainit_map(self):
         self.map_w = PositionMap(api_key=self.api.api_key, center=[self.latitude, self.longitude], position_handler=self.search_center_observer())

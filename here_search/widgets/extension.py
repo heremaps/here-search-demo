@@ -73,15 +73,7 @@ class OneBoxCatNearCat(OneBoxMap):
 
     def __init__(self,
                  user_profile: UserProfile,
-                 results_limit: int=None,
-                 suggestions_limit: int=None,
-                 terms_limit: int=None,
                  autosuggest_query_params: dict=None,
-                 discover_query_params: dict=None,
-                 lookup_query_params: dict=None,
-                 design: Callable=None,
-                 autosuggest_automatic_recenter: bool=False,
-                 debounce_time: int=None,
                  lg_radius: int=None,
                  lg_pair_distance: int=None,
                  lg_text_submission: bool=None,
@@ -90,15 +82,7 @@ class OneBoxCatNearCat(OneBoxMap):
 
         OneBoxMap.__init__(self,
                            user_profile,
-                           results_limit=results_limit,
-                           suggestions_limit=suggestions_limit,
-                           terms_limit=terms_limit,
                            autosuggest_query_params=autosuggest_query_params or OneBoxCatNearCat.default_autosuggest_query_params,
-                           discover_query_params=discover_query_params,
-                           lookup_query_params=lookup_query_params,
-                           design=design,
-                           autosuggest_automatic_recenter=autosuggest_automatic_recenter,
-                           debounce_time=debounce_time,
                            **kwargs)
 
         self.lg_api = LGAPI(api_key=self.api.api_key)
@@ -137,16 +121,18 @@ class OneBoxCatNearCat(OneBoxMap):
                     near_resp, near_ontology = await self.get_first_category_ontology(session, query_tail, latitude, longitude)
                     if near_ontology:
                         # Replace the query below with the calls to Location Graph
-                        self.add_cat_near_cat_suggestion(autosuggest_resp, conjunction, find_ontology,
-                                                               latitude, longitude, near_ontology, near_resp)
+                        new_autosuggest_resp = self.add_cat_near_cat_suggestion(autosuggest_resp, conjunction, find_ontology,
+                                                                            latitude, longitude, near_ontology, near_resp)
+                        autosuggest_resp = new_autosuggest_resp
 
                 self.handle_suggestion_list(autosuggest_resp)
 
     def add_cat_near_cat_suggestion(self, autosuggest_resp, conjunction, find_ontology, latitude, longitude,
-                                          near_ontology, near_resp):
+                                          near_ontology, near_resp) -> Response:
         find_categories = [cat["id"] for cat in find_ontology['categories']]
         near_categories = [cat["id"] for cat in near_ontology['categories']]
-        ontology_near_ontology = {"title": f"{find_ontology['title']} {conjunction} {near_ontology['title']}",
+        ontology_near_ontology = {"clientSideAddition": True,
+                                  "title": f"{find_ontology['title']} {conjunction} {near_ontology['title']}",
                                   "id": f"{find_ontology['id']}:near:{near_ontology['id']}",
                                   "resultType": "categoryNearCategoryQuery",
                                   "relationship": "nearby",
@@ -162,11 +148,15 @@ class OneBoxCatNearCat(OneBoxMap):
                                                                       "radius": self.lg_radius},
                                                       "distance": self.lg_pair_distance,
                                                       "limit": OneBoxCatNearCat.default_results_limit}}
-        autosuggest_resp.data["items"] = ([ontology_near_ontology] + autosuggest_resp.data["items"])[
-                                         :OneBoxMap.default_suggestions_limit]
+        data = {"items": [ontology_near_ontology], "queryTerms": []}
+        data["items"].extend(autosuggest_resp.data["items"].copy())
+        data["items"] = data["items"][:OneBoxMap.default_suggestions_limit]
+        new_autosugest_resp = Response(data=data, x_headers=autosuggest_resp.x_headers, req=autosuggest_resp.req)
         if near_resp.data["queryTerms"]:
-            autosuggest_resp.data["queryTerms"] = ([{"term": near_resp.data["queryTerms"][0]["term"]}] +
-                                                   autosuggest_resp.data["queryTerms"])[:OneBoxMap.default_terms_limit]
+            new_autosugest_resp.data["queryTerms"].append({"term": near_resp.data["queryTerms"][0]["term"]})
+        new_autosugest_resp.data["queryTerms"].extend(autosuggest_resp.data["queryTerms"])
+        new_autosugest_resp.data["queryTerms"] = new_autosugest_resp.data["queryTerms"][:OneBoxMap.default_terms_limit]
+        return new_autosugest_resp
 
     async def handle_text_submissions(self):
         """
@@ -272,7 +262,9 @@ class OneBoxCatNearCat(OneBoxMap):
                                     lang=self.get_language(),
                                     x_headers=self.x_headers,
                                     **self.lookup_query_params))
-                find_lookup_resp_copy = Response(req=find_lookup_resp.req, data=find_lookup_resp.data.copy(), x_headers=find_lookup_resp.x_headers)
+                data = {"clientSideAddition": True}
+                data.update(find_lookup_resp.data.copy())
+                find_lookup_resp_copy = Response(req=find_lookup_resp.req, data=data, x_headers=find_lookup_resp.x_headers)
                 find_lookup_resp_copy.data['children'] = [{'association': 'nearby', 'id': f'here:pds:place:{near_id}'}]
                 if self.lg_children_details:
                     title = find_lookup_resp_copy.data["title"]
@@ -295,7 +287,8 @@ class OneBoxCatNearCat(OneBoxMap):
                 search_items.append(find_lookup_resp_copy.data)
 
         if search_items:
-            response = Response(data={'items': search_items}, req=Request(endpoint=LGEndpoint.PLACES_CAT_NEAR_CAT))
+            data = {"clientSideAddition": True, 'items': search_items}
+            response = Response(data=data, req=Request(endpoint=LGEndpoint.PLACES_CAT_NEAR_CAT))
         else:
             response = Response()
 

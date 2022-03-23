@@ -57,7 +57,7 @@ class API:
     https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
     """
     api_key: str
-    cache: dict
+    cache: Dict[tuple, Response]
 
     def __init__(self, api_key: str=None, cache: dict=None):
         self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="api key: ")
@@ -74,7 +74,12 @@ class API:
         """
         cache_key = req.key()
         if cache_key in self.cache:
-            return self.cache[cache_key]
+            cached_response = self.cache[cache_key]
+            data = cached_response.data.copy()
+            response = Response(data=data,
+                                x_headers=cached_response.x_headers,
+                                req=cached_response.req)
+            return response
 
         async with session.get(req.url, params=req.params, headers=req.x_headers) as get_response:
             x_headers = {"X-Request-Id": get_response.headers["X-Request-Id"],
