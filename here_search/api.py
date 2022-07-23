@@ -1,21 +1,14 @@
 from aiohttp import ClientSession
 from ujson import loads
 
+from .entities import Request, Response, Endpoint
+
 from collections import OrderedDict
 from typing import Tuple, Dict
 import os
 from dataclasses import dataclass
 from enum import IntEnum, auto
 from getpass import getpass
-
-
-class Endpoint(IntEnum):
-    AUTOSUGGEST = auto()
-    AUTOSUGGEST_HREF = auto()
-    DISCOVER = auto()
-    LOOKUP = auto()
-    REVGEOCODE = auto()
-    SIGNALS = auto()
 
 
 base_url = {ep: f'https://{eps}.search.hereapi.com/v1/{eps}'
@@ -26,32 +19,7 @@ base_url = {ep: f'https://{eps}.search.hereapi.com/v1/{eps}'
                             Endpoint.REVGEOCODE:'revgeocode',
                             Endpoint.SIGNALS:'signals'}.items()}
 
-@dataclass
-class Request:
-    endpoint: Endpoint=None
-    url: str=None
-    params: Dict[str, str]=None
-    x_headers: dict=None
-    post: bool=False
 
-    def key(self) -> Tuple[Endpoint, Tuple[str]]:
-        return self.endpoint, tuple(self.params.items())
-
-
-@dataclass
-class Response:
-    req: Request=None
-    data: dict=None
-    x_headers: dict=None
-
-
-@dataclass
-class ResponseItem:
-    resp: Response=None
-    data: dict=None
-    rank: int=None
-    
-    
 class API:
     """
     https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html

@@ -3,8 +3,10 @@ import traceback
 from aiohttp import ClientSession, client_exceptions
 from ujson import loads
 
-from here_search.widgets import OneBoxMap
-from here_search.api import API, Response, base_url, Endpoint, ResponseItem, Request
+from here_search.widgets.app import OneBoxMap
+from here_search.api import API, base_url
+from here_search.entities import Response, ResponseItem, Request
+
 from here_search.user import UserProfile
 from .query import NearbySimpleParser
 

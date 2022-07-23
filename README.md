@@ -48,3 +48,4 @@ The recipe below runs on a macos Monterey machine.
 - [Effective Python environment](https://realpython.com/effective-python-environment/)
 - [Launch your OSS](https://opensource.guide/starting-a-project/#launching-your-own-open-source-project)
 - [GeoJS terms of services](https://www.geojs.io/tos/)
+- [Macos extended charset](https://www.barcodefaq.com/knowledge-base/mac-extended-ascii-character-chart/)

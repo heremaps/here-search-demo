@@ -13,15 +13,18 @@ This has been tested on an intranet Centos 7 server.
 
 ## Install Jupyterhub
 
-    pip instal jupyterhub
-    pip install jupyterhub-idle-culler
+    pip install jupyterhub jupyterhub-idle-culler
     sudo yum install npm
     sudo npm install -g configurable-http-proxy
+    jupyter nbextension enable --py widgetsnbextension
+    jupyter labextension install @jupyterlab/geojson-extension
+    python3 -m ipykernel install --user --name search_notebook --display-name "demo search"
+
 
 ### Configuration
 
 
-sudo iptables -I INPUT 1 -p tcp --dport 8082 -j ACCEPT
+    sudo iptables -I INPUT 1 -p tcp --dport 8082 -j ACCEPT
 
 #### jupyterhub.service
 
@@ -70,6 +73,7 @@ sudo iptables -I INPUT 1 -p tcp --dport 8082 -j ACCEPT
 ## Jupyterhub lite
 
 
+## Reference
 
-
-Reference: https://tljh.jupyter.org/en/latest/install/custom-server.html
+- https://tljh.jupyter.org/en/latest/howto/env/user-environment.html
+- https://tljh.jupyter.org/en/latest/install/custom-server.html

@@ -2,8 +2,6 @@ from IPython.display import display as Idisplay
 from ipywidgets import Widget, CallbackDispatcher, HBox, VBox, Text, Button, Layout, HTML
 from traitlets import observe
 
-from here_search.util import debounce
-
 from typing import Awaitable, Tuple, Callable, Optional
 from functools import reduce
 import asyncio
@@ -51,13 +49,10 @@ class SubmittableTextBox(HBox):
     default_icon = 'fa-search'
     default_button_width = '32px'
 
-    def __init__(self, debounce_time: int, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.lens = Button(icon=kwargs.pop('icon', SubmittableTextBox.default_icon),
                            layout={'width': SubmittableTextBox.default_button_width})
         self.text = SubmittableText(*args, layout=kwargs.pop('layout', Layout()), **kwargs)
-        self.debounce_time = debounce_time
-        if debounce_time:
-            self.__class__.get_key_stroke_future == self.__get_key_stroke_future_debounce
         super().__init__([self.text, self.lens], **kwargs)
 
     def observe_text(self, *args):
@@ -83,16 +78,6 @@ class SubmittableTextBox(HBox):
     def get_key_stroke_future(self) -> Awaitable:
         # This methods allows to control the call to the widget handler outside of the jupyter event loop
         future = asyncio.Future()
-        def getvalue(change: dict):
-            value = change.new
-            future.set_result(value if not value.endswith("~") else None)
-            self.unobserve_text(getvalue, 'value')
-        self.observe_text(getvalue, 'value')
-        return future
-
-    def __get_key_stroke_future_debounce(self) -> Awaitable:
-        future = asyncio.Future()
-        @debounce(self.debounce_time)
         def getvalue(change: dict):
             value = change.new
             future.set_result(value if not value.endswith("~") else None)

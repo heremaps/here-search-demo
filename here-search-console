@@ -1,5 +1,0 @@
-cat << eof | python -
-from here_search.terminal import OneBoxConsole
-from here_search.user import permissive
-OneBoxConsole(permissive, term_keys=b'[]\\\').run()
-eof
