@@ -10,6 +10,8 @@ A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/
 ## Installation
 
     pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search
+    $ pip -v install psp-cli --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
+
 
 ### step-by-step for non developers
 

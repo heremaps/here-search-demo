@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 from here_search import __version__
 
-setup(name='here-search',
+setup(name='here-search-demo',
       version=__version__,
       description='HERE Geocoding and Search support widgets',
       packages=find_packages(),
