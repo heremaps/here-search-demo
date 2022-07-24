@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
 from pathlib import Path
 
 project_name = "here-search-demo"
@@ -12,11 +12,10 @@ with open(Path(package_path, package_name, "__init__.py")) as init_file:
 setup(name=project_name,
       version=namespace["__version__"],
       description='HERE Geocoding and Search support widgets',
-      packages=find_packages(where=package_path),
+      packages=find_namespace_packages(where=package_path),
       scripts=[Path(package_path, package_name, "scripts", "here-search-notebook").as_posix()],
       package_dir={'': package_path},
-      package_data={package_name:['LICENSE'],
-                    f'{package_name}.notebook': ['*.ipynb']},
+      package_data={f'{package_name}.notebooks': ['*.ipynb']},
       entry_points={'console_scripts': ['here-search-console=here_search.terminal.simple_app:cli']},
       install_requires=[p for p in Path(Path(__file__).parent, 'requirements.txt').open().readlines()
                         if not p.startswith("--")],
