@@ -1,5 +1,8 @@
 from aiohttp import ClientSession
-from pyinstrument import Profiler
+try:
+    from pyinstrument import Profiler
+except ImportError:
+    Profiler = None
 
 from . import __version__
 from .user import UserProfile
@@ -35,7 +38,7 @@ class OneBoxBase:
                  **kwargs):
 
         profiling = kwargs.pop("profiling", None)
-        if profiling:
+        if profiling and Profiler:
             self.profiler = Profiler(async_mode="enabled")
             try:
                 self.profiler.start()
