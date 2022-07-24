@@ -1,5 +1,5 @@
 (cd $(cat << eof | python -
 import here_search, pathlib, os.path
-print(pathlib.Path(os.path.dirname(here_search.__file__), '..', 'docs'))
+print(pathlib.Path(os.path.dirname(here_search.__file__), 'notebooks'))
 eof
 ); jupyter lab)

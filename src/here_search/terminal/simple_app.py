@@ -1,5 +1,3 @@
-import pdb
-
 from here_search.base import OneBoxBase
 from here_search.user import UserProfile
 from here_search.entities import Response
