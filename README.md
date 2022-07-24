@@ -11,39 +11,41 @@ A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/
 
     $ pip -v install here-search-demo --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
 
-
 ### step-by-step
 
-This simplified method does not use pyenv or conda, but the python3 integrated `venv` module.
-The recipe below runs on a macos Monterey machine.
+It is recommended to use a virtual environment. The below recipe uses the python batteries `venv` module.
+It has only been tested on a macos Monterey machine.
 
-1. Get A HERE [API key](https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start-dhc.html#get-an-api-key)
-
-2. Do:
+1. Virtual environment
 
    ```
-   $ mkdir test_search_notebook_demo
-   $ cd test_search_notebook_demo
-   $ envname=$(basename $(pwd)) && (mkdir -p ~/virtualenv; cd ~/virtualenv; python -m venv $envname)
-   $ source ~/virtualenv/$(basename $(pwd))/bin/activate
+   $ mkdir -p ~/virtualenv; (cd ~/virtualenv; python -m venv search-notebook)
+   $ source ~/virtualenv/search-notebook/bin/activate
+   ```
+
+2. Download and install
+
+   For users:
+
+   ```
    $ pip -v install here-search-demo --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
-   mkdir virtualenv
-   python3 -m venv virtualenv
-   source virtualenv/bin/activate
-   pip3 -v install git+ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git#egg=here-search
-   jupyter nbextension enable --py widgetsnbextension
-   jupyter labextension install @jupyterlab/geojson-extension
-   python3 -m ipykernel install --user --name search_notebook --display-name "demo search"
    ```
 
-3. Run the demo in your virtualenv
+   For contributors/developers:   
 
    ```
-   cd search-notebook
-   source virtualenv/bin/activate
-   API_KEY="your api key" here-search-notebook
+   $ git clone ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git
+   $ cd search-notebook
+   $ pip install -e .
    ```
 
+3. Jupyter config
+
+   ```
+   $ jupyter nbextension enable --py widgetsnbextension
+   $ jupyter labextension install @jupyterlab/geojson-extension
+   $ python -m ipykernel install --user --name search_demo --display-name "search demo"
+   ```
 
 ## Reference
 
