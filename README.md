@@ -12,7 +12,7 @@ A jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/
     $ pip -v install here-search-demo --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
 
 
-### step-by-step for non developers
+### step-by-step
 
 This simplified method does not use pyenv or conda, but the python3 integrated `venv` module.
 The recipe below runs on a macos Monterey machine.
@@ -22,6 +22,11 @@ The recipe below runs on a macos Monterey machine.
 2. Do:
 
    ```
+   $ mkdir test_search_notebook_demo
+   $ cd test_search_notebook_demo
+   $ envname=$(basename $(pwd)) && (mkdir -p ~/virtualenv; cd ~/virtualenv; python -m venv $envname)
+   $ source ~/virtualenv/$(basename $(pwd))/bin/activate
+   $ pip -v install here-search-demo --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
    mkdir virtualenv
    python3 -m venv virtualenv
    source virtualenv/bin/activate
