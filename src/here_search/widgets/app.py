@@ -24,7 +24,6 @@ class OneBoxMap(OneBoxBase):
     default_placeholder = "free text"
     default_output_format = 'text'
     default_design = design.EmbeddedList
-    default_debounce_time = 0
 
     def __init__(self,
                  user_profile: UserProfile,
@@ -32,7 +31,6 @@ class OneBoxMap(OneBoxBase):
                  suggestions_limit: int=None,
                  terms_limit: int=None,
                  design: Callable=None,
-                 debounce_time: int=None,
                  **kwargs):
 
         self.result_queue: asyncio.Queue = asyncio.Queue()
@@ -43,8 +41,7 @@ class OneBoxMap(OneBoxBase):
                             terms_limit=terms_limit or OneBoxMap.default_terms_limit,
                             result_queue=self.result_queue, **kwargs)
 
-        self.query_box_w = SubmittableTextBox(OneBoxMap.default_debounce_time if debounce_time is None else debounce_time,
-                                              layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
+        self.query_box_w = SubmittableTextBox(layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
                                               placeholder=kwargs.pop('placeholder', self.__class__.default_placeholder),
                                               **kwargs)
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
