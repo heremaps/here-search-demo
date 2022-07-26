@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+jupyter nbextension enable --py widgetsnbextension
+jupyter labextension install @jupyterlab/geojson-extension
