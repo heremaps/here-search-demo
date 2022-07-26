@@ -3,4 +3,6 @@ set -e
 pip install -e .
 jupyter nbextension enable --py widgetsnbextension
 jupyter labextension install @jupyterlab/geojson-extension
-cp src/here_search/notebooks/*.ipynb $HOME
+mkdir -p /tmp/work
+mv * /tmp/work
+cp /tmp/work/src/here_search/notebooks/*.ipynb .
