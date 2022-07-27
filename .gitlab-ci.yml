@@ -6,8 +6,7 @@ include:
 variables:
   # When using dind, it's wise to use the overlayfs driver for improved performance.
   DOCKER_DRIVER: overlay2
-  IMAGE_NAME: onesearch-notebook
-  CONTAINER_IMAGE: "$ARTIFACTORY_URL/$IMAGE_NAME"
+  CONTAINER_NAME: onesearch-demo
   GIT_SUBMODULE_STRATEGY: recursive
   ARTIFACTORY_URL: docker-local.artifactory.in.here.com
   VAULT_SERVER_URL: https://vault.hcs.aws.in.here.com/
@@ -21,43 +20,42 @@ image: docker:stable
       (echo "$ARTIFACTORY_PASS" | base64 -d | docker login -u $ARTIFACTORY_USER --password-stdin $ARTIFACTORY_URL) && break || STATUS=$(echo $?; sleep 15);
     done ; [ $STATUS -ne 0 ] && exit 1
 
+.hcr_login: &hcr_login
+- STATUS=0 ;for i in 1 2 3 4 5; do
+      (echo "$HCR_PASS" | base64 -d | docker login -u $HCR_USER --password-stdin $HCR_URL) && break || STATUS=$(echo $?; sleep 15);
+    done ; [ $STATUS -ne 0 ] && exit 1
 
 stages:
   - build
   - push
 
-#before_script:
-#  - apk add --update --no-cache sudo bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
-#  - ln -sf python /usr/bin/python
-#  - pip3 install --no-cache --upgrade pip setuptools
+before_script:
+  - apk add --update --no-cache sudo bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
+  - ln -sf python /usr/bin/python
+  - pip3 install --no-cache --upgrade pip setuptools
   
 build:
   stage: build
   services:
     - docker:dind
   script:
-    - echo $CI_COMMIT_SHA
-    - echo $CI_COMMIT_SHORT_SHA
-    - echo $CI_COMMIT_BRANCH
-    - echo $CI_DEFAULT_BRANCH
-    - echo $CI_PROJECT_NAME
-    - echo $CI_PIPELINE_ID
-    - echo $CI_COMMIT_REF_NAME
-    - echo $CI_PIPELINE_SOURCE
-    - echo $(cut -d\' -f2 src/here_search/__init__.py)
-
-    #- PATH=/home/search:/home/search/.local/bin:$PATH
-    #- pip3 install jupyter-repo2docker
-    #- adduser -h /home search -S -D -u 1999
-    #- /usr/bin/jupyter-repo2docker --no-run --image-name onesearch-notebook-repo2docker --user-id 1999 --user-name search .
+    - PATH=/home/search:/home/search/.local/bin:$PATH
+    - pip3 install jupyter-repo2docker
+    - adduser -h /home search -S -D -u 1999
+    - /usr/bin/jupyter-repo2docker --no-run --image-name ${CONTAINER_NAME} --user-id 1999 --user-name search .
     #- docker save onesearch-notebook-repo2docker:latest | gzip > onesearch-notebook-repo2docker.tgz
-  #artifacts:
-  #  paths:
-  #    - onesearch-notebook-repo2docker.tgz
+  artifacts:
+    paths:
+      - onesearch-notebook-repo2docker.tgz
 
 push:
   stage: push
   services:
     - docker:dind
+  
   script:
-    - echo $CI_COMMIT_SHA
+    - *artfactory_login
+    - SEARCH_DEMO_VERSION=$(cut -d\' -f2 src/here_search/__init__.py)
+    # search-notebook-0.5.0-master-4544b837
+    - DEPLOYMENT_ID=${CI_PROJECT_NAME}-${SEARCH_DEMO_VERSION}-$CI_COMMIT_REF_NAME-${CI_COMMIT_SHORT_SHA}
+    - docker push ${ARTIFACTORY_URL}/${CONTAINER_NAME}:$DEPLOYMENT_ID
