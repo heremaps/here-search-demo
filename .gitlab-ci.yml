@@ -19,7 +19,7 @@ include:
     ref: master
 
 image:
-  name: python:latest
+  name: docker:latest
   entrypoint: ['bash', '-c', 'useradd --create-home search && exec su search -c bash']
 
 variables:
