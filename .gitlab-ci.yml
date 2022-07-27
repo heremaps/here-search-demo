@@ -20,7 +20,7 @@ include:
 
 image:
   name: docker:latest
-  entrypoint: ['bash', '-c', 'useradd --create-home search && exec su search -c bash']
+  entrypoint: ['/bin/bash', '-c', 'useradd --create-home search && exec su search -c /bin/bash']
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
