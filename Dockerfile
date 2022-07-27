@@ -21,10 +21,9 @@ ENV LANGUAGE en_US.UTF-8
 ENV SHELL /bin/bash
 
 # Set up user
-ARG NB_USER
-ARG NB_UID
-ENV USER ${NB_USER}
-ENV HOME /home/${NB_USER}
+ARG CI_REGISTRY_USER
+ENV USER default
+ENV HOME /home/default
 
 RUN groupadd \
         --gid ${NB_UID} \
@@ -32,11 +31,11 @@ RUN groupadd \
     useradd \
         --comment "Default user" \
         --create-home \
-        --gid ${NB_UID} \
+        --gid ${CI_REGISTRY_USER} \
         --no-log-init \
         --shell /bin/bash \
-        --uid ${NB_UID} \
-        ${NB_USER}
+        --uid ${CI_REGISTRY_USER} \
+        default
 
 # Base package installs are not super interesting to users, so hide their outputs
 # If install fails for some reason, errors will still be printed
@@ -75,7 +74,7 @@ bash -c 'time /tmp/install-base-env.bash' && \
 rm -rf /tmp/install-base-env.bash /tmp/env
 
 RUN mkdir -p ${NPM_DIR} && \
-chown -R ${NB_USER}:${NB_USER} ${NPM_DIR}
+chown -R default:default ${NPM_DIR}
 
 
 # ensure root user after build scripts
@@ -85,7 +84,7 @@ USER root
 ARG REPO_DIR=${HOME}
 ENV REPO_DIR ${REPO_DIR}
 WORKDIR ${REPO_DIR}
-RUN chown ${NB_USER}:${NB_USER} ${REPO_DIR}
+RUN chown default:default ${REPO_DIR}
 
 # We want to allow two things:
 #   1. If there's a .local/bin directory in the repo, things there
