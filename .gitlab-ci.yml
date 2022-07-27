@@ -3,10 +3,26 @@ include:
     file: variables_from_vault.yml
     ref: master
 
+variables:
+  # When using dind, it's wise to use the overlayfs driver for improved performance.
+  DOCKER_DRIVER: overlay2
+  GIT_SUBMODULE_STRATEGY: recursive
+  ARTIFACTORY_URL: docker-local.artifactory.in.here.com
+  VAULT_SERVER_URL: https://vault.hcs.aws.in.here.com/
+  VAULT_AUTH_ROLE: gitlab-default
+  VAULT_AUTH_PATH: gitlab-jwt
+
 image: docker:stable
+
+.artfactory_login: &artfactory_login
+- STATUS=0 ;for i in 1 2 3 4 5; do
+      (echo "$ARTIFACTORY_PASS" | base64 -d | docker login -u $ARTIFACTORY_USER --password-stdin $ARTIFACTORY_URL) && break || STATUS=$(echo $?; sleep 15);
+    done ; [ $STATUS -ne 0 ] && exit 1
+
 
 stages:
   - build
+  - push
 
 before_script:
   - apk add --update --no-cache sudo bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
@@ -14,7 +30,7 @@ before_script:
   - pip3 install --no-cache --upgrade pip setuptools
   
 build:
-  stage: build  
+  stage: build
   services:
     - docker:dind
   script:
@@ -26,3 +42,11 @@ build:
   artifacts:
     paths:
       - search-demo-repo2docker.tgz
+
+push:
+  stage: push
+  extends: .vault_variables
+  services:
+    - docker:dind
+  script:
+    - echo $CI_COMMIT_SHA
