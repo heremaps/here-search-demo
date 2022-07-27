@@ -20,7 +20,7 @@ include:
 
 image:
   name: python:latest
-  entrypoint: ['bash', '-c', 'useradd $HERE_USER_ID && exec su $HERE_USER_ID -c bash']
+  entrypoint: ['bash', '-c', 'useradd $CI_REGISTRY_USER && exec su $CI_REGISTRY_USER -c bash']
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -43,9 +43,7 @@ build:
   stage: build  
   script:
     - pip install jupyter-repo2docker
-    - jupyter-repo2docker \
-     --no-run --image-name search-demo-repo2docker --user-name default \
-     ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook.git
+    - jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name default .
     - docker save search-demo-repo2docker:latest | gzip > search-demo-repo2docker.tgz
   artifacts:
     paths:
