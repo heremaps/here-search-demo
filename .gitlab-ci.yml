@@ -20,7 +20,7 @@ include:
 
 image:
   name: python:latest
-  #entrypoint: ['bash', '-c', 'useradd $HERE_USER_ID && exec su $HERE_USER_ID -c bash']
+  entrypoint: ['bash', '-c', 'useradd decitre && exec su decitre -c bash']
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
