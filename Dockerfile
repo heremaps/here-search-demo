@@ -21,21 +21,9 @@ ENV LANGUAGE en_US.UTF-8
 ENV SHELL /bin/bash
 
 # Set up user
-ARG CI_REGISTRY_USER
-ENV USER default
-ENV HOME /home/default
-
-RUN groupadd \
-        --gid ${CI_REGISTRY_USER} \
-        default && \
-    useradd \
-        --comment "Default user" \
-        --create-home \
-        --gid ${CI_REGISTRY_USER} \
-        --no-log-init \
-        --shell /bin/bash \
-        --uid ${CI_REGISTRY_USER} \
-        default
+ENV HOME /home/search
+RUN groupadd search
+RUN useradd --create-home --no-log-init --shell /bin/bash --gid search search
 
 # Base package installs are not super interesting to users, so hide their outputs
 # If install fails for some reason, errors will still be printed
@@ -74,7 +62,7 @@ bash -c 'time /tmp/install-base-env.bash' && \
 rm -rf /tmp/install-base-env.bash /tmp/env
 
 RUN mkdir -p ${NPM_DIR} && \
-chown -R default:default ${NPM_DIR}
+chown -R search:search ${NPM_DIR}
 
 
 # ensure root user after build scripts
@@ -84,7 +72,7 @@ USER root
 ARG REPO_DIR=${HOME}
 ENV REPO_DIR ${REPO_DIR}
 WORKDIR ${REPO_DIR}
-RUN chown default:default ${REPO_DIR}
+RUN chown search:search ${REPO_DIR}
 
 # We want to allow two things:
 #   1. If there's a .local/bin directory in the repo, things there
@@ -122,7 +110,7 @@ LABEL repo2docker.repo="local"
 LABEL repo2docker.version="2022.02.0"
 
 # We always want containers to run as non-root
-USER ${NB_USER}
+USER search
 
 # Make sure that postBuild scripts are marked executable before executing them
 RUN chmod +x .binder/postBuild
