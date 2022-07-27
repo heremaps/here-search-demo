@@ -40,7 +40,7 @@ stages:          # List of stages for jobs, and their order of execution
   - run
 
 before_script:
-  - apk add --update --no-cache python3 && ln -sf python /usr/bin/python
+  - apk add --update --no-cache python3 build-base && ln -sf python /usr/bin/python
   - python3 -m ensurepip
   - pip3 install --no-cache --upgrade pip setuptools
   - python3 -V
