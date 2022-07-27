@@ -13,7 +13,7 @@
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
 
-image: docker:latest
+image: python:latest
 
 include:
   - project: olp/onesearch/infrastructure/gitlabci-utils
