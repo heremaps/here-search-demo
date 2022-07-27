@@ -15,8 +15,8 @@ before_script:
   
 build:
   stage: build  
-  services:
-    - docker:dind
+  #services:
+  #  - docker:dind
   script:
     - PATH=/home/search:/home/search/.local/bin:$PATH
     - pip3 install jupyter-repo2docker
