@@ -18,9 +18,8 @@ include:
     file: variables_from_vault.yml
     ref: master
 
-image: 
-  name: python:latest
-  user: $HERE_USER_ID
+image: python:latest
+image_user: $HERE_USER_ID
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
