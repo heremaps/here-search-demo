@@ -56,15 +56,10 @@ run:
 # https://hub.docker.com/r/library/python/tags/
 
 
-image: python:latest
-
 #include:
 #  - project: olp/onesearch/infrastructure/gitlabci-utils
 #    file: variables_from_vault.yml
 #    ref: master
-
-variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
 # Pip's cache doesn't store the python packages
 # https://pip.pypa.io/en/stable/topics/caching/
@@ -76,17 +71,8 @@ cache:
     - .cache/pip
     - venv/
 
-stages:          # List of stages for jobs, and their order of execution
-  - build
-  - run
-
-before_script:
-  - python --version  # For debugging
-  - python -m venv venv
-  - source venv/bin/activate
-
 build:
-  stage: build
+  stage: build2
   script:
     - pip install jupyter-repo2docker
     - jupyter-repo2docker \
