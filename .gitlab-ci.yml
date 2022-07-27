@@ -40,12 +40,9 @@ stages:          # List of stages for jobs, and their order of execution
   - run
 
 before_script:
-  - uname -a
-  - cat /etc/*-release
-  - lsb_release -a
-  - cat /proc/version
-  - hostnamectl
-  - apt install python3.9
+  - apk add --update --no-cache python3 && ln -sf python /usr/bin/python
+  - python3 -m ensurepip
+  - pip install --no-cache --upgrade pip setuptools
   - which python
   - which python3
   
