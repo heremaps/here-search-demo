@@ -42,8 +42,8 @@ stages:          # List of stages for jobs, and their order of execution
 build:
   stage: build  
   script:
-    - echo $PATH
-    - python -m pip install --upgrade pip
+    - PATH=/home/search:$PATH
+    - python -m pip -v install --upgrade pip
     - pip -v install jupyter-repo2docker
     - which python
     - jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search .
