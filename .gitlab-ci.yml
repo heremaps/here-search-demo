@@ -41,6 +41,8 @@ stages:          # List of stages for jobs, and their order of execution
 
 build:
   stage: build  
+  services:
+    - docker:dind
   script:
     - PATH=/home/search:/home/search/.local/bin:$PATH
     - python -m pip -v install --upgrade pip
