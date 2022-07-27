@@ -39,6 +39,11 @@ stages:          # List of stages for jobs, and their order of execution
   - build
   - run
 
+before_script:
+  - yum install -y python3
+  - which python
+  - which python3
+  
 build:
   stage: build  
   services:
