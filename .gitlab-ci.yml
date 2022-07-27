@@ -55,6 +55,8 @@ build:
     - adduser -h /home search -S -D
     #- runuser -u search -- jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search .
     #- su -s /bin/bash search "/usr/bin/jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search ."
+    - pwd
+    - ls -l .
     - sudo -u search /usr/bin/jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search .
     - docker save search-demo-repo2docker:latest | gzip > search-demo-repo2docker.tgz
   artifacts:
