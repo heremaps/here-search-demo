@@ -48,6 +48,7 @@ build:
     - python -m pip -v install --upgrade pip
     - pip -v install jupyter-repo2docker
     - which python
+    - docker ps
     - jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search .
     - docker save search-demo-repo2docker:latest | gzip > search-demo-repo2docker.tgz
   artifacts:
