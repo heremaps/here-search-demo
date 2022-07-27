@@ -52,7 +52,7 @@ build:
   script:
     - PATH=/home/search:/home/search/.local/bin:$PATH
     - pip3 -v install jupyter-repo2docker
-    - adduser -h /home search
+    - adduser -h /home search -S -D
     - runuser -u search -- jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search .
     - docker save search-demo-repo2docker:latest | gzip > search-demo-repo2docker.tgz
   artifacts:
