@@ -40,7 +40,7 @@ stages:          # List of stages for jobs, and their order of execution
   - run
 
 before_script:
-  - apk add --update --no-cache bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
+  - apk add --update --no-cache sudo bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
   - ln -sf python /usr/bin/python
   - pip3 install --no-cache --upgrade pip setuptools
   - python3 -V
@@ -56,7 +56,7 @@ build:
     - ls -l /usr/bin
     #- runuser -u search -- jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search .
     #- su -s /bin/bash search "/usr/bin/jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search ."
-    - su -s /bin/bash search "/usr/bin/jupyter-repo2docker --help"
+    - sudo -u search /usr/bin/jupyter-repo2docker --help
     - docker save search-demo-repo2docker:latest | gzip > search-demo-repo2docker.tgz
   artifacts:
     paths:
