@@ -52,7 +52,6 @@ ENV KERNEL_PYTHON_PREFIX ${NB_PYTHON_PREFIX}
 ENV PATH ${NB_PYTHON_PREFIX}/bin:${CONDA_DIR}/bin:${NPM_DIR}/bin:${PATH}
 
 # If scripts required during build are present, copy them
-RUN ls -lR build_script_files
 RUN ls -lR /tmp
 COPY --chown=1000:1000 build_script_files/-2fusers-2fsearch-2fvirtualenv-2fsearch-5fnotebook3-2flib-2fpython3-2e9-2fsite-2dpackages-2frepo2docker-2fbuildpacks-2fconda-2factivate-2dconda-2esh-975c3c /etc/profile.d/activate-conda.sh
 
