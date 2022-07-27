@@ -42,7 +42,7 @@ stages:          # List of stages for jobs, and their order of execution
 before_script:
   - apk add --update --no-cache python3 && ln -sf python /usr/bin/python
   - python3 -m ensurepip
-  - pip install --no-cache --upgrade pip setuptools
+  - pip3 install --no-cache --upgrade pip setuptools
   - which python
   - which python3
   
@@ -52,9 +52,7 @@ build:
     - docker:dind
   script:
     - PATH=/home/search:/home/search/.local/bin:$PATH
-    - python -m pip -v install --upgrade pip
-    - pip -v install jupyter-repo2docker
-    - which python
+    - pip3 -v install jupyter-repo2docker
     - docker ps
     - useradd --create-home search && exec su search -c "jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search .
     - docker save search-demo-repo2docker:latest | gzip > search-demo-repo2docker.tgz
