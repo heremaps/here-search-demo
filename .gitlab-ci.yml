@@ -42,6 +42,7 @@ build:
     - adduser -h /home search -S -D -u 1999
     - /usr/bin/jupyter-repo2docker --no-run --image-name ${CONTAINER_NAME} --user-id 1999 --user-name search .
     # search-notebook-0.5.0-master-4544b837
+    - docker tag ${ARTIFACTORY_URL}/${CONTAINER_NAME}
     - docker push ${ARTIFACTORY_URL}/${CONTAINER_NAME}:$DEPLOYMENT_ID
     #- docker save onesearch-notebook-repo2docker:latest | gzip > onesearch-notebook-repo2docker.tgz
   #artifacts:
