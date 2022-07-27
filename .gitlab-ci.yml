@@ -6,6 +6,8 @@ include:
 variables:
   # When using dind, it's wise to use the overlayfs driver for improved performance.
   DOCKER_DRIVER: overlay2
+  IMAGE_NAME: onesearch-notebook
+  CONTAINER_IMAGE: "$ARTIFACTORY_URL/$IMAGE_NAME"
   GIT_SUBMODULE_STRATEGY: recursive
   ARTIFACTORY_URL: docker-local.artifactory.in.here.com
   VAULT_SERVER_URL: https://vault.hcs.aws.in.here.com/
@@ -24,10 +26,10 @@ stages:
   - build
   - push
 
-before_script:
-  - apk add --update --no-cache sudo bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
-  - ln -sf python /usr/bin/python
-  - pip3 install --no-cache --upgrade pip setuptools
+#before_script:
+#  - apk add --update --no-cache sudo bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
+#  - ln -sf python /usr/bin/python
+#  - pip3 install --no-cache --upgrade pip setuptools
   
 build:
   stage: build
@@ -35,14 +37,23 @@ build:
     - docker:dind
   script:
     - echo $CI_COMMIT_SHA
-    - PATH=/home/search:/home/search/.local/bin:$PATH
-    - pip3 install jupyter-repo2docker
-    - adduser -h /home search -S -D -u 1999
-    - /usr/bin/jupyter-repo2docker --no-run --image-name onesearch-notebook-repo2docker --user-id 1999 --user-name search .
-    - docker save onesearch-notebook-repo2docker:latest | gzip > onesearch-notebook-repo2docker.tgz
-  artifacts:
-    paths:
-      - onesearch-notebook-repo2docker.tgz
+    - echo $CI_COMMIT_SHORT_SHA
+    - echo $CI_COMMIT_BRANCH
+    - echo $CI_DEFAULT_BRANCH
+    - echo $CI_PROJECT_NAME
+    - echo $CI_PIPELINE_ID
+    - echo $CI_COMMIT_REF_NAME
+    - echo $CI_PIPELINE_SOURCE
+    - echo $(cut -d\' -f2 src/here_search/__init__.py)
+
+    #- PATH=/home/search:/home/search/.local/bin:$PATH
+    #- pip3 install jupyter-repo2docker
+    #- adduser -h /home search -S -D -u 1999
+    #- /usr/bin/jupyter-repo2docker --no-run --image-name onesearch-notebook-repo2docker --user-id 1999 --user-name search .
+    #- docker save onesearch-notebook-repo2docker:latest | gzip > onesearch-notebook-repo2docker.tgz
+  #artifacts:
+  #  paths:
+  #    - onesearch-notebook-repo2docker.tgz
 
 push:
   stage: push
