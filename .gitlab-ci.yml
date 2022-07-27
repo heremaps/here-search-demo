@@ -39,7 +39,7 @@ stages:          # List of stages for jobs, and their order of execution
 build:
   stage: build
   image: python:latest
-  image_user: $HERE_USER_ID
+  user: $HERE_USER_ID
   script:
     - pip install jupyter-repo2docker
     - jupyter-repo2docker \
