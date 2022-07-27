@@ -20,7 +20,7 @@ include:
 
 image:
   name: python:latest
-  entrypoint: ['bash', '-c', 'useradd --create-home --shell /bin/bash search && exec su search -c bash']
+  entrypoint: ['bash', '-c', 'useradd --create-home search && exec su search -c bash']
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -44,6 +44,7 @@ build:
   script:
     - python -m pip install --upgrade pip
     - pip install jupyter-repo2docker
+    - which jupyter-repo2docker
     - jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search .
     - docker save search-demo-repo2docker:latest | gzip > search-demo-repo2docker.tgz
   artifacts:
