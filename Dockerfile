@@ -26,8 +26,8 @@ ENV USER default
 ENV HOME /home/default
 
 RUN groupadd \
-        --gid ${NB_UID} \
-        ${NB_USER} && \
+        --gid ${CI_REGISTRY_USER} \
+        default && \
     useradd \
         --comment "Default user" \
         --create-home \
