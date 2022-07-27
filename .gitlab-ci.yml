@@ -13,9 +13,9 @@
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
 
-image: python:latest
-
-user: $HERE_USER_ID
+image: 
+  name: python:latest
+  user: $HERE_USER_ID
 
 include:
   - project: olp/onesearch/infrastructure/gitlabci-utils
