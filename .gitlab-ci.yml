@@ -15,13 +15,23 @@
 
 image: python:latest
 
-include:
-  - project: olp/onesearch/infrastructure/gitlabci-utils
-    file: variables_from_vault.yml
-    ref: master
+#include:
+#  - project: olp/onesearch/infrastructure/gitlabci-utils
+#    file: variables_from_vault.yml
+#    ref: master
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# Pip's cache doesn't store the python packages
+# https://pip.pypa.io/en/stable/topics/caching/
+#
+# If you want to also cache the installed packages, you have to install
+# them in a virtualenv and cache it as well.
+cache:
+  paths:
+    - .cache/pip
+    - venv/
 
 stages:          # List of stages for jobs, and their order of execution
   - build
