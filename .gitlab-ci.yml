@@ -42,7 +42,6 @@ stages:          # List of stages for jobs, and their order of execution
 before_script:
   - apk add --update --no-cache py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
   - ln -sf python /usr/bin/python
-  - python3 -m ensurepip
   - pip3 install --no-cache --upgrade pip setuptools
   - python3 -V
   
