@@ -20,7 +20,7 @@ include:
 
 image:
   name: python:latest
-  entrypoint: ['bash', '-c', 'useradd search && exec su search -c bash']
+  entrypoint: ['bash', '-c', 'groupadd search && useradd --create-home --shell /bin/bash --gid search search && exec su search -c bash']
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
