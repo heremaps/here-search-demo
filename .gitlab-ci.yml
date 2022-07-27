@@ -40,7 +40,7 @@ stages:          # List of stages for jobs, and their order of execution
   - run
 
 before_script:
-  - yum install -y python3
+  - apt install python3.9
   - which python
   - which python3
   
