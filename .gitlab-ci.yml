@@ -40,6 +40,11 @@ stages:          # List of stages for jobs, and their order of execution
   - run
 
 before_script:
+  - uname -a
+  - cat /etc/*-release
+  - lsb_release -a
+  - cat /proc/version
+  - hostnamectl
   - apt install python3.9
   - which python
   - which python3
