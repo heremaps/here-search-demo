@@ -34,18 +34,18 @@ build:
   services:
     - docker:dind
   script:
+    - echo $CI_COMMIT_SHA
     - PATH=/home/search:/home/search/.local/bin:$PATH
     - pip3 install jupyter-repo2docker
     - adduser -h /home search -S -D -u 1999
-    - /usr/bin/jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-id 1999 --user-name search .
-    - docker save search-demo-repo2docker:latest | gzip > search-demo-repo2docker.tgz
+    - /usr/bin/jupyter-repo2docker --no-run --image-name onesearch-notebook-repo2docker --user-id 1999 --user-name search .
+    - docker save onesearch-notebook-repo2docker:latest | gzip > onesearch-notebook-repo2docker.tgz
   artifacts:
     paths:
-      - search-demo-repo2docker.tgz
+      - onesearch-notebook-repo2docker.tgz
 
 push:
   stage: push
-  extends: .vault_variables
   services:
     - docker:dind
   script:
