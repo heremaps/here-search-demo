@@ -18,6 +18,9 @@ include:
     file: variables_from_vault.yml
     ref: master
 
+image:
+  name: python:latest
+  entrypoint: ['bash', '-c', 'useradd $HERE_USER_ID && exec su $HERE_USER_ID -c bash']
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -37,9 +40,7 @@ stages:          # List of stages for jobs, and their order of execution
   - run
 
 build:
-  stage: build
-  image: python:latest
-  entrypoint: ['bash', '-c', 'useradd $HERE_USER_ID && exec su $HERE_USER_ID -c bash']
+  stage: build  
   script:
     - pip install jupyter-repo2docker
     - jupyter-repo2docker \
