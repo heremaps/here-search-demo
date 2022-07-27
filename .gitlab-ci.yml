@@ -57,6 +57,7 @@ build:
     #- su -s /bin/bash search "/usr/bin/jupyter-repo2docker --no-run --image-name search-demo-repo2docker --user-name search ."
     - pwd
     - docker ps
+    - sudo chmod 666 /var/run/docker.sock
     - sudo -u search /usr/bin/jupyter-repo2docker \
       --no-run --image-name search-demo-repo2docker --user-name search \
       /builds/olp/onesearch/playground/decitre/search-notebook
