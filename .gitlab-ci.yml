@@ -33,15 +33,12 @@ before_script:
 build:
   stage: build
   script:
+    - *artfactory_login
     - PATH=/home/search:/home/search/.local/bin:$PATH
     - pip3 install jupyter-repo2docker
     - adduser -h /home search -S -D -u 1999
     - /usr/bin/jupyter-repo2docker --no-run --image-name ${CONTAINER_NAME} --user-id 1999 --user-name search .
-
-push:
-  stage: push  
-  script:
-    - *artfactory_login
+    # The following should be in a follow-up push stage
     - SEARCH_DEMO_VERSION=$(cut -d\' -f2 src/here_search/__init__.py)
     - DEPLOYMENT_ID=${CI_PROJECT_NAME}-${SEARCH_DEMO_VERSION}-$CI_COMMIT_REF_NAME-${CI_COMMIT_SHORT_SHA}
     - docker tag ${CONTAINER_NAME} ${ARTIFACTORY_URL}/${CONTAINER_NAME}:$DEPLOYMENT_ID
