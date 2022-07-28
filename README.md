@@ -18,7 +18,15 @@ A typical way to run a Python notebook such as the `here-search-notebook`, is to
    $ pip -v install here-search-demo --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
    ```
 
-1. Launch the notebook
+2. Configure Jupyter
+
+   ```
+   $ jupyter nbextension enable --py widgetsnbextension
+   $ jupyter labextension install @jupyterlab/geojson-extension
+   $ python -m ipykernel install --user --name search_demo --display-name "search demo"
+   ```
+
+3. Launch the notebook
 
    ```
    $ API_KEY="your API key" here-search-notebook

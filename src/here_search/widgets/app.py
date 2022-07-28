@@ -3,7 +3,7 @@ from ipywidgets import Output
 import nest_asyncio
 
 from here_search.base import OneBoxBase
-from here_search.user import UserProfile
+from here_search.user import Profile
 from here_search.entities import Response
 
 from .query import SubmittableTextBox, TermsButtons, NearbySimpleParser
@@ -12,6 +12,38 @@ import here_search.widgets.design as design
 
 from typing import Callable, ClassVar, Awaitable
 import asyncio
+import logging
+
+
+class OutputWidgetHandler(logging.Handler):
+    """ Custom logging handler sending logs to an output widget """
+
+    def __init__(self, *args, **kwargs):
+        super(OutputWidgetHandler, self).__init__(*args, **kwargs)
+        layout = {
+            'width': '100%',
+            'height': '160px',
+            'border': '1px solid black'
+        }
+        self.out = Output(layout=layout)
+
+    def emit(self, record):
+        """ Overload of logging.Handler method """
+        formatted_record = self.format(record)
+        new_output = {
+            'name': 'stdout',
+            'output_type': 'stream',
+            'text': formatted_record+'\n'
+        }
+        self.out.outputs = (new_output, ) + self.out.outputs
+
+    def show_logs(self):
+        """ Show the logs """
+        Idisplay(self.out)
+
+    def clear_logs(self):
+        """ Clear the current logs """
+        self.out.clear_output()
 
 
 class OneBoxMap(OneBoxBase):
@@ -26,7 +58,7 @@ class OneBoxMap(OneBoxBase):
     default_design = design.EmbeddedList
 
     def __init__(self,
-                 user_profile: UserProfile,
+                 user_profile: Profile,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
@@ -147,6 +179,14 @@ class OneBoxMap(OneBoxBase):
     async def __ainit_map(self):
         self.map_w = PositionMap(api_key=self.api.api_key, center=[self.latitude, self.longitude], position_handler=self.search_center_observer())
         self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.result_list_w)
+
+    @staticmethod
+    def show_logs() -> None:
+        logger = logging.getLogger("here_search")
+        handler = OutputWidgetHandler()
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        handler.show_logs()
 
     def run(self,
             handle_user_profile_setup: Callable=None,

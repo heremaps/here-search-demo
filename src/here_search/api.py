@@ -2,12 +2,11 @@ from aiohttp import ClientSession
 from ujson import loads
 
 from .entities import Request, Response, Endpoint
+from .util import logger
 
 from collections import OrderedDict
 from typing import Tuple, Dict
-import os
-from dataclasses import dataclass
-from enum import IntEnum, auto
+import os, sys
 from getpass import getpass
 
 
@@ -31,11 +30,12 @@ class API:
         self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="api key: ")
         self.cache = cache or {}
 
-    async def uncache_or_get(self, session: ClientSession, req: Request) -> Response:
+    async def get(self, session: ClientSession, req: Request) -> Response:
         """
         Returns from HERE Search backend the response for a specific Request, or from the cache if it has been cached.
         Cache the Response if returned by the HERE Search backend.
 
+        :param method: "GET" or "POST"
         :param session: instance of ClientSession
         :param req: Search Request object
         :return: a Response object
@@ -50,6 +50,7 @@ class API:
             return response
 
         async with session.get(req.url, params=req.params, headers=req.x_headers) as get_response:
+            logger.info(get_response.url)
             x_headers = {"X-Request-Id": get_response.headers["X-Request-Id"],
                          "X-Correlation-ID": get_response.headers["X-Correlation-ID"]}
             response = Response(data=await get_response.json(loads=loads),
@@ -74,10 +75,10 @@ class API:
         """
         params = OrderedDict(q=q, at=f'{latitude},{longitude}', apiKey=self.api_key)
         params.update(kwargs)
-        return await self.uncache_or_get(session, Request(endpoint=Endpoint.AUTOSUGGEST,
-                                                          url=base_url[Endpoint.AUTOSUGGEST],
-                                                          params=params,
-                                                          x_headers=x_headers))
+        return await self.get(session, Request(endpoint=Endpoint.AUTOSUGGEST,
+                                                url=base_url[Endpoint.AUTOSUGGEST],
+                                                params=params,
+                                                x_headers=x_headers))
 
     async def autosuggest_href(self, session: ClientSession,
                                href: str,
@@ -94,8 +95,8 @@ class API:
         """
         params = {'apiKey': self.api_key}
         params.update(kwargs)
-        return await self.uncache_or_get(session, Request(endpoint=Endpoint.AUTOSUGGEST_HREF,
-                                                          url=href, params=params, x_headers=x_headers))
+        return await self.get(session, Request(endpoint=Endpoint.AUTOSUGGEST_HREF,
+                                                url=href, params=params, x_headers=x_headers))
 
     async def discover(self, session: ClientSession,
                        q: str, latitude: float, longitude: float,
@@ -113,10 +114,10 @@ class API:
         """
         params = OrderedDict(q=q, at=f'{latitude},{longitude}', apiKey=self.api_key)
         params.update(kwargs)
-        return await self.uncache_or_get(session, Request(endpoint=Endpoint.DISCOVER,
-                                                          url=base_url[Endpoint.DISCOVER],
-                                                          params=params,
-                                                          x_headers=x_headers))
+        return await self.get(session, Request(endpoint=Endpoint.DISCOVER,
+                                                url=base_url[Endpoint.DISCOVER],
+                                                params=params,
+                                                x_headers=x_headers))
 
     async def lookup(self, session: ClientSession,
                      id: str,
@@ -132,10 +133,10 @@ class API:
         """
         params = OrderedDict(id=id, apiKey=self.api_key)
         params.update(kwargs)
-        return await self.uncache_or_get(session, Request(endpoint=Endpoint.LOOKUP,
-                                                          url=base_url[Endpoint.LOOKUP],
-                                                          params=params,
-                                                          x_headers=x_headers))
+        return await self.get(session, Request(endpoint=Endpoint.LOOKUP,
+                                                url=base_url[Endpoint.LOOKUP],
+                                                params=params,
+                                                x_headers=x_headers))
 
     async def reverse_geocode(self, session: ClientSession,
                               latitude: float, longitude: float,
@@ -152,10 +153,10 @@ class API:
         """
         params = OrderedDict(at=f"{latitude},{longitude}", apiKey=self.api_key)
         params.update(kwargs)
-        return await self.uncache_or_get(session, Request(endpoint=Endpoint.REVGEOCODE,
-                                                          url=base_url[Endpoint.REVGEOCODE],
-                                                          params=params,
-                                                          x_headers=x_headers))
+        return await self.get(session, Request(endpoint=Endpoint.REVGEOCODE,
+                                                url=base_url[Endpoint.REVGEOCODE],
+                                                params=params,
+                                                x_headers=x_headers))
 
     async def signals(self, session: ClientSession,
                       resource_id: str,
@@ -163,7 +164,7 @@ class API:
                       rank: int,
                       action: str,
                       x_headers: dict=None,
-                      **kwargs) -> None:
+                      **kwargs) -> Response:
         """
         Calls HERE signals endpoint with some user action
 
@@ -179,8 +180,21 @@ class API:
                            correlationId=correlation_id,
                            rank=rank, action=action)
         data.update(kwargs)
+
         async with session.post(base_url[Endpoint.SIGNALS],
                                 params=OrderedDict(apiKey=self.api_key),
                                 data=data,
-                                headers=x_headers) as response:
-            await response.text()
+                                headers=x_headers) as post_response:
+            logger.info(dict(data))
+            logger.info(post_response.url)
+            x_headers = {"X-Request-Id": post_response.headers["X-Request-Id"],
+                         "X-Correlation-ID": post_response.headers["X-Correlation-ID"]}
+
+            response = Response(data={"text": await post_response.text()},
+                                req=Request(endpoint=Endpoint.SIGNALS,
+                                            url=base_url[Endpoint.SIGNALS],
+                                            params=data,
+                                            x_headers=x_headers),
+                                x_headers=x_headers)
+
+            return response

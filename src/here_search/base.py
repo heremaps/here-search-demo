@@ -5,7 +5,7 @@ except ImportError:
     Profiler = None
 
 from . import __version__
-from .user import UserProfile
+from .user import Profile
 from .api import API
 from .entities import Response, Endpoint, ResponseItem
 
@@ -26,7 +26,7 @@ class OneBoxBase:
     default_headers = {'User-Agent': f'here-search-notebook-{__version__}'}
 
     def __init__(self,
-                 user_profile: UserProfile,
+                 user_profile: Profile,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
@@ -127,8 +127,8 @@ class OneBoxBase:
     async def get_preferred_location_language(self, session) -> str:
         if self.user_profile.preferred_languages is None:
             country_code, language = await self.get_position_locale(session)
-        elif list(self.user_profile.preferred_languages.keys()) == [UserProfile.default_name]:
-            language = self.user_profile.preferred_languages[UserProfile.default_name]
+        elif list(self.user_profile.preferred_languages.keys()) == [Profile.default_name]:
+            language = self.user_profile.preferred_languages[Profile.default_name]
         else:
             country_code, country_language = await self.get_position_locale(session)
             preferred_language = self.user_profile.get_preferred_language(country_code)

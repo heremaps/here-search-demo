@@ -9,7 +9,7 @@ import asyncio
 import uuid
 
 
-class UserProfile:
+class Profile:
     preferred_languages: dict
     current_latitude: float
     current_longitude: float
@@ -34,7 +34,7 @@ class UserProfile:
         :param languages: Optional user language preferences
         :param name: Optional user name
         """
-        self.name = name or UserProfile.default_name
+        self.name = name or Profile.default_name
         self.id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{self.name}{uuid.getnode()}'))
 
         self.__use_positioning = use_positioning
@@ -42,7 +42,7 @@ class UserProfile:
 
         self._api = api
         self.preferred_languages = languages or {}
-        self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [UserProfile.default_name])
+        self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name])
 
         nest_asyncio.apply()
         try:
@@ -95,9 +95,9 @@ class UserProfile:
 
     async def __init_locale(self):
         if not self.__use_positioning:
-            self.current_latitude = UserProfile.default_current_latitude
-            self.current_longitude = UserProfile.default_current_longitude
-            self.current_country_code = UserProfile.default_country_code
+            self.current_latitude = Profile.default_current_latitude
+            self.current_longitude = Profile.default_current_longitude
+            self.current_country_code = Profile.default_country_code
         else:
             async with ClientSession(raise_for_status=True) as session:
                 self.current_latitude, self.current_longitude = await get_lat_lon(session)
@@ -106,9 +106,9 @@ class UserProfile:
     def get_current_language(self):
         if self.current_country_code in self.preferred_languages:
             return self.preferred_languages[self.current_country_code]
-        return self.preferred_languages[UserProfile.default_name]
+        return self.preferred_languages[Profile.default_name]
 
 
-class Permissive(UserProfile):
+class Permissive(Profile):
     def __init__(self, api: API=None):
-        UserProfile.__init__(self, use_positioning=True, share_experience=True, api=api)
+        Profile.__init__(self, use_positioning=True, share_experience=True, api=api)

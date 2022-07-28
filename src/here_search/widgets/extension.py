@@ -7,7 +7,7 @@ from here_search.widgets.app import OneBoxMap
 from here_search.api import API, base_url
 from here_search.entities import Response, ResponseItem, Request
 
-from here_search.user import UserProfile
+from here_search.user import Profile
 from .query import NearbySimpleParser
 
 from typing import Tuple, Callable, ClassVar, Iterable, Optional
@@ -74,7 +74,7 @@ class OneBoxCatNearCat(OneBoxMap):
     lg_children_details = False
 
     def __init__(self,
-                 user_profile: UserProfile,
+                 user_profile: Profile,
                  autosuggest_query_params: dict=None,
                  lg_radius: int=None,
                  lg_pair_distance: int=None,

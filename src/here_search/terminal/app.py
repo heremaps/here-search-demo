@@ -1,5 +1,5 @@
 from here_search.base import OneBoxBase
-from here_search.user import UserProfile
+from here_search.user import Profile
 from here_search.entities import Response
 
 from typing import Awaitable, Callable
@@ -15,7 +15,7 @@ class OneBoxConsole(OneBoxBase):
     default_results_limit = 5
 
     def __init__(self,
-                 user_profile: UserProfile,
+                 user_profile: Profile,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  term_keys: bytes=None,
