@@ -2,9 +2,9 @@ from aiohttp import ClientSession
 import nest_asyncio
 
 from .util import get_lat_lon
-from .api import API
+from .api import API, Option
 
-from typing import Tuple
+from typing import Tuple, Sequence
 import asyncio
 import uuid
 
@@ -30,7 +30,8 @@ class Profile:
                  share_experience: bool,
                  api: API=None,
                  languages: dict=None,
-                 name: str=None):
+                 name: str=None,
+                 options: Sequence[Option]=None):
         """
         :param use_position: Mandatory opt-in/out about position usage
         :param share_experience: Mandatory opt-in/out about activity usage
@@ -47,6 +48,7 @@ class Profile:
         self._api = api
         self.preferred_languages = languages or {}
         self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name])
+        self.options = options
 
         nest_asyncio.apply()
         try:

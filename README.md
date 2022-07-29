@@ -53,6 +53,6 @@ Another way to run the notebook is to have it served by a Docker container:
 
 3. Launch the notebook
 
-   Browse to `http://127.0.0.1:51234/lab/tree/oneboxmap.ipynb`
+   Browse to [`http://127.0.0.1:51234/lab/tree/oneboxmap.ipynb`](http://127.0.0.1:51234/lab/tree/oneboxmap.ipynb)
 
    The Jupyter token can be found at the end of the running container logs.
