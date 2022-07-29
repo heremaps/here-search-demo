@@ -21,38 +21,53 @@ A typical way to run a Python notebook such as the `here-search-notebook`, is to
 2. Configure Jupyter
 
    ```
-   $ jupyter nbextension enable --py widgetsnbextension
-   $ jupyter labextension install @jupyterlab/geojson-extension
-   $ python -m ipykernel install --user --name search_demo --display-name "search demo"
+   jupyter nbextension enable --py widgetsnbextension
+   jupyter labextension install @jupyterlab/geojson-extension
+   python -m ipykernel install --user --name search_demo --display-name "search demo"
    ```
 
 3. Launch the notebook
 
    ```
-   $ API_KEY="your API key" here-search-notebook
+   API_KEY="your API key" here-search-notebook
    ```
    
 (More [details](docs/developers.md#setup-a-notebook-python-environment))
 
 ## Docker
 
-Another way to run the notebook is to have it served by a Docker container:
+Another way to run the notebook is to have it served by a Docker container.  
+You can either start it manually or via the hosted docker-compose file.  
+Therefor configure the **API_KEY** in the local **./docker-compose.yaml** file or in your bash as environment variable **API_KEY**.
 
-1. Pull the latest image
+---
+### Docker-compose:
+
+```
+docker-compose up -d
+```
+---
+
+### Manually:
+
+1. Pull the latest image (optional)
 
    ```
-   $ docker pull docker-local.artifactory.in.here.com/onesearch-demo:latest
+   docker pull docker-local.artifactory.in.here.com/onesearch-demo:latest
    ```
 2. Run a new container
 
-   Use the Docker Desktop to run the image with the host port `51234` and the variable `API_KEY` set to your key. Or do:
+   Use the Docker Desktop to run the image with the host port `8888` and the variable `API_KEY` set to your key. Or do:
 
    ```
-   $ docker run -p 51234:8888 -e APY_KEY=<your API key> docker-local.artifactory.in.here.com/onesearch-demo:latest
+   API_KEY=<YOUR_API_KEY> 
+   docker run --name onesearch-demo -d -p 8888:8888 -e APY_KEY=$API_KEY docker-local.artifactory.in.here.com/onesearch-demo:latest
    ```
 
-3. Launch the notebook
+---
 
-   Browse to [`http://127.0.0.1:51234/lab/tree/oneboxmap.ipynb`](http://127.0.0.1:51234/lab/tree/oneboxmap.ipynb)
+### Browse
 
-   The Jupyter token can be found at the end of the running container logs.
+Launch the notebook
+
+Browse to http://127.0.0.1:8888/lab/tree/oneboxmap.ipynb?token=HERE
