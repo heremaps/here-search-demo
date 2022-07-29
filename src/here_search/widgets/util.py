@@ -14,7 +14,9 @@ class LogWidgetHandler(logging.Handler):
         layout = {
             'width': '100%',
             'height': '160px',
-            'border': '1px solid black'
+            'border': '1px solid black',
+            'overflow': 'auto',
+            'white-space': 'nowrap'
         }
         self.out = Output(layout=layout)
 

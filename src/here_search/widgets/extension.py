@@ -9,6 +9,7 @@ from here_search.entities import Response, ResponseItem, Request
 
 from here_search.user import Profile
 from .query import NearbySimpleParser
+from here_search.util import logger
 
 from typing import Tuple, Callable, ClassVar, Iterable, Optional
 import asyncio
@@ -46,6 +47,7 @@ class LGAPI:
             return self.cache[cache_key]
 
         async with session.get(url, params=params) as response:
+            logger.info(response.url)
             result = await response.json(loads=loads)
             self.cache[cache_key] = result
             return result
