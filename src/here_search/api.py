@@ -4,8 +4,8 @@ from ujson import loads
 from .entities import Request, Response, Endpoint
 from .util import logger
 
-from collections import OrderedDict
-from typing import Tuple, Dict
+from collections import OrderedDict, namedtuple
+from typing import Tuple, Dict, Sequence
 import os, sys
 from getpass import getpass
 
@@ -198,3 +198,52 @@ class API:
                                 x_headers=x_headers)
 
             return response
+
+
+class Option:
+    key: str
+    values: Sequence[str]
+
+
+class FuelPreference(Option):
+    types = ("biodiesel", "diesel", "e85", "e10", "cng", "lpg", "lng", "hydrogen", "truck_diesel", "truck_cng", "truck_lpg", "truck_hydrogen")
+    types = namedtuple("types", types)(*types)
+    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER)
+
+    def __init__(self, *fuel_types):
+        assert all(t in FuelPreference.types for t in fuel_types)
+        self.key = "fuelStation[fuelTypes]"
+        self.value = fuel_types
+
+
+class FuelAdditionalInfo(Option):
+    topics = ("fuel", "truck")
+    topics = namedtuple("types", topics)(*topics)
+    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.LOOKUP)
+
+    def __init__(self, *topics):
+        assert all(t in FuelAdditionalInfo.topics for t in topics)
+        self.key = "show"
+        self.value = topics
+
+
+class EVAdditionalInfo(Option):
+    types = ("ev",)
+    types = namedtuple("types", types)(*types)
+    endpoints = (Endpoint.DISCOVER, Endpoint.LOOKUP)
+
+    def __init__(self, *topics):
+        assert all(t in EVAdditionalInfo.types for t in topics)
+        self.key = "show"
+        self.value = topics
+
+
+class TripadvisorAdditionalInfo(Option):
+    types = ("tripadvisor",)
+    types = namedtuple("types", types)(*types)
+    endpoints = (Endpoint.DISCOVER, Endpoint.LOOKUP)
+
+    def __init(self, *topics):
+        assert all(t in TripadvisorAdditionalInfo.types for t in topics)
+        self.key = "show"
+        self.value = topics
