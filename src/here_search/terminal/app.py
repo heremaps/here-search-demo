@@ -174,8 +174,8 @@ class OneBoxConsole(OneBoxBase):
 
 
 def cli():
-    from here_search.user import Permissive
-    OneBoxConsole(Permissive(), term_keys=b'[]\\').run()
+    from here_search.user import Default
+    OneBoxConsole(Default(), term_keys=b'[]\\').run()
 
 
 if __name__ == '__main__':

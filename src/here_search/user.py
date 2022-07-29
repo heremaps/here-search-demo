@@ -20,6 +20,10 @@ class Profile:
     default_current_longitude = 13.408333
     default_country_code = "DEU"
     default_profile_languages = {default_name: "en"}
+
+    paris = 48.85717, 2.3414
+    chicago = 41.87478, -87.62977
+    berlin = 52.51604, 13.37691
     
     def __init__(self,
                  use_positioning: bool,
@@ -108,7 +112,10 @@ class Profile:
             return self.preferred_languages[self.current_country_code]
         return self.preferred_languages[Profile.default_name]
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}(name={self.name}, id={self.id}, opt_in={self.__use_positioning}/{self.__share_experience})"
 
-class Permissive(Profile):
+
+class Default(Profile):
     def __init__(self, api: API=None):
         Profile.__init__(self, use_positioning=True, share_experience=True, api=api)

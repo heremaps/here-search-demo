@@ -6,6 +6,7 @@ from here_search.base import OneBoxBase
 from here_search.user import Profile
 from here_search.entities import Response
 
+from .util import LogWidgetHandler
 from .query import SubmittableTextBox, TermsButtons, NearbySimpleParser
 from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson, SearchResultRadioButtons
 import here_search.widgets.design as design
@@ -13,37 +14,6 @@ import here_search.widgets.design as design
 from typing import Callable, ClassVar, Awaitable
 import asyncio
 import logging
-
-
-class OutputWidgetHandler(logging.Handler):
-    """ Custom logging handler sending logs to an output widget """
-
-    def __init__(self, *args, **kwargs):
-        super(OutputWidgetHandler, self).__init__(*args, **kwargs)
-        layout = {
-            'width': '100%',
-            'height': '160px',
-            'border': '1px solid black'
-        }
-        self.out = Output(layout=layout)
-
-    def emit(self, record):
-        """ Overload of logging.Handler method """
-        formatted_record = self.format(record)
-        new_output = {
-            'name': 'stdout',
-            'output_type': 'stream',
-            'text': formatted_record+'\n'
-        }
-        self.out.outputs = (new_output, ) + self.out.outputs
-
-    def show_logs(self):
-        """ Show the logs """
-        Idisplay(self.out)
-
-    def clear_logs(self):
-        """ Clear the current logs """
-        self.out.clear_output()
 
 
 class OneBoxMap(OneBoxBase):
@@ -82,10 +52,13 @@ class OneBoxMap(OneBoxBase):
         self.map_w = None
         self.app_design_w = None
 
-        self.result_list_w = [out_class(widget=Output(),
+        self.result_list_w = tuple(out_class(widget=Output(),
                                         max_results_number=max(self.results_limit, self.suggestions_limit),
                                         result_queue=self.result_queue)
-                              for out_class in self.design.out_classes]
+                              for out_class in self.design.out_classes)
+
+        self.log_handler = LogWidgetHandler()
+        self.logger = logging.getLogger("here_search")
 
     def get_search_center(self):
         return self.latitude, self.longitude
@@ -124,6 +97,7 @@ class OneBoxMap(OneBoxBase):
 
     def handle_result_list(self, discover_resp: Response):
         """
+        Displays a results list in various widgets
         Typically called by OneBoxBase.handle_text_submissions()
         :param autosuggest_resp:
         :return: None
@@ -180,13 +154,16 @@ class OneBoxMap(OneBoxBase):
         self.map_w = PositionMap(api_key=self.api.api_key, center=[self.latitude, self.longitude], position_handler=self.search_center_observer())
         self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.result_list_w)
 
-    @staticmethod
-    def show_logs() -> None:
-        logger = logging.getLogger("here_search")
-        handler = OutputWidgetHandler()
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-        handler.show_logs()
+    def show_logs(self, level: int=None) -> "OneBoxMap":
+        self.logger.addHandler(self.log_handler)
+        self.logger.setLevel(level or logging.INFO)
+        self.log_handler.show_logs()
+        return self
+
+    def clear_logs(self):
+        self.logger.removeHandler(self.log_handler)
+        self.log_handler.clear_logs()
+        self.log_handler.close()
 
     def run(self,
             handle_user_profile_setup: Callable=None,
@@ -201,9 +178,12 @@ class OneBoxMap(OneBoxBase):
             loop = asyncio.new_event_loop()
         loop.run_until_complete(self.__ainit_map())
         Idisplay(self.app_design_w)
-
+        self.show_logs()
         OneBoxBase.run(self,
                        handle_user_profile_setup,
                        handle_key_strokes or self.handle_key_strokes,
                        handle_text_submissions or self.handle_text_submissions,
                        handle_result_selections or self.handle_result_selections)
+
+    def __del__(self):
+        self.logger.removeHandler(self.log_handler)
