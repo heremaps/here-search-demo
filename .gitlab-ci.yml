@@ -35,7 +35,8 @@ build:
   script:
     - *artfactory_login
     - PATH=/home/search:/home/search/.local/bin:$PATH
-    - pip3 install jupyter-repo2docker
+    - pip3 install jupyter-repo2docker \
+        --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
     - adduser -h /home search -S -D -u 1999
     - /usr/bin/jupyter-repo2docker --no-run --image-name ${CONTAINER_NAME} --user-id 1999 --user-name search .
     # The following should be in a follow-up push stage
