@@ -1,7 +1,6 @@
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Sequence, Optional
 from dataclasses import dataclass
 from enum import IntEnum, auto
-import uuid
 
 
 class Endpoint(IntEnum):
@@ -9,6 +8,7 @@ class Endpoint(IntEnum):
     AUTOSUGGEST_HREF = auto()
     DISCOVER = auto()
     LOOKUP = auto()
+    BROWSE = auto()
     REVGEOCODE = auto()
     SIGNALS = auto()
 
@@ -38,36 +38,9 @@ class ResponseItem:
     data: dict=None
     rank: int=None
 
-
-class UserProfile:
-    preferred_languages: dict
-    current_latitude: float
-    current_longitude: float
-    current_country_code: str
-
-    default_name = "default"
-    default_current_latitude = 52.518333
-    default_current_longitude = 13.408333
-    default_country_code = "DEU"
-    default_profile_languages = {default_name: "en"}
-
-    def __init__(self,
-                 use_positioning: bool,
-                 share_experience: bool,
-                 languages: dict=None,
-                 name: str=None):
-        """
-        :param use_position: Mandatory opt-in/out about position usage
-        :param share_experience: Mandatory opt-in/out about activity usage
-        :param api: Optional API instance
-        :param languages: Optional user language preferences
-        :param name: Optional user name
-        """
-        self.name = name or UserProfile.default_name
-        self.id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{self.name}{uuid.getnode()}'))
-
-        self.__use_positioning = use_positioning
-        self.__share_experience = share_experience
-
-        self.preferred_languages = languages or {}
-        self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [UserProfile.default_name])
+@dataclass
+class Ontology:
+    name: str
+    categories: Optional[Sequence[str]] = None
+    food_types: Optional[Sequence[str]] = None
+    chains: Optional[Sequence[str]] = None

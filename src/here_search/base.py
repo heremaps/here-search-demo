@@ -7,7 +7,7 @@ except ImportError:
 from . import __version__
 from .user import Profile
 from .api import API
-from .entities import Response, Endpoint, ResponseItem
+from .entities import Response, Endpoint, ResponseItem, Ontology
 
 from typing import Tuple, Awaitable, Callable
 import asyncio
@@ -22,6 +22,7 @@ class OneBoxBase:
     default_autosuggest_query_params = {}
     default_discover_query_params = {}
     default_lookup_query_params = {}
+    default_browse_query_params = {}
     default_profile_language = 'en'
     default_headers = {'User-Agent': f'here-search-notebook-{__version__}'}
 
@@ -33,6 +34,7 @@ class OneBoxBase:
                  autosuggest_query_params: dict=None,
                  discover_query_params: dict=None,
                  lookup_query_params: dict=None,
+                 browse_query_params: dict=None,
                  initial_query: str=None,
                  result_queue: asyncio.Queue=None,
                  **kwargs):
@@ -59,6 +61,7 @@ class OneBoxBase:
         self.autosuggest_query_params = autosuggest_query_params or self.__class__.default_autosuggest_query_params
         self.discover_query_params = discover_query_params or self.__class__.default_discover_query_params
         self.lookup_query_params = lookup_query_params or self.__class__.default_lookup_query_params
+        self.browse_query_params = browse_query_params or self.__class__.default_browse_query_params
 
         self.result_queue: asyncio.Queue = result_queue or asyncio.Queue()
 
@@ -71,7 +74,7 @@ class OneBoxBase:
 
     async def handle_key_strokes(self):
         """
-        This method is called for each key stroke in the one box search Text form.
+        This method repeatedly waits on key strokes in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             x_headers = self.x_headers
@@ -96,7 +99,7 @@ class OneBoxBase:
 
     async def handle_text_submissions(self):
         """
-        This method is called for each key stroke in the one box search Text form.
+        This method repeatedly waits for texts submitted in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             x_headers = self.x_headers
@@ -149,21 +152,36 @@ class OneBoxBase:
 
     async def handle_result_selections(self):
         """
-        This method is called for each search result selected.
+        This method repeatedly waits for any result item to be selected.
+        If the selected result type is categoryQuery or chainQuery, a follow-up category/chain expansion query is sent.
+        If it is another type, a lookup call is sent.
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
-            x_headers = self.x_headers
             while True:
                 item: ResponseItem = await self.wait_for_selected_result()
-                if item is None:
-                    break
-                if not item:
-                    continue
+                if item is None:  break
+                if not item: continue
 
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    await self._do_autosuggest_href(session, item, self.user_profile.share_experience, x_headers)
+                    await self._do_autosuggest_expansion(session, item, self.user_profile.share_experience, self.x_headers)
                 else:
-                    await self._do_lookup(session, item, self.user_profile.share_experience, x_headers)
+                    await self._do_lookup(session, item, self.user_profile.share_experience, self.x_headers)
+
+    async def handle_shortcut_selections(self):
+        """
+        This method is called for each shortcut button selected.
+        """
+        async with ClientSession(raise_for_status=True, headers=self.headers) as session:
+            while True:
+                ontology: Ontology = await self.wait_for_selected_shortcut()
+                if ontology is None:
+                    break
+                if not ontology:
+                    continue
+
+                x_headers = self.x_headers.copy()
+                x_headers.pop('X-AS-Session-ID', None)
+                await self._do_browse(session, ontology, x_headers)
 
     def get_search_center(self) -> Tuple[float, float]:
         return self.latitude, self.longitude
@@ -194,7 +212,7 @@ class OneBoxBase:
                                  **self.autosuggest_query_params))
         self.handle_suggestion_list(autosuggest_resp)
 
-    async def _do_autosuggest_href(self, session, item, send_signals_action, x_headers):
+    async def _do_autosuggest_expansion(self, session, item, send_signals_action, x_headers):
         if send_signals_action:
             await asyncio.ensure_future(
                 self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
@@ -205,14 +223,37 @@ class OneBoxBase:
             self.api.autosuggest_href(session, item.data["href"], limit=self.results_limit, x_headers=x_headers))
         self.handle_result_list(discover_resp)
 
+    async def _do_browse(self, session, ontology, x_headers) -> set:
+        latitude, longitude = self.get_search_center()
+        browse_task = asyncio.ensure_future(
+            self.api.browse(session, latitude, longitude,
+                            categories=ontology.categories,
+                            food_types=ontology.food_types,
+                            chains=ontology.chains,
+                            lang=self.language,
+                            limit=self.results_limit,
+                            x_headers=x_headers,
+                            **self.discover_query_params))
+        browse_resp = await browse_task
+        self.handle_result_list(browse_resp)
+        return {item["address"]["countryCode"] for item in browse_resp.data["items"]}
+
     async def _do_lookup(self, session, item, send_signals_action, x_headers):
+        """
+        Perfooms a location id lookup
+        :param session:
+        :param item:
+        :param send_signals_action:
+        :param x_headers:
+        :return:
+        """
         if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
             if send_signals_action:
                 await asyncio.ensure_future(
                     self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
                                      correlation_id=item.resp.x_headers['X-Correlation-ID'],
                                      action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
-                                     userId=x_headers['X-AS-Session-ID']))
+                                     userId=x_headers['X-User-ID']))
             lookup_resp = await asyncio.ensure_future(
                 self.api.lookup(session, item.data["id"], lang=self.language, x_headers=x_headers,
                                 **self.lookup_query_params))
@@ -221,7 +262,7 @@ class OneBoxBase:
                 await asyncio.ensure_future(
                     self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
                                      correlation_id=item.resp.x_headers['X-Correlation-ID'],
-                                     action="here:gs:action:view", userId=x_headers['X-AS-Session-ID']))
+                                     action="here:gs:action:view", userId=x_headers['X-User-ID']))
             lookup_resp = await asyncio.ensure_future(
                 self.api.lookup(session, item.data["id"], lang=self.language, x_headers=None,
                                 **self.lookup_query_params))
@@ -248,6 +289,9 @@ class OneBoxBase:
     def wait_for_selected_result(self) -> Awaitable:
         return self.result_queue.get()
 
+    def wait_for_selected_shortcut(self) -> Awaitable:
+        raise NotImplementedError()
+
     def handle_suggestion_list(self, response: Response) -> None:
         raise NotImplementedError()
 
@@ -264,11 +308,13 @@ class OneBoxBase:
             handle_user_profile_setup: Callable=None,
             handle_key_strokes: Callable=None, 
             handle_text_submissions: Callable=None, 
-            handle_result_selections: Callable=None):
+            handle_result_selections: Callable=None,
+            handle_shortcut_selections: Callable=None):
 
         asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
         asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
         asyncio.ensure_future((handle_result_selections or self.handle_result_selections)())
+        asyncio.ensure_future((handle_shortcut_selections or self.handle_shortcut_selections)())
 
     async def __astop(self):
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:

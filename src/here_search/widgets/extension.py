@@ -77,6 +77,8 @@ class OneBoxCatNearCat(OneBoxMap):
 
     def __init__(self,
                  user_profile: Profile,
+                 results_limit: int=None,
+                 suggestions_limit: int=None,
                  autosuggest_query_params: dict=None,
                  lg_radius: int=None,
                  lg_pair_distance: int=None,
@@ -86,6 +88,8 @@ class OneBoxCatNearCat(OneBoxMap):
 
         OneBoxMap.__init__(self,
                            user_profile,
+                           results_limit=results_limit,
+                           suggestions_limit=suggestions_limit,
                            autosuggest_query_params=autosuggest_query_params or OneBoxCatNearCat.default_autosuggest_query_params,
                            **kwargs)
 
@@ -189,7 +193,7 @@ class OneBoxCatNearCat(OneBoxMap):
                     continue
 
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    await self._do_autosuggest_href(session, item, self.user_profile.share_experience, x_headers)
+                    await self._do_autosuggest_expansion(session, item, self.user_profile.share_experience, x_headers)
                 elif item.data["resultType"] == "categoryNearCategoryQuery":
                     follow_up = item.data["followUpDetails"]
                     response = await self.lg_to_search_response(session,

@@ -4,21 +4,21 @@ import nest_asyncio
 
 from here_search.base import OneBoxBase
 from here_search.user import Profile
-from here_search.entities import Response
+from here_search.entities import Response, Ontology
 
-from .util import LogWidgetHandler
-from .query import SubmittableTextBox, TermsButtons, NearbySimpleParser
+from .util import TableLogWidgetHandler
+from .query import SubmittableTextBox, TermsButtons, NearbySimpleParser, OntologyBox, OntologyButton, Ontology
 from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson, SearchResultRadioButtons
 import here_search.widgets.design as design
 
-from typing import Callable, ClassVar, Awaitable
+from typing import Callable, ClassVar, Awaitable, Sequence, Tuple
 import asyncio
 import logging
 
 
 class OneBoxMap(OneBoxBase):
 
-    default_results_limit = 10
+    default_results_limit = 20
     default_suggestions_limit = 5
     default_terms_limit = 3
     minimum_zoom_level = 11
@@ -32,6 +32,7 @@ class OneBoxMap(OneBoxBase):
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
+                 ontology_buttons: Tuple[OntologyButton]=None,
                  design: Callable=None,
                  **kwargs):
 
@@ -49,16 +50,26 @@ class OneBoxMap(OneBoxBase):
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
         self.result_points_w: SearchFeatureCollection = None
         self.design = design or self.__class__.default_design
-        self.map_w = None
-        self.app_design_w = None
-
+        self.buttons_box_w = OntologyBox(buttons=ontology_buttons) if ontology_buttons else None
         self.result_list_w = tuple(out_class(widget=Output(),
                                         max_results_number=max(self.results_limit, self.suggestions_limit),
                                         result_queue=self.result_queue)
                               for out_class in self.design.out_classes)
 
-        self.log_handler = LogWidgetHandler()
+        self.log_handler = TableLogWidgetHandler()
         self.logger = logging.getLogger("here_search")
+
+        # Below variable will be actually initialized in __ainit method.
+        self.map_w = None
+        self.app_design_w = None
+
+    async def __ainit(self):
+        """
+        Initialisation of the asynchronous parts of OneBoxMap. Calls in OneBoxMap.run()
+        :return:
+        """
+        self.map_w = PositionMap(api_key=self.api.api_key, center=[self.latitude, self.longitude], position_handler=self.search_center_observer())
+        self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.buttons_box_w, self.result_list_w)
 
     def get_search_center(self):
         return self.latitude, self.longitude
@@ -77,6 +88,12 @@ class OneBoxMap(OneBoxBase):
 
     def wait_for_submitted_value(self) -> Awaitable:
         return self.query_box_w.get_submitted_value_future()
+
+    def wait_for_selected_shortcut(self) -> Awaitable:
+        if self.buttons_box_w:
+            return self.buttons_box_w.get_ontology_future()
+        else:
+            return asyncio.Future()
 
     def handle_suggestion_list(self, autosuggest_resp: Response):
         """
@@ -136,7 +153,7 @@ class OneBoxMap(OneBoxBase):
         #self.display_result_map(autosuggest_resp, update_search_center=False)
 
     def clear_query_text(self):
-        self.query_box_w.text.value = ''
+        self.query_box_w.text_w.value = ''
         self.query_terms_w.set([])
 
     def display_result_map(self, resp: Response, update_search_center: bool=False):
@@ -149,10 +166,6 @@ class OneBoxMap(OneBoxBase):
             if len(resp.data["items"]) == 1:
                 self.map_w.zoom = OneBoxMap.minimum_zoom_level
             self.latitude, self.longitude = self.map_w.center
-
-    async def __ainit_map(self):
-        self.map_w = PositionMap(api_key=self.api.api_key, center=[self.latitude, self.longitude], position_handler=self.search_center_observer())
-        self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.result_list_w)
 
     def show_logs(self, level: int=None) -> "OneBoxMap":
         self.logger.addHandler(self.log_handler)
@@ -169,21 +182,23 @@ class OneBoxMap(OneBoxBase):
             handle_user_profile_setup: Callable=None,
             handle_key_strokes: Callable=None,
             handle_text_submissions: Callable=None,
-            handle_result_selections: Callable=None):
+            handle_result_selections: Callable=None,
+            handle_shortcut_selections: Callable=None):
 
         nest_asyncio.apply()
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
-        loop.run_until_complete(self.__ainit_map())
+        loop.run_until_complete(self.__ainit())
         Idisplay(self.app_design_w)
         self.show_logs()
         OneBoxBase.run(self,
                        handle_user_profile_setup,
                        handle_key_strokes or self.handle_key_strokes,
                        handle_text_submissions or self.handle_text_submissions,
-                       handle_result_selections or self.handle_result_selections)
+                       handle_result_selections or self.handle_result_selections,
+                       handle_shortcut_selections or self.handle_shortcut_selections)
 
     def __del__(self):
         self.logger.removeHandler(self.log_handler)

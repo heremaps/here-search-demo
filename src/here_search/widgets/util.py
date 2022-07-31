@@ -1,5 +1,7 @@
-from IPython.display import display as Idisplay
+from IPython.display import display as Idisplay, Markdown
+from IPython.core.interactiveshell import InteractiveShell
 from ipywidgets import Output
+
 import logging
 
 
@@ -37,3 +39,27 @@ class LogWidgetHandler(logging.Handler):
     def clear_logs(self):
         """ Clear the current logs """
         self.out.clear_output()
+
+
+class TableLogWidgetHandler(LogWidgetHandler):
+    default_separator = "|"
+
+    def __init__(self, *args, **kwargs):
+        super(TableLogWidgetHandler, self).__init__(*args, **kwargs)
+        self.lines = []
+        self.separator = kwargs.pop("separator", TableLogWidgetHandler.default_separator)
+        self.fmt = InteractiveShell.instance().display_formatter.format
+        self.columns_count = 1
+
+    def emit(self, record):
+        """ Overload of logging.Handler method """
+        formatted_record = self.format(record)
+        self.lines.insert(0, f"| {formatted_record} |")
+
+        self.columns_count = max(self.columns_count, len(formatted_record.split(self.separator)))
+        header = ['| <div style="width:70%"></div> |' + '| '*(self.columns_count-1), f"{'|:-'*self.columns_count}|"]
+
+        log_output = Markdown("\n".join(header + self.lines))
+        fmt = InteractiveShell.instance().display_formatter.format
+        data, metadata = fmt(log_output)
+        self.out.outputs = {'output_type': 'display_data', 'data': data, 'metadata': metadata},

@@ -1,7 +1,7 @@
 import panel
 from panel.pane import JSON as IJSON
 from IPython.display import display as Idisplay, Markdown
-from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML
+from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML, Layout
 
 from here_map_widget import GeoJSON
 from here_map_widget import Platform, MapTile, TileLayer, Map
@@ -24,7 +24,7 @@ class SearchResultList(HBox):
     result_queue: asyncio.Queue=None
     layout: dict=None
 
-    default_layout = {'display': 'flex', 'width': '276px', 'justify_content': 'flex-start'}
+    default_layout = {'display': 'flex', 'width': '276px', 'height': '400px', 'justify_content': 'flex-start', 'overflow_y': 'scroll', 'overflow': 'scroll'}
 
     def __post_init__(self):
         if self.layout is None:
@@ -102,7 +102,7 @@ class SearchResultJson(SearchResultList):
                                             "request": {"url": resp.req.url,
                                                         "params": resp.req.params,
                                                         "x_headers": resp.req.x_headers}},
-                                            height=700, theme="light", depth=3))
+                                            height=600, theme="light", depth=4))
         return out
 
     def _clear(self) -> Widget:
@@ -117,17 +117,18 @@ class SearchResultSelectMultiple(SearchResultList):
 
 
 class SearchResultButton(HBox):
-    default_layout = {'display': 'flex', 'width': '270px', 'justify_content': 'flex-start'}
+    default_layout = {'display': 'flex', 'width': '270px', 'justify_content': 'flex-start', 'height': '24px', 'min_height': '24px', 'overflow': 'visible'}
 
     def __init__(self, item: ResponseItem, **kvargs):
         self.label = Label(value='', layout={'width': '20px'})
         # TODO: create a class derived from Both Button and ResponseItem
         self.button = Button(description='',  icon='',
-                             layout=kvargs.pop('layout', self.__class__.default_layout))
+                             layout=Layout(display='flex', justify_content='flex-start', height='24px', min_height='24px', width='270px')
+                             )
         self.button.value = item
         if item.data is not None:
             self.set_result(item.data, item.rank, item.resp)
-        HBox.__init__(self, [self.label, self.button], **kvargs)
+        HBox.__init__(self, [self.label, self.button], layout=Layout(**kvargs.pop('layout', self.__class__.default_layout)), **kvargs)
         self.add_class('result-button')
 
     def set_result(self, data: dict, rank: int, resp: Response):
@@ -139,6 +140,7 @@ class SearchResultButton(HBox):
 
 class SearchResultButtons(SearchResultList):
     buttons: List[SearchResultButton] = []
+    default_layout = {'display': 'flex', 'width': '276px', 'height': '400px', 'justify_content': 'flex-start', 'overflow': 'auto'}
 
     def __post_init__(self):
         for i in range(self.max_results_number):
@@ -155,7 +157,7 @@ class SearchResultButtons(SearchResultList):
         for rank, item_data in enumerate(items):
             self.buttons[rank].set_result(item_data, rank, resp)
         out = self.buttons[:len(items)]
-        return VBox(out)
+        return VBox(out, layout=Layout(**self.layout))
 
     def _clear(self) -> Widget:
         return VBox([])
@@ -238,7 +240,7 @@ class SearchFeatureCollection(GeoJSON):
 
 class PositionMap(Map):
     default_zoom_level = 12
-    default_layout = {'height': '700px'}
+    default_layout = {'height': '600px'}
 
     def __init__(self, api_key: str,
                  center: List[float],

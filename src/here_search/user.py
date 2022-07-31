@@ -50,6 +50,7 @@ class Profile:
         self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name])
         self.options = options
 
+        self.language = None
         nest_asyncio.apply()
         try:
             loop = asyncio.get_running_loop()
@@ -77,7 +78,7 @@ class Profile:
     def set_position(self, latitude, longitude):
         self.current_latitude = latitude
         self.current_longitude = longitude
-        self.current_country_code, language = asyncio.get_running_loop().run_until_complete(self.get_preferred_locale(latitude, longitude))
+        self.current_country_code, self.language = asyncio.get_running_loop().run_until_complete(self.get_preferred_locale(latitude, longitude))
 
     def get_preferred_language(self, country_code: str):
         return self.preferred_languages.get(country_code, self.preferred_languages.get(self.__class__.default_name, None))
@@ -107,7 +108,7 @@ class Profile:
         else:
             async with ClientSession(raise_for_status=True) as session:
                 self.current_latitude, self.current_longitude = await get_lat_lon(session)
-            self.current_country_code, language = await self.get_preferred_locale(self.current_latitude, self.current_longitude)
+            self.current_country_code, self.language = await self.get_preferred_locale(self.current_latitude, self.current_longitude)
 
     def get_current_language(self):
         if self.current_country_code in self.preferred_languages:
@@ -115,7 +116,11 @@ class Profile:
         return self.preferred_languages[Profile.default_name]
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(name={self.name}, id={self.id}, opt_in={self.__use_positioning}/{self.__share_experience})"
+        if self.preferred_languages:
+            languages = self.preferred_languages
+        else:
+            languages = self.language
+        return f"{self.__class__.__name__}(name={self.name}, id={self.id}, lang={languages}, opt_in={self.__use_positioning}/{self.__share_experience})"
 
 
 class Default(Profile):
