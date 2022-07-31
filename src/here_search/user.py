@@ -2,9 +2,9 @@ from aiohttp import ClientSession
 import nest_asyncio
 
 from .util import get_lat_lon
-from .api import API, Option
+from .api import API, APIOptions
 
-from typing import Tuple, Sequence
+from typing import Tuple
 import asyncio
 import uuid
 
@@ -24,14 +24,14 @@ class Profile:
     paris = 48.85717, 2.3414
     chicago = 41.87478, -87.62977
     berlin = 52.51604, 13.37691
-    
+
     def __init__(self,
                  use_positioning: bool,
                  share_experience: bool,
                  api: API=None,
+                 api_options: APIOptions=None,
                  languages: dict=None,
-                 name: str=None,
-                 options: Sequence[Option]=None):
+                 name: str=None):
         """
         :param use_position: Mandatory opt-in/out about position usage
         :param share_experience: Mandatory opt-in/out about activity usage
@@ -48,7 +48,7 @@ class Profile:
         self._api = api
         self.preferred_languages = languages or {}
         self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name])
-        self.options = options
+        self.api_options = api_options or {}
 
         self.language = None
         nest_asyncio.apply()
@@ -124,5 +124,5 @@ class Profile:
 
 
 class Default(Profile):
-    def __init__(self, api: API=None):
-        Profile.__init__(self, use_positioning=True, share_experience=True, api=api)
+    def __init__(self, **kwargs):
+        Profile.__init__(self, use_positioning=True, share_experience=True, **kwargs)

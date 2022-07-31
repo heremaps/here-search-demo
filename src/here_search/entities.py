@@ -19,10 +19,9 @@ class Request:
     url: str=None
     params: Dict[str, str]=None
     x_headers: dict=None
-    post: bool=False
 
-    def key(self) -> Tuple[Endpoint, Tuple[str]]:
-        return self.endpoint, tuple(self.params.items())
+    def key(self) -> Tuple[Endpoint, tuple]:
+        return self.endpoint, tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in self.params.items())
 
 
 @dataclass

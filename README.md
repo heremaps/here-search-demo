@@ -50,6 +50,6 @@ Another way to run the notebook is to have it served by a Docker container.
    docker-compose up -d
    ```
 
-2. Launch the notebook
+2. Launch the base notebook
 
-   Browse to http://127.0.0.1:8888/lab/tree/oneboxmap.ipynb?token=HERE
+   Browse to http://127.0.0.1:8888/lab/tree/obm_1_base.ipynb?token=HERE

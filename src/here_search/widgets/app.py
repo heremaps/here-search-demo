@@ -33,6 +33,7 @@ class OneBoxMap(OneBoxBase):
                  suggestions_limit: int=None,
                  terms_limit: int=None,
                  ontology_buttons: Tuple[OntologyButton]=None,
+                 extra_api_params: dict=None,
                  design: Callable=None,
                  **kwargs):
 
@@ -42,6 +43,7 @@ class OneBoxMap(OneBoxBase):
                             results_limit=results_limit or OneBoxMap.default_results_limit,
                             suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,
                             terms_limit=terms_limit or OneBoxMap.default_terms_limit,
+                            extra_api_params=extra_api_params,
                             result_queue=self.result_queue, **kwargs)
 
         self.query_box_w = SubmittableTextBox(layout=kwargs.pop('layout', self.__class__.default_search_box_layout),
@@ -72,7 +74,7 @@ class OneBoxMap(OneBoxBase):
         self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.buttons_box_w, self.result_list_w)
 
     def get_search_center(self):
-        return self.latitude, self.longitude
+        return round(self.latitude, 5), round(self.longitude, 5)
 
     def search_center_observer(self):
         def observe(change):

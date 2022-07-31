@@ -7,6 +7,7 @@ from .util import logger
 from collections import namedtuple
 from typing import Tuple, Dict, Sequence, Optional
 import os, sys
+import urllib.parse
 from getpass import getpass
 
 
@@ -25,10 +26,12 @@ class API:
     https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
     """
     api_key: str
+    options: "APIOptions"
     cache: Dict[tuple, Response]
 
-    def __init__(self, api_key: str=None, cache: dict=None):
+    def __init__(self, api_key: str=None, options: "APIOptions"=None, cache: dict=None):
         self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="api key: ")
+        self.options = options or {}
         self.cache = cache or {}
 
     async def get(self, session: ClientSession, req: Request) -> Response:
@@ -36,7 +39,6 @@ class API:
         Returns from HERE Search backend the response for a specific Request, or from the cache if it has been cached.
         Cache the Response if returned by the HERE Search backend.
 
-        :param method: "GET" or "POST"
         :param session: instance of ClientSession
         :param req: Search Request object
         :return: a Response object
@@ -51,8 +53,13 @@ class API:
             return response
 
         req.params["apiKey"] = self.api_key
-        async with session.get(req.url, params=req.params, headers=req.x_headers) as get_response:
-            log_url = str(get_response.url).replace(f"&apiKey={self.api_key}", "")
+        params = {k: ",".join(v) if isinstance(v, list) else v for k, v in req.params.items()}
+        async with session.get(req.url, params=params, headers=req.x_headers) as get_response:
+            endpoint = get_response.url.path.split("/")[-1]
+            params = dict(get_response.url.query)
+            params.pop("apiKey", None)
+            params = urllib.parse.unquote(urllib.parse.urlencode(params))
+            log_url = f'<a href="{str(get_response.url)}">/{endpoint}?{params}</a>'
             if req.x_headers and 'X-AS-Session-ID' in req.x_headers:
                 logger.info(f"{log_url} | {req.x_headers['X-AS-Session-ID']}")
             else:
@@ -80,6 +87,7 @@ class API:
         :return: a Response object
         """
         params = {"q": q, "at": f'{latitude},{longitude}'}
+        params.update(self.options.get(Endpoint.AUTOSUGGEST, {}))
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.AUTOSUGGEST,
                                                 url=base_url[Endpoint.AUTOSUGGEST],
@@ -117,6 +125,7 @@ class API:
         :return: a Response object
         """
         params = {"q": q, "at": f'{latitude},{longitude}'}
+        params.update(self.options.get(Endpoint.DISCOVER, {}))
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.DISCOVER,
                                                 url=base_url[Endpoint.DISCOVER],
@@ -149,6 +158,7 @@ class API:
             params["foodTypes"] = ",".join(sorted(set(food_types)))
         if chains:
             params["categories"] = ",".join(sorted(set(chains)))
+        params.update(self.options.get(Endpoint.BROWSE, {}))
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.BROWSE,
                                                url=base_url[Endpoint.BROWSE],
@@ -168,6 +178,7 @@ class API:
         :return: a Response object
         """
         params = {"id": id}
+        params.update(self.options.get(Endpoint.LOOKUP, {}))
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.LOOKUP,
                                                 url=base_url[Endpoint.LOOKUP],
@@ -188,6 +199,7 @@ class API:
         :return: a Response object
         """
         params = {"at": f"{latitude},{longitude}"}
+        params.update(self.options.get(Endpoint.REVGEOCODE, {}))
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.REVGEOCODE,
                                                 url=base_url[Endpoint.REVGEOCODE],
@@ -221,10 +233,9 @@ class API:
                                 params={"apiKey": self.api_key},
                                 data=data,
                                 headers=x_headers) as post_response:
-            log_url = str(post_response.url).replace(f"?apiKey={self.api_key}", "")
             x_headers = {"X-Request-Id": post_response.headers["X-Request-Id"],
                          "X-Correlation-ID": post_response.headers["X-Correlation-ID"]}
-            logger.info(f"{log_url} | {data}")
+            logger.info(f"/signals | {data}")
             response = Response(data={"text": await post_response.text()},
                                 req=Request(endpoint=Endpoint.SIGNALS,
                                             url=base_url[Endpoint.SIGNALS],
@@ -248,26 +259,54 @@ class FuelPreference(Option):
     def __init__(self, *fuel_types):
         assert all(t in FuelPreference.types for t in fuel_types)
         self.key = "fuelStation[fuelTypes]"
-        self.value = fuel_types
+        self.values = fuel_types
 
 
-class FuelAdditionalInfo(Option):
-    topics = ("fuel", "truck")
-    topics = namedtuple("types", topics)(*topics)
+class TruckClassPreference(Option):
+    classes = ("heavy", "medium")
+    classes = namedtuple("classes", classes)(*classes)
+    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.BROWSE)
+
+    def __init__(self, *classes):
+        assert all(c in TruckClassPreference.classes for c in classes)
+        self.key = "fuelStation[minimumTruckClass]"
+        self.values = classes
+
+
+class FuelDetails(Option):
     endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
 
-    def __init__(self, *topics):
-        assert all(t in FuelAdditionalInfo.topics for t in topics)
+    def __init__(self):
         self.key = "show"
-        self.value = topics
+        self.values = ["fuel"]
 
 
-class TripadvisorAdditionalInfo(Option):
-    types = ("tripadvisor",)
-    types = namedtuple("types", types)(*types)
+class TruckDetails(Option):
+    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["truck"]
+
+
+class TripadvisorDetails(Option):
     endpoints = (Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
 
-    def __init(self, *topics):
-        assert all(t in TripadvisorAdditionalInfo.types for t in topics)
+    def __init__(self):
         self.key = "show"
-        self.value = topics
+        self.values = ["tripadvisor"]
+
+
+class APIOptions(dict):
+    def __init__(self, options: dict):
+        _options = {}
+        for endpoint, ep_options in options.items():
+            for option in ep_options:
+                assert endpoint in option.endpoints, f"Option {option.__class__.__name__} illegal for endpoint {endpoint}"
+                _options.setdefault(endpoint, {}).setdefault(option.key, []).extend(option.values)
+        super().__init__(_options)
+
+
+fuelDetails = FuelDetails()
+truckDetails = TruckDetails()
+tripadvisorDetails = TripadvisorDetails()

@@ -8,6 +8,7 @@ from here_search.api import API, base_url
 from here_search.entities import Response, ResponseItem, Request
 
 from here_search.user import Profile
+from here_search.api import Endpoint
 from .query import NearbySimpleParser
 from here_search.util import logger
 
@@ -71,7 +72,7 @@ class LGAPI:
 
 
 class OneBoxCatNearCat(OneBoxMap):
-    default_autosuggest_query_params = {'show': 'ontologyDetails,expandedOntologies'}
+    default_extra_api_params = {Endpoint.AUTOSUGGEST: {'show': 'ontologyDetails,expandedOntologies'}}
     default_lg_text_submission = True
     lg_children_details = False
 
@@ -79,7 +80,7 @@ class OneBoxCatNearCat(OneBoxMap):
                  user_profile: Profile,
                  results_limit: int=None,
                  suggestions_limit: int=None,
-                 autosuggest_query_params: dict=None,
+                 extra_api_params: dict=None,
                  lg_radius: int=None,
                  lg_pair_distance: int=None,
                  lg_text_submission: bool=None,
@@ -90,7 +91,7 @@ class OneBoxCatNearCat(OneBoxMap):
                            user_profile,
                            results_limit=results_limit,
                            suggestions_limit=suggestions_limit,
-                           autosuggest_query_params=autosuggest_query_params or OneBoxCatNearCat.default_autosuggest_query_params,
+                           extra_api_params=extra_api_params or OneBoxCatNearCat.default_extra_api_params,
                            **kwargs)
 
         self.lg_api = LGAPI(api_key=self.api.api_key)
