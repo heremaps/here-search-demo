@@ -94,22 +94,6 @@ class API:
                                                 params=params,
                                                 x_headers=x_headers))
 
-    async def autosuggest_href(self, session: ClientSession,
-                               href: str,
-                               x_headers: dict=None,
-                               **kwargs) -> Response:
-        """
-        Calls HERE Search Autosuggest href follow-up
-
-        Blindly calls Autosuggest href
-        :param session: instance of ClientSession
-        :param href: href value returned in Autosuggest categoryQyery/chainQuery results
-        :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
-        :return: a Response object
-        """
-        return await self.get(session, Request(endpoint=Endpoint.AUTOSUGGEST_HREF,
-                                                url=href, params=kwargs, x_headers=x_headers))
-
     async def discover(self, session: ClientSession,
                        q: str, latitude: float, longitude: float,
                        x_headers: dict=None,

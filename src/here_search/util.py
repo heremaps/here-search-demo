@@ -1,4 +1,8 @@
 from aiohttp import ClientSession
+try:
+    from pyinstrument import Profiler
+except ImportError:
+    Profiler = None
 
 from importlib import reload
 import logging

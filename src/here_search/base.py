@@ -1,15 +1,13 @@
 from aiohttp import ClientSession
-try:
-    from pyinstrument import Profiler
-except ImportError:
-    Profiler = None
 
 from . import __version__
 from .user import Profile
 from .api import API
 from .entities import Response, Endpoint, ResponseItem, Ontology
+from .util import Profiler
 
 from typing import Tuple, Awaitable, Callable
+import urllib.parse
 import asyncio
 import uuid
 
@@ -32,15 +30,7 @@ class OneBoxBase:
                  result_queue: asyncio.Queue=None,
                  **kwargs):
 
-        profiling = kwargs.pop("profiling", None)
-        if profiling and Profiler:
-            self.profiler = Profiler(async_mode="enabled")
-            try:
-                self.profiler.start()
-            except RuntimeError: # Previous self.profiler.stop() is not completely stopping the profiler....
-                pass
-        else:
-            self.profiler = False
+        self._do_profiler_start(kwargs)
 
         self.user_profile = user_profile
         self.api: API = user_profile.api
@@ -218,12 +208,25 @@ class OneBoxBase:
                                  action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
                                  userId=x_headers['X-AS-Session-ID']))
 
-        # patch against OSQ-32323
-        orig_show = item.resp.req.params.get("show")
-        params = {"show": orig_show} if orig_show else {}
+        # Analyse item["href"] in order to directly call discover.
+        href_parts = urllib.parse.urlparse(item.data["href"])
+        href_params = urllib.parse.parse_qs(href_parts.query)
+        href_lat, href_lon = urllib.parse.unquote(href_params.pop("at", [""])[0]).split(",")
+        href_q = href_params.pop("q", ["_"])[0]
+        href_lang = href_params.pop("lang", [self.language])[0]
+        href_limit = href_params.pop("limit", [self.results_limit])[0]
 
+        # patch against OSQ-32323
+        orig_params = item.resp.req.params
+        orig_show = orig_params.get("show")
+        if orig_show:
+            href_params.setdefault("show", []).extend(orig_show)
         discover_resp = await asyncio.ensure_future(
-            self.api.autosuggest_href(session, item.data["href"], limit=self.results_limit, x_headers=x_headers, **params))
+            self.api.discover(session, href_q, href_lat, href_lon,
+                              lang=href_lang,
+                              limit=href_limit,
+                              x_headers=x_headers,
+                              **href_params))
         self.handle_result_list(discover_resp)
 
     async def _do_browse(self, session, ontology, x_headers) -> set:
@@ -274,6 +277,17 @@ class OneBoxBase:
             lookup_resp = await asyncio.ensure_future(
                 self.api.lookup(session, item.data["id"], lang=self.language, x_headers=None, **extra_params))
         self.handle_result_details(lookup_resp)
+
+    def _do_profiler_start(self, kwargs):
+        profiling = kwargs.pop("profiling", None)
+        if profiling and Profiler:
+            self.profiler = Profiler(async_mode="enabled")
+            try:
+                self.profiler.start()
+            except RuntimeError:  # Previous self.profiler.stop() is not completely stopping the profiler....
+                pass
+        else:
+            self.profiler = False
 
     def _do_profiler_stop(self):
         if self.profiler:
