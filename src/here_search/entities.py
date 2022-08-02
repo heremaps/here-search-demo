@@ -15,27 +15,27 @@ class Endpoint(IntEnum):
 
 @dataclass
 class Request:
-    endpoint: Endpoint=None
-    url: str=None
-    params: Dict[str, str]=None
-    x_headers: dict=None
+    endpoint: Endpoint = None
+    url: str = None
+    params: Dict[str, str] = None
+    x_headers: dict = None
 
-    def key(self) -> Tuple[Endpoint, tuple]:
-        return self.endpoint, tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in self.params.items())
+    def key(self) -> Tuple[str, str]:
+        return self.url, str(self.params)
 
 
 @dataclass
 class Response:
-    req: Request=None
-    data: dict=None
-    x_headers: dict=None
+    req: Request = None
+    data: dict = None
+    x_headers: dict = None
 
 
 @dataclass
 class ResponseItem:
-    resp: Response=None
-    data: dict=None
-    rank: int=None
+    resp: Response = None
+    data: dict = None
+    rank: int = None
 
 @dataclass
 class Ontology:

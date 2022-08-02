@@ -42,14 +42,17 @@ A typical way to run a Python notebook such as the `here-search-notebook`, is to
 
 Another way to run the notebook is to have it served by a Docker container.
 
-1. docker compose
-
-   Set the `API_KEY` variable in `docker-compose.yaml` to your api key, and do:
+1. Docker compose
+   Download  [`docker-compose.yaml`](https://main.gitlab.in.here.com/olp/onesearch/playground/decitre/search-notebook/-/raw/master/docker-compose.yaml?inline=false), 
+set its variable `API_KEY` to your api key, and do:
 
    ```
    docker-compose up -d
    ```
 
-2. Launch the base notebook
+
+3. Launch the base notebook
 
    Browse to http://127.0.0.1:8888/lab/tree/obm_1_base.ipynb?token=HERE
+
+(Macos [recipe](docs/developers.md#docker-on-macos) without Docker Desktop)

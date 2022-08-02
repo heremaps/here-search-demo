@@ -80,7 +80,17 @@ Optionally:
      docker-local.artifactory.in.here.com/onesearch-demo:latest
    ```
 
+### Docker on macos
 
+1. Download [macos_run.sh](https://main.gitlab.in.here.com/olp/onesearch/playground/decitre/search-notebook/-/blob/master/src/here_search/scripts/here-search-notebooks/macos_run.sh)
+
+2. Run it in a terminal with your api key
+
+   ```
+   bash macos_run.sh <YOUR API KEY>
+   ```
+   
+3. Browse to the displayed URL
 
 ## External pointers
 

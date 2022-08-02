@@ -208,6 +208,22 @@ class OneBoxBase:
                                  action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
                                  userId=x_headers['X-AS-Session-ID']))
 
+        # patch against OSQ-32323
+        orig_show = item.resp.req.params.get("show")
+        params = {"show": orig_show} if orig_show else {}
+
+        discover_resp = await asyncio.ensure_future(
+            self.api.autosuggest_href(session, item.data["href"], limit=self.results_limit, x_headers=x_headers, **params))
+        self.handle_result_list(discover_resp)
+
+    async def _do_autosuggest_expansion_deconstructed(self, session, item, send_signals_action, x_headers):
+        if send_signals_action:
+            await asyncio.ensure_future(
+                self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
+                                 correlation_id=item.resp.x_headers['X-Correlation-ID'],
+                                 action="here:gs:action:view", asSessionId=x_headers['X-AS-Session-ID'],
+                                 userId=x_headers['X-AS-Session-ID']))
+
         # Analyse item["href"] in order to directly call discover.
         href_parts = urllib.parse.urlparse(item.data["href"])
         href_params = urllib.parse.parse_qs(href_parts.query)

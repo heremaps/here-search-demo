@@ -57,7 +57,7 @@ class TableLogWidgetHandler(LogWidgetHandler):
         self.lines.insert(0, f"| {formatted_record} |")
 
         self.columns_count = max(self.columns_count, len(formatted_record.split(self.separator)))
-        header = ['| <div style="width:70%"></div> |' + '| '*(self.columns_count-1), f"{'|:-'*self.columns_count}|"]
+        header = [f'| {"&nbsp; "*100} |' + '| '*(self.columns_count-1), f"{'|:-'*self.columns_count}|"]
 
         log_output = Markdown("\n".join(header + self.lines))
         fmt = InteractiveShell.instance().display_formatter.format
