@@ -119,8 +119,10 @@ class OneBoxBase:
 
     async def get_position_locale(self, session):
         country_code, language = None, None
-        local_addresses = await asyncio.ensure_future(self.api.reverse_geocode(
-            session, latitude=self.latitude, longitude=self.longitude))
+        latitude, longitude = self.get_search_center()
+        x_headers = self.x_headers.copy()
+        x_headers.pop('X-AS-Session-ID', None)
+        local_addresses = await self._do_revgeocode(session, latitude, longitude, x_headers)
         if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
             country_code = local_addresses.data["items"][0]["address"]["countryCode"]
             address_details = await asyncio.ensure_future(
@@ -170,8 +172,8 @@ class OneBoxBase:
 
     async def _do_discover(self, session, query_text, x_headers) -> set:
         latitude, longitude = self.get_search_center()
-        extra_params = self.extra_api_params.get(Endpoint.DISCOVER, {})
-        extra_params.update(self.api.options.get(Endpoint.DISCOVER, {}))
+        extra_params = self.api.options.get(Endpoint.DISCOVER, {})
+        extra_params.update(self.extra_api_params.get(Endpoint.DISCOVER, {}))
         extra_params.update(self.user_profile.api_options.get(Endpoint.DISCOVER, {}))
         discover_task = asyncio.ensure_future(
             self.api.discover(session, query_text, latitude, longitude,
@@ -185,8 +187,8 @@ class OneBoxBase:
 
     async def _do_autosuggest(self, session, query_text, x_headers):
         latitude, longitude = self.get_search_center()
-        extra_params = self.extra_api_params.get(Endpoint.AUTOSUGGEST, {})
-        extra_params.update(self.api.options.get(Endpoint.AUTOSUGGEST, {}))
+        extra_params = self.api.options.get(Endpoint.AUTOSUGGEST, {})
+        extra_params.update(self.extra_api_params.get(Endpoint.AUTOSUGGEST, {}))
         extra_params.update(self.user_profile.api_options.get(Endpoint.AUTOSUGGEST, {}))
         autosuggest_resp = await asyncio.ensure_future(
             self.api.autosuggest(session,
@@ -247,10 +249,10 @@ class OneBoxBase:
 
     async def _do_browse(self, session, ontology, x_headers) -> set:
         latitude, longitude = self.get_search_center()
-        extra_params = self.extra_api_params.get(Endpoint.BROWSE, {})
-        extra_params.update(self.api.options.get(Endpoint.BROWSE, {}))
+        extra_params = self.api.options.get(Endpoint.BROWSE, {}).copy()
+        extra_params.update(self.extra_api_params.get(Endpoint.BROWSE, {}))
         extra_params.update(self.user_profile.api_options.get(Endpoint.BROWSE, {}))
-        browse_task = asyncio.ensure_future(
+        browse_resp = await asyncio.ensure_future(
             self.api.browse(session, latitude, longitude,
                             categories=ontology.categories,
                             food_types=ontology.food_types,
@@ -259,7 +261,6 @@ class OneBoxBase:
                             limit=self.results_limit,
                             x_headers=x_headers,
                             **extra_params))
-        browse_resp = await browse_task
         self.handle_result_list(browse_resp)
         return {item["address"]["countryCode"] for item in browse_resp.data["items"]}
 
@@ -287,12 +288,25 @@ class OneBoxBase:
                     self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
                                      correlation_id=item.resp.x_headers['X-Correlation-ID'],
                                      action="here:gs:action:view", userId=x_headers['X-User-ID']))
-            extra_params = self.extra_api_params.get(Endpoint.LOOKUP, {})
-            extra_params.update(self.api.options.get(Endpoint.LOOKUP, {}))
+            extra_params = self.api.options.get(Endpoint.LOOKUP, {})
+            extra_params.update(self.extra_api_params.get(Endpoint.LOOKUP, {}))
             extra_params.update(self.user_profile.api_options.get(Endpoint.LOOKUP, {}))
             lookup_resp = await asyncio.ensure_future(
                 self.api.lookup(session, item.data["id"], lang=self.language, x_headers=None, **extra_params))
         self.handle_result_details(lookup_resp)
+
+    async def _do_revgeocode(self, session, latitude, longitude, x_headers) -> Response:
+        extra_params = self.api.options.get(Endpoint.REVGEOCODE, {})
+        extra_params.update(self.extra_api_params.get(Endpoint.REVGEOCODE, {}))
+        extra_params.update(self.user_profile.api_options.get(Endpoint.REVGEOCODE, {}))
+        if self.language:
+            extra_params["lang"] = self.language
+        revgeocode_resp = await asyncio.ensure_future(self.api.reverse_geocode(
+            session, latitude, longitude,
+            limit=self.results_limit,
+            x_headers=x_headers,
+            **extra_params))
+        return revgeocode_resp
 
     def _do_profiler_start(self, kwargs):
         profiling = kwargs.pop("profiling", None)

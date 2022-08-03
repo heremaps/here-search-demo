@@ -1,15 +1,15 @@
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientResponse
 from ujson import loads
 
 from .entities import Request, Response, Endpoint
 from .util import logger
 
 from collections import namedtuple
+from dataclasses import dataclass
 from typing import Tuple, Dict, Sequence, Optional
 import os, sys
 import urllib.parse
 from getpass import getpass
-
 
 base_url = {ep: f'https://{eps}.search.hereapi.com/v1/{eps}'
             for ep, eps in {Endpoint.AUTOSUGGEST: 'autosuggest',
@@ -27,54 +27,63 @@ class API:
     """
     api_key: str
     options: "APIOptions"
-    cache: Dict[tuple, Response]
+    cache: Dict[str, Response]
 
-    def __init__(self, api_key: str=None, options: "APIOptions"=None, cache: dict=None):
+    def __init__(self, api_key: str = None, options: "APIOptions" = None, cache: dict = None):
         self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="api key: ")
         self.options = options or {}
         self.cache = cache or {}
 
-    async def get(self, session: ClientSession, req: Request) -> Response:
+    async def get(self, session: ClientSession, request: Request) -> Response:
         """
         Returns from HERE Search backend the response for a specific Request, or from the cache if it has been cached.
         Cache the Response if returned by the HERE Search backend.
 
         :param session: instance of ClientSession
-        :param req: Search Request object
+        :param request: Search Request object
         :return: a Response object
         """
-        cache_key = req.key()
+        cache_key = request.key()
         if cache_key in self.cache:
             cached_response = self.cache[cache_key]
             data = cached_response.data.copy()
             response = Response(data=data,
                                 x_headers=cached_response.x_headers,
                                 req=cached_response.req)
+            endpoint_str = response.req.url.split("/")[-1]
+            params = {k:(",".join(v) if isinstance(v, list) else v) for k, v in response.req.params.items()}
+            params.pop("apiKey", None)
+            params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
+            log_msg = await self._get_log_msg(endpoint_str, response.req.url, params_str, request.x_headers)
+            logger.info(f"{log_msg} | (cached)")
             return response
 
-        req.params["apiKey"] = self.api_key
-        params = {k: ",".join(v) if isinstance(v, list) else v for k, v in req.params.items()}
-        async with session.get(req.url, params=params, headers=req.x_headers) as get_response:
-            endpoint = get_response.url.path.split("/")[-1]
+        request.params["apiKey"] = self.api_key
+        params = {k: ",".join(v) if isinstance(v, list) else v for k, v in request.params.items()}
+        async with session.get(request.url, params=params, headers=request.x_headers or {}) as get_response:
+            endpoint_str = get_response.url.path.split("/")[-1]
             params = dict(get_response.url.query)
             params.pop("apiKey", None)
-            params = urllib.parse.unquote(urllib.parse.urlencode(params))
-            log_url = f'<a href="{str(get_response.url)}">/{endpoint}?{params}</a>'
-            if req.x_headers and 'X-AS-Session-ID' in req.x_headers:
-                logger.info(f"{log_url} | {req.x_headers['X-AS-Session-ID']}")
-            else:
-                logger.info(log_url)
+            params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
+            log_msg = await self._get_log_msg(endpoint_str, get_response.url.human_repr(), params_str, request.x_headers)
+            logger.info(log_msg)
             x_headers = {"X-Request-Id": get_response.headers["X-Request-Id"],
                          "X-Correlation-ID": get_response.headers["X-Correlation-ID"]}
             response = Response(data=await get_response.json(loads=loads),
-                              req=req,
-                              x_headers=x_headers)
+                                req=request,
+                                x_headers=x_headers)
             self.cache[cache_key] = response
             return response
 
+    async def _get_log_msg(self, endpoint_str: str, url: str, params_str: str, x_headers: dict=None):
+        log_msg = f'<a href="{url}">/{endpoint_str}?{params_str}</a>'
+        if x_headers and 'X-AS-Session-ID' in x_headers:
+            log_msg = f"{log_msg} | {x_headers['X-AS-Session-ID']}"
+        return log_msg
+
     async def autosuggest(self, session: ClientSession,
                           q: str, latitude: float, longitude: float,
-                          x_headers: dict=None,
+                          x_headers: dict = None,
                           **kwargs) -> Response:
         """
         Calls HERE Search Autosuggest endpoint
@@ -86,17 +95,17 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q, "at": f'{latitude},{longitude}'}
-        params.update(self.options.get(Endpoint.AUTOSUGGEST, {}))
+        params = self.options.get(Endpoint.AUTOSUGGEST, {}).copy()
+        params.update(q=q, at=f'{latitude},{longitude}')
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.AUTOSUGGEST,
-                                                url=base_url[Endpoint.AUTOSUGGEST],
-                                                params=params,
-                                                x_headers=x_headers))
+                                               url=base_url[Endpoint.AUTOSUGGEST],
+                                               params=params,
+                                               x_headers=x_headers))
 
     async def autosuggest_href(self, session: ClientSession,
                                href: str,
-                               x_headers: dict=None,
+                               x_headers: dict = None,
                                **kwargs) -> Response:
         """
         Calls HERE Search Autosuggest href follow-up
@@ -112,7 +121,7 @@ class API:
 
     async def discover(self, session: ClientSession,
                        q: str, latitude: float, longitude: float,
-                       x_headers: dict=None,
+                       x_headers: dict = None,
                        **kwargs) -> Response:
         """
         Calls HERE Search Discover endpoint
@@ -124,20 +133,20 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q, "at": f'{latitude},{longitude}'}
-        params.update(self.options.get(Endpoint.DISCOVER, {}))
+        params = self.options.get(Endpoint.DISCOVER, {}).copy()
+        params.update(q=q, at=f'{latitude},{longitude}')
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.DISCOVER,
-                                                url=base_url[Endpoint.DISCOVER],
-                                                params=params,
-                                                x_headers=x_headers))
+                                               url=base_url[Endpoint.DISCOVER],
+                                               params=params,
+                                               x_headers=x_headers))
 
     async def browse(self, session: ClientSession,
                      latitude: float, longitude: float,
                      categories: Optional[Sequence[str]],
                      food_types: Optional[Sequence[str]],
                      chains: Optional[Sequence[str]],
-                     x_headers: dict=None,
+                     x_headers: dict = None,
                      **kwargs) -> Response:
         """
         Calls HERE Search Browse endpoint
@@ -151,14 +160,14 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"at": f'{latitude},{longitude}'}
+        params = self.options.get(Endpoint.BROWSE, {}).copy()
+        params["at"] = f'{latitude},{longitude}'
         if categories:
             params["categories"] = ",".join(sorted(set(categories)))
         if food_types:
             params["foodTypes"] = ",".join(sorted(set(food_types)))
         if chains:
             params["categories"] = ",".join(sorted(set(chains)))
-        params.update(self.options.get(Endpoint.BROWSE, {}))
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.BROWSE,
                                                url=base_url[Endpoint.BROWSE],
@@ -167,7 +176,7 @@ class API:
 
     async def lookup(self, session: ClientSession,
                      id: str,
-                     x_headers: dict=None,
+                     x_headers: dict = None,
                      **kwargs) -> Response:
         """
         Calls HERE Search Lookup for a specific id
@@ -177,17 +186,17 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"id": id}
-        params.update(self.options.get(Endpoint.LOOKUP, {}))
+        params = self.options.get(Endpoint.LOOKUP, {}).copy()
+        params["id"] = id
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.LOOKUP,
-                                                url=base_url[Endpoint.LOOKUP],
-                                                params=params,
-                                                x_headers=x_headers))
+                                               url=base_url[Endpoint.LOOKUP],
+                                               params=params,
+                                               x_headers=x_headers))
 
     async def reverse_geocode(self, session: ClientSession,
                               latitude: float, longitude: float,
-                              x_headers: dict=None,
+                              x_headers: dict = None,
                               **kwargs) -> Response:
         """
         Calls HERE Reverese Geocode for a geo position
@@ -198,20 +207,20 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"at": f"{latitude},{longitude}"}
-        params.update(self.options.get(Endpoint.REVGEOCODE, {}))
+        params = self.options.get(Endpoint.REVGEOCODE, {}).copy()
+        params["at"] = f"{latitude},{longitude}"
         params.update(kwargs)
         return await self.get(session, Request(endpoint=Endpoint.REVGEOCODE,
-                                                url=base_url[Endpoint.REVGEOCODE],
-                                                params=params,
-                                                x_headers=x_headers))
+                                               url=base_url[Endpoint.REVGEOCODE],
+                                               params=params,
+                                               x_headers=x_headers))
 
     async def signals(self, session: ClientSession,
                       resource_id: str,
                       correlation_id: str,
                       rank: int,
                       action: str,
-                      x_headers: dict=None,
+                      x_headers: dict = None,
                       **kwargs) -> Response:
         """
         Calls HERE signals endpoint with some user action
@@ -246,13 +255,17 @@ class API:
             return response
 
 
-class Option:
+@dataclass
+class APIOption:
     key: str
     values: Sequence[str]
+    endpoints = []
 
 
-class FuelPreference(Option):
-    types = ("biodiesel", "diesel", "e85", "e10", "cng", "lpg", "lng", "hydrogen", "truck_diesel", "truck_cng", "truck_lpg", "truck_hydrogen")
+class FuelPreference(APIOption):
+    types = (
+    "biodiesel", "diesel", "e85", "e10", "cng", "lpg", "lng", "hydrogen", "truck_diesel", "truck_cng", "truck_lpg",
+    "truck_hydrogen")
     types = namedtuple("types", types)(*types)
     endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.BROWSE)
 
@@ -262,7 +275,7 @@ class FuelPreference(Option):
         self.values = fuel_types
 
 
-class TruckClassPreference(Option):
+class TruckClassPreference(APIOption):
     classes = ("heavy", "medium")
     classes = namedtuple("classes", classes)(*classes)
     endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.BROWSE)
@@ -273,7 +286,7 @@ class TruckClassPreference(Option):
         self.values = classes
 
 
-class FuelDetails(Option):
+class FuelDetails(APIOption):
     endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
 
     def __init__(self):
@@ -281,7 +294,7 @@ class FuelDetails(Option):
         self.values = ["fuel"]
 
 
-class TruckDetails(Option):
+class TruckDetails(APIOption):
     endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
 
     def __init__(self):
@@ -289,7 +302,7 @@ class TruckDetails(Option):
         self.values = ["truck"]
 
 
-class TripadvisorDetails(Option):
+class TripadvisorDetails(APIOption):
     endpoints = (Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
 
     def __init__(self):
@@ -302,7 +315,7 @@ class APIOptions(dict):
         _options = {}
         for endpoint, ep_options in options.items():
             for option in ep_options:
-                assert endpoint in option.endpoints, f"Option {option.__class__.__name__} illegal for endpoint {endpoint}"
+                assert not option.endpoints or endpoint in option.endpoints, f"Option {option.__class__.__name__} illegal for endpoint {endpoint}"
                 _options.setdefault(endpoint, {}).setdefault(option.key, []).extend(option.values)
         super().__init__(_options)
 

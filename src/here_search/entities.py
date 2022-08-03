@@ -20,8 +20,8 @@ class Request:
     params: Dict[str, str] = None
     x_headers: dict = None
 
-    def key(self) -> Tuple[str, str]:
-        return self.url, str(self.params)
+    def key(self) -> str:
+        return self.url+"".join(f"{k}{v}"for k, v in self.params.items())
 
 
 @dataclass
