@@ -310,6 +310,22 @@ class TripadvisorDetails(APIOption):
         self.values = ["tripadvisor"]
 
 
+class At(APIOption):
+    endpoints = Endpoint.DISCOVER, Endpoint.AUTOSUGGEST, Endpoint.BROWSE, Endpoint.REVGEOCODE
+
+    def __init__(self, latitude: float, longitude: float):
+        self.key = "at"
+        self.values = [f"{latitude},{longitude}"]
+
+
+class Route(APIOption):
+    endpoints = Endpoint.DISCOVER, Endpoint.AUTOSUGGEST, Endpoint.BROWSE
+
+    def __init__(self, polyline: str, width: int):
+        self.key = "route"
+        self.values = [f"{polyline};w={width}"]
+
+
 class APIOptions(dict):
     def __init__(self, options: dict):
         _options = {}

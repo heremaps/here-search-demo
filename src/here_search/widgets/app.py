@@ -1,17 +1,19 @@
 from IPython.display import display as Idisplay
 from ipywidgets import Output
+from flexpolyline import decode
+from here_map_widget import LineString, Polyline
 import nest_asyncio
 
 from here_search.base import OneBoxBase
 from here_search.user import Profile
-from here_search.entities import Response, Ontology
+from here_search.entities import Response
 
 from .util import TableLogWidgetHandler
-from .query import SubmittableTextBox, TermsButtons, NearbySimpleParser, OntologyBox, OntologyButton, Ontology
-from .response import SearchFeatureCollection, SearchResultButtons, PositionMap, SearchResultJson, SearchResultRadioButtons
+from .query import SubmittableTextBox, TermsButtons, OntologyBox, OntologyButton
+from .response import SearchFeatureCollection, PositionMap
 import here_search.widgets.design as design
 
-from typing import Callable, ClassVar, Awaitable, Sequence, Tuple
+from typing import Callable, Awaitable, Tuple
 import asyncio
 import logging
 
@@ -163,11 +165,21 @@ class OneBoxMap(OneBoxBase):
             self.map_w.remove_layer(self.result_points_w)
         self.result_points_w = SearchFeatureCollection(resp)
         self.map_w.add_layer(self.result_points_w)
+        route = self._get_route(resp)
+        if route:
+            self.map_w.add_object(route)
         if self.result_points_w.bbox:
             self.map_w.bounds = self.result_points_w.bbox
             if len(resp.data["items"]) == 1:
                 self.map_w.zoom = OneBoxMap.minimum_zoom_level
             self.latitude, self.longitude = self.map_w.center
+
+    def _get_route(self, resp: Response) -> Polyline:
+        if "route" in resp.req.params:
+            points = []
+            for p in decode(resp.req.params["route"][0].split(";")[0]):
+                points.extend([p[0], p[1], 0])
+            return Polyline(object=LineString(points=points) , style={"lineWidth": 3})
 
     def show_logs(self, level: int=None) -> "OneBoxMap":
         self.logger.addHandler(self.log_handler)
