@@ -1,7 +1,9 @@
 from IPython.display import display as Idisplay
 from ipywidgets import Output
 from flexpolyline import decode
-from here_map_widget import LineString, Polyline
+from here_map_widget import LineString as LineStringW, Polyline as PolylineW, Polygon as PolygonW, GeoPolygon as GeoPolygonW
+from geopandas import GeoSeries
+from shapely.geometry import LineString
 import nest_asyncio
 
 from here_search.base import OneBoxBase
@@ -163,23 +165,36 @@ class OneBoxMap(OneBoxBase):
     def display_result_map(self, resp: Response, update_search_center: bool=False):
         if self.result_points_w:
             self.map_w.remove_layer(self.result_points_w)
+
         self.result_points_w = SearchFeatureCollection(resp)
         self.map_w.add_layer(self.result_points_w)
-        route = self._get_route(resp)
-        if route:
-            self.map_w.add_object(route)
+        route_pg = self._get_route_polygon(resp)
+        if route_pg:
+            self.map_w.add_object(route_pg)
         if self.result_points_w.bbox:
             self.map_w.bounds = self.result_points_w.bbox
             if len(resp.data["items"]) == 1:
                 self.map_w.zoom = OneBoxMap.minimum_zoom_level
             self.latitude, self.longitude = self.map_w.center
 
-    def _get_route(self, resp: Response) -> Polyline:
+    def _get_route_polyline(self, resp: Response) -> PolylineW:
         if "route" in resp.req.params:
-            points = []
-            for p in decode(resp.req.params["route"][0].split(";")[0]):
-                points.extend([p[0], p[1], 0])
-            return Polyline(object=LineString(points=points) , style={"lineWidth": 3})
+            encoded = resp.req.params["route"][0].split(";")[0]
+            points = [p for ps in decode(encoded) for p in [ps[0], ps[1], 0]]
+            ls = LineStringW(points=points)
+            pl = PolylineW(object=ls, style={"lineWidth": 3})
+            return pl
+
+    def _get_route_polygon(self, resp: Response) -> PolygonW:
+        if "route" in resp.req.params:
+            encoded_width = resp.req.params["route"][0].split(";")
+            encoded = encoded_width[0]
+            width = int(encoded_width[1].split("=")[1]) if len(encoded_width) > 1 else 1000
+            points = [ps[:2] for ps in decode(encoded)]
+            gs = GeoSeries(LineString(points), crs = "epsg:4326")
+            pg = gs.to_crs("epsg:3174").buffer(width).to_crs("epsg:4326")
+            l = [p for ps in pg.exterior.tolist()[0].coords for p in [ps[0], ps[1], 0]]
+            return PolygonW(object=GeoPolygonW(linestring=LineStringW(points=l)), style={"lineWidth": 3}, draggable=False)
 
     def show_logs(self, level: int=None) -> "OneBoxMap":
         self.logger.addHandler(self.log_handler)

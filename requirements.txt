@@ -8,6 +8,8 @@ traitlets
 panel
 here-map-widget-for-jupyter
 flexpolyline
+geopandas
+shapely
 
 --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple/
 
