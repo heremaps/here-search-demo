@@ -1,7 +1,7 @@
 from ipywidgets import Box, HBox, VBox, Widget
 from here_map_widget import WidgetControl
 
-from .query import SubmittableTextBox, TermsButtons, OntologyBox
+from .request import SubmittableTextBox, TermsButtons, OntologyBox
 from .response import PositionMap, SearchResultButtons, SearchResultJson
 
 from typing import List, Tuple

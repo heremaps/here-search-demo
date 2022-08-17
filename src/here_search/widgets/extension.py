@@ -9,7 +9,7 @@ from here_search.entities import Response, ResponseItem, Request
 
 from here_search.user import Profile
 from here_search.api import Endpoint
-from .query import NearbySimpleParser
+from .request import NearbySimpleParser
 from here_search.util import logger
 
 from typing import Tuple, Callable, ClassVar, Iterable, Optional

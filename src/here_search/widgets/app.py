@@ -11,7 +11,7 @@ from here_search.user import Profile
 from here_search.entities import Response
 
 from .util import TableLogWidgetHandler
-from .query import SubmittableTextBox, TermsButtons, OntologyBox, OntologyButton
+from .request import SubmittableTextBox, TermsButtons, OntologyBox, OntologyButton
 from .response import SearchFeatureCollection, PositionMap
 import here_search.widgets.design as design
 
