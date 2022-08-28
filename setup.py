@@ -16,7 +16,6 @@ setup(name=project_name,
       scripts=[Path(package_path, package_name, "scripts", "here-search-notebooks").as_posix()],
       package_dir={'': package_path},
       package_data={f'{package_name}.notebooks': ['*.ipynb']},
-      entry_points={'console_scripts': ['here-search-console=here_search.terminal.simple_app:cli']},
       install_requires=[p for p in Path(Path(__file__).parent, 'requirements.txt').open().readlines()
                         if not p.startswith("--")],
       python_requires=">=3.6",

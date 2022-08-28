@@ -121,7 +121,7 @@ class OneBoxCatNearCat(OneBoxMap):
                     find_ontology = None
                     continue
 
-                latitude, longitude = self.get_search_center()
+                latitude, longitude = self.search_center
                 conjunction_mode, conjunction, query_head, query_tail = self.get_conjunction_mode(query_text)
                 autosuggest_resp, top_ontology = await self.get_first_category_ontology(session, query_text, latitude, longitude)
                 if conjunction_mode == NearbySimpleParser.Mode.TOKENS or top_ontology:
@@ -135,7 +135,7 @@ class OneBoxCatNearCat(OneBoxMap):
                     if near_ontology:
                         # Replace the query below with the calls to Location Graph
                         new_autosuggest_resp = self.add_cat_near_cat_suggestion(autosuggest_resp, conjunction, find_ontology,
-                                                                            latitude, longitude, near_ontology, near_resp)
+                                                                                latitude, longitude, near_ontology, near_resp)
                         autosuggest_resp = new_autosuggest_resp
 
                 self.handle_suggestion_list(autosuggest_resp)
@@ -243,7 +243,7 @@ class OneBoxCatNearCat(OneBoxMap):
 
     async def _do_lg_discover(self, session, query_text, x_headers):
         response = Response(req=Request())
-        latitude, longitude = self.get_search_center()
+        latitude, longitude = self.search_center()
         country_codes = set()
         conjunction_mode, conjunction, query_head, query_tail = self.get_conjunction_mode(query_text)
         if conjunction_mode == NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS:
@@ -323,14 +323,8 @@ class OneBoxCatNearCat(OneBoxMap):
     async def get_first_category_ontology(self, session: ClientSession,
                                           query: str, latitude: float, longitude: float) -> Tuple[Response, Optional[dict]]:
         autosuggest_resp = await asyncio.ensure_future(
-            self.api.autosuggest(session,
-                                 query,
-                                 latitude,
-                                 longitude,
-                                 lang=self.language,
-                                 limit=self.suggestions_limit,
-                                 termsLimit=self.terms_limit,
-                                 x_headers=None,
+            self.api.autosuggest(query, latitude, longitude, x_headers=None, session=session, lang=self.language,
+                                 limit=self.suggestions_limit, termsLimit=self.terms_limit,
                                  **self.autosuggest_query_params))
         for item in autosuggest_resp.data["items"]:
             if item["resultType"] == "categoryQuery" and "relationship" not in item:

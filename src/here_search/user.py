@@ -28,7 +28,6 @@ class Profile:
     def __init__(self,
                  use_positioning: bool,
                  share_experience: bool,
-                 api: API=None,
                  api_options: APIOptions=None,
                  languages: dict=None,
                  name: str=None):
@@ -45,7 +44,6 @@ class Profile:
         self.__use_positioning = use_positioning
         self.__share_experience = share_experience
 
-        self._api = api
         self.preferred_languages = languages or {}
         self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name])
         self.api_options = api_options or {}
@@ -66,12 +64,6 @@ class Profile:
     def share_experience(self):
         return self.__share_experience
 
-    @property
-    def api(self) -> API:
-        if self._api is None:
-            self._api = API()
-        return self._api
-
     def send_signal(self, body: list):
         pass
 
@@ -86,16 +78,15 @@ class Profile:
     async def get_preferred_locale(self, latitude: float, longitude: float) -> Tuple[str, str]:
         country_code, language = None, None
         async with ClientSession(raise_for_status=True) as session:
-
-            local_addresses = await asyncio.ensure_future(self.api.reverse_geocode(
+            api = API()
+            local_addresses = await asyncio.ensure_future(api.reverse_geocode(
                 session,
                 latitude=latitude,
                 longitude=longitude))
 
             if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
                 country_code = local_addresses.data["items"][0]["address"]["countryCode"]
-                address_details = await asyncio.ensure_future(self.api.lookup(session,
-                                                                              id=local_addresses.data["items"][0]["id"]))
+                address_details = await asyncio.ensure_future(api.lookup(session, id=local_addresses.data["items"][0]["id"]))
                 language = address_details.data["language"]
 
             return country_code, language

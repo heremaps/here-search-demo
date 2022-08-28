@@ -243,7 +243,7 @@ class PositionMap(Map):
     default_layout = {'height': '600px'}
 
     def __init__(self, api_key: str,
-                 center: List[float],
+                 center: Tuple[float, float],
                  position_handler: Callable[[float, float], None]=None,
                  **kvargs):
 

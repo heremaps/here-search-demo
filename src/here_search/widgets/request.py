@@ -195,13 +195,15 @@ class OntologyButton(Button):
 
 
 class OntologyBox(HBox):
+    default_buttons = [OntologyButton(ontology=Ontology(name=""), fa5_name="")]
+
     def __init__(self, buttons: Sequence[OntologyButton]):
         self.buttons = buttons
         HBox.__init__(self, list(buttons))
 
     def get_ontology_future(self) -> Awaitable:
         future = asyncio.Future()
-        for button in self.buttons:
+        for button in self.buttons or OntologyBox.default_buttons:
             def getvalue(clicked_button):
                 future.set_result(clicked_button.ontology)
                 for other_button in self.buttons:

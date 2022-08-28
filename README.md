@@ -31,7 +31,7 @@ A typical way to run a Python notebook such as the `here-search-notebook`, is to
 3. Launch the notebook
 
    ```
-   API_KEY="your API key" here-search-notebook
+   API_KEY="your API key" here-search-notebooks
    ```
    
 (More [details](docs/developers.md#setup-a-notebook-python-environment))

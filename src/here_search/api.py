@@ -1,12 +1,11 @@
-from aiohttp import ClientSession, ClientResponse
+from aiohttp import ClientSession
 from ujson import loads
 
 from .entities import Request, Response, Endpoint
 from .util import logger
 
-from collections import namedtuple
 from dataclasses import dataclass
-from typing import Tuple, Dict, Sequence, Optional
+from typing import Dict, Sequence, Optional
 import os, sys
 import urllib.parse
 from getpass import getpass
@@ -17,8 +16,8 @@ base_url = {ep: f'https://{eps}.search.hereapi.com/v1/{eps}'
                             Endpoint.DISCOVER: 'discover',
                             Endpoint.LOOKUP: 'lookup',
                             Endpoint.BROWSE: 'browse',
-                            Endpoint.REVGEOCODE: 'revgeocode',
-                            Endpoint.SIGNALS: 'signals'}.items()}
+                            Endpoint.REVGEOCODE: 'revgeocode'
+                            }.items()}
 
 
 class API:
@@ -81,10 +80,8 @@ class API:
             log_msg = f"{log_msg} | {x_headers['X-AS-Session-ID']}"
         return log_msg
 
-    async def autosuggest(self, session: ClientSession,
-                          q: str, latitude: float, longitude: float,
-                          x_headers: dict = None,
-                          **kwargs) -> Response:
+    async def autosuggest(self, q: str, latitude: float, longitude: float, x_headers: dict = None,
+                          session: ClientSession = None, **kwargs) -> Response:
         """
         Calls HERE Search Autosuggest endpoint
 
@@ -98,10 +95,16 @@ class API:
         params = self.options.get(Endpoint.AUTOSUGGEST, {}).copy()
         params.update(q=q, at=f'{latitude},{longitude}')
         params.update(kwargs)
-        return await self.get(session, Request(endpoint=Endpoint.AUTOSUGGEST,
-                                               url=base_url[Endpoint.AUTOSUGGEST],
-                                               params=params,
-                                               x_headers=x_headers))
+        request = Request(endpoint=Endpoint.AUTOSUGGEST,
+                          url=base_url[Endpoint.AUTOSUGGEST],
+                          params=params,
+                          x_headers=x_headers)
+        if session:
+            response = await self.get(session, request)
+        else:
+            async with ClientSession(raise_for_status=True) as session:
+                response = await self.get(session, request)
+        return response
 
     async def autosuggest_href(self, session: ClientSession,
                                href: str,
@@ -119,10 +122,8 @@ class API:
         return await self.get(session, Request(endpoint=Endpoint.AUTOSUGGEST_HREF,
                                                url=href, params=kwargs, x_headers=x_headers))
 
-    async def discover(self, session: ClientSession,
-                       q: str, latitude: float, longitude: float,
-                       x_headers: dict = None,
-                       **kwargs) -> Response:
+    async def discover(self, q: str, latitude: float, longitude: float, x_headers: dict = None,
+                       session: ClientSession = None, **kwargs) -> Response:
         """
         Calls HERE Search Discover endpoint
 
@@ -136,10 +137,16 @@ class API:
         params = self.options.get(Endpoint.DISCOVER, {}).copy()
         params.update(q=q, at=f'{latitude},{longitude}')
         params.update(kwargs)
-        return await self.get(session, Request(endpoint=Endpoint.DISCOVER,
-                                               url=base_url[Endpoint.DISCOVER],
-                                               params=params,
-                                               x_headers=x_headers))
+        request = Request(endpoint=Endpoint.DISCOVER,
+                          url=base_url[Endpoint.DISCOVER],
+                          params=params,
+                          x_headers=x_headers)
+        if session:
+            response = await self.get(session, request)
+        else:
+            async with ClientSession(raise_for_status=True) as session:
+                response = await self.get(session, request)
+        return response
 
     async def browse(self, session: ClientSession,
                      latitude: float, longitude: float,
@@ -215,99 +222,11 @@ class API:
                                                params=params,
                                                x_headers=x_headers))
 
-    async def signals(self, session: ClientSession,
-                      resource_id: str,
-                      correlation_id: str,
-                      rank: int,
-                      action: str,
-                      x_headers: dict = None,
-                      **kwargs) -> Response:
-        """
-        Calls HERE signals endpoint with some user action
-
-        :param session: instance of ClientSession
-        :param resource_id: the HERE result id on which the action is performed
-        :param rank: the rank of the result in its result list
-        :param action: the action performed by the user on the result
-        :param x_headers: Optional X-* headers (X-Request-Id, ...)
-        :return: a Response object
-        """
-        data = dict(version=1,
-                    resourceId=resource_id,
-                    correlationId=correlation_id,
-                    rank=rank, action=action)
-        data.update(kwargs)
-
-        async with session.post(base_url[Endpoint.SIGNALS],
-                                params={"apiKey": self.api_key},
-                                data=data,
-                                headers=x_headers) as post_response:
-            x_headers = {"X-Request-Id": post_response.headers["X-Request-Id"],
-                         "X-Correlation-ID": post_response.headers["X-Correlation-ID"]}
-            logger.info(f"/signals | {data}")
-            response = Response(data={"text": await post_response.text()},
-                                req=Request(endpoint=Endpoint.SIGNALS,
-                                            url=base_url[Endpoint.SIGNALS],
-                                            params=data,
-                                            x_headers=x_headers),
-                                x_headers=x_headers)
-
-            return response
-
-
 @dataclass
 class APIOption:
     key: str
     values: Sequence[str]
     endpoints = []
-
-
-class FuelPreference(APIOption):
-    types = (
-    "biodiesel", "diesel", "e85", "e10", "cng", "lpg", "lng", "hydrogen", "truck_diesel", "truck_cng", "truck_lpg",
-    "truck_hydrogen")
-    types = namedtuple("types", types)(*types)
-    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.BROWSE)
-
-    def __init__(self, *fuel_types):
-        assert all(t in FuelPreference.types for t in fuel_types)
-        self.key = "fuelStation[fuelTypes]"
-        self.values = fuel_types
-
-
-class TruckClassPreference(APIOption):
-    classes = ("heavy", "medium")
-    classes = namedtuple("classes", classes)(*classes)
-    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.BROWSE)
-
-    def __init__(self, *classes):
-        assert all(c in TruckClassPreference.classes for c in classes)
-        self.key = "fuelStation[minimumTruckClass]"
-        self.values = classes
-
-
-class FuelDetails(APIOption):
-    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
-
-    def __init__(self):
-        self.key = "show"
-        self.values = ["fuel"]
-
-
-class TruckDetails(APIOption):
-    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
-
-    def __init__(self):
-        self.key = "show"
-        self.values = ["truck"]
-
-
-class TripadvisorDetails(APIOption):
-    endpoints = (Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
-
-    def __init__(self):
-        self.key = "show"
-        self.values = ["tripadvisor"]
 
 
 class At(APIOption):
@@ -335,7 +254,3 @@ class APIOptions(dict):
                 _options.setdefault(endpoint, {}).setdefault(option.key, []).extend(option.values)
         super().__init__(_options)
 
-
-fuelDetails = FuelDetails()
-truckDetails = TruckDetails()
-tripadvisorDetails = TripadvisorDetails()

@@ -1,6 +1,7 @@
 from typing import Tuple, Dict, Sequence, Optional
 from dataclasses import dataclass
 from enum import IntEnum, auto
+from urllib.parse import urlencode
 
 
 class Endpoint(IntEnum):
@@ -10,7 +11,6 @@ class Endpoint(IntEnum):
     LOOKUP = auto()
     BROWSE = auto()
     REVGEOCODE = auto()
-    SIGNALS = auto()
 
 
 @dataclass
@@ -23,6 +23,9 @@ class Request:
     def key(self) -> str:
         return self.url+"".join(f"{k}{v}"for k, v in self.params.items())
 
+    @property
+    def full(self):
+        return f"{self.url}?{urlencode(self.params)}"
 
 @dataclass
 class Response:
