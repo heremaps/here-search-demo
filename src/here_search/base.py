@@ -7,9 +7,80 @@ from .entities import Response, Endpoint, ResponseItem, Ontology
 from .util import Profiler
 
 from typing import Tuple, Awaitable, Callable
-import urllib.parse
 import asyncio
 import uuid
+
+
+class OneBoxSimple:
+    default_results_limit = 20
+    default_suggestions_limit = 5
+    default_terms_limit = 3
+    default_search_center = 52.51604, 13.37691
+    default_language = "en"
+
+    def __init__(self):
+
+        self.api = API()
+        klass = type(self)
+        self.search_center = klass.default_search_center
+        self.language = klass.default_language
+        self.results_limit = klass.default_results_limit
+        self.suggestions_limit = klass.default_suggestions_limit
+        self.terms_limit = klass.default_terms_limit
+        self.result_queue = asyncio.Queue()
+
+    async def handle_key_strokes(self):
+        """
+        This method repeatedly waits on key strokes in the one box search Text form.
+        """
+        async with ClientSession(raise_for_status=True) as session:
+            while True:
+                query_text = await self.wait_for_new_key_stroke()
+                if query_text:
+                    await self._do_autosuggest(session, query_text)
+
+    async def handle_text_submissions(self):
+        """
+        This method repeatedly waits for texts submitted in the one box search Text form.
+        """
+        async with ClientSession(raise_for_status=True) as session:
+            while True:
+                query_text = await self.wait_for_submitted_value()
+                if query_text:
+                    await self._do_discover(session, query_text)
+
+    async def _do_autosuggest(self, session, query_text, x_headers: dict=None) -> None:
+        latitude, longitude = self.search_center
+        autosuggest_resp = await asyncio.ensure_future(
+            self.api.autosuggest(query_text, latitude, longitude, x_headers=x_headers, session=session,
+                                 lang=self.language, limit=self.suggestions_limit, termsLimit=self.terms_limit))
+        self.handle_suggestion_list(autosuggest_resp)
+
+    async def _do_discover(self, session, query_text, x_headers: dict=None) -> None:
+        latitude, longitude = self.search_center
+        discover_task = asyncio.ensure_future(
+            self.api.discover(query_text, latitude, longitude, x_headers=x_headers, session=session, lang=self.language,
+                              limit=self.results_limit))
+        discover_resp = await discover_task
+        self.handle_result_list(discover_resp)
+
+    def run(self,
+            handle_key_strokes: Callable=None,
+            handle_text_submissions: Callable=None):
+        asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
+        asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
+
+    def wait_for_new_key_stroke(self) -> Awaitable:
+        raise NotImplementedError()
+
+    def wait_for_submitted_value(self) -> Awaitable:
+        raise NotImplementedError()
+
+    def handle_suggestion_list(self, response: Response) -> None:
+        raise NotImplementedError()
+
+    def handle_result_list(self, response: Response) -> None:
+        raise NotImplementedError()
 
 
 class OneBoxBase:
@@ -132,8 +203,7 @@ class OneBoxBase:
         if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
             country_code = local_addresses.data["items"][0]["address"]["countryCode"]
             address_details = await asyncio.ensure_future(
-                self.api.lookup(session,
-                                id=local_addresses.data["items"][0]["id"]))
+                self.api.lookup(id=local_addresses.data["items"][0]["id"], session=session))
             language = address_details.data["language"]
         return country_code, language
 
@@ -202,7 +272,11 @@ class OneBoxBase:
         params = {"show": orig_show} if orig_show else {}
 
         discover_resp = await asyncio.ensure_future(
-            self.api.autosuggest_href(session, item.data["href"], limit=self.results_limit, x_headers=x_headers, **params))
+            self.api.autosuggest_href(item.data["href"],
+                                      x_headers=x_headers,
+                                      limit=self.results_limit,
+                                      session=session,
+                                      **params))
         self.handle_result_list(discover_resp)
 
     async def share_autosuggest_result_selection(self, item, session, x_headers) -> None:
@@ -214,13 +288,14 @@ class OneBoxBase:
         extra_params.update(self.extra_api_params.get(Endpoint.BROWSE, {}))
         extra_params.update(self.user_profile.api_options.get(Endpoint.BROWSE, {}))
         browse_resp = await asyncio.ensure_future(
-            self.api.browse(session, latitude, longitude,
+            self.api.browse(latitude, longitude,
+                            x_headers=x_headers,
+                            session=session,
                             categories=ontology.categories,
                             food_types=ontology.food_types,
                             chains=ontology.chains,
                             lang=self.language,
                             limit=self.results_limit,
-                            x_headers=x_headers,
                             **extra_params))
         self.handle_result_list(browse_resp)
         return {item["address"]["countryCode"] for item in browse_resp.data["items"]}
@@ -242,7 +317,10 @@ class OneBoxBase:
                                      action="here:gs:action:view", userId=x_headers['X-User-ID'],
                                      asSessionId=x_headers['X-AS-Session-ID']))
             lookup_resp = await asyncio.ensure_future(
-                self.api.lookup(session, item.data["id"], lang=self.language, x_headers=x_headers))
+                self.api.lookup(item.data["id"],
+                                x_headers=x_headers,
+                                lang=self.language,
+                                session=session))
         else:
             if share_experience and item.resp.x_headers:
                 await asyncio.ensure_future(
@@ -253,7 +331,11 @@ class OneBoxBase:
             extra_params.update(self.extra_api_params.get(Endpoint.LOOKUP, {}))
             extra_params.update(self.user_profile.api_options.get(Endpoint.LOOKUP, {}))
             lookup_resp = await asyncio.ensure_future(
-                self.api.lookup(session, item.data["id"], lang=self.language, x_headers=None, **extra_params))
+                self.api.lookup(item.data["id"],
+                                x_headers=None,
+                                session=session,
+                                lang=self.language,
+                                **extra_params))
         self.handle_result_details(lookup_resp)
 
     async def _do_revgeocode(self, session, latitude, longitude, x_headers) -> Response:
@@ -262,11 +344,12 @@ class OneBoxBase:
         extra_params.update(self.user_profile.api_options.get(Endpoint.REVGEOCODE, {}))
         if self.language:
             extra_params["lang"] = self.language
-        revgeocode_resp = await asyncio.ensure_future(self.api.reverse_geocode(
-            session, latitude, longitude,
-            limit=self.results_limit,
-            x_headers=x_headers,
-            **extra_params))
+        revgeocode_resp = await asyncio.ensure_future(
+            self.api.reverse_geocode(latitude, longitude,
+                                     x_headers=x_headers,
+                                     session=session,
+                                     limit=self.results_limit,
+                                     **extra_params))
         return revgeocode_resp
 
     def _do_profiler_start(self, kwargs):
@@ -292,30 +375,9 @@ class OneBoxBase:
         if self.user_profile.share_experience:
             self.x_headers['X-AS-Session-ID'] = str(uuid.uuid4())
 
-    def wait_for_new_key_stroke(self) -> Awaitable:
-        raise NotImplementedError()
-
-    def wait_for_submitted_value(self) -> Awaitable:
-        raise NotImplementedError()
-
     def wait_for_selected_result(self) -> Awaitable:
         return self.result_queue.get()
 
-    def wait_for_selected_shortcut(self) -> Awaitable:
-        raise NotImplementedError()
-
-    def handle_suggestion_list(self, response: Response) -> None:
-        raise NotImplementedError()
-
-    def handle_empty_text_submission(self, **kwargs) -> None:
-        raise NotImplementedError()
-
-    def handle_result_list(self, response: Response) -> None:
-        raise NotImplementedError()
-
-    def handle_result_details(self, response: Response) -> None:
-        raise NotImplementedError()
-    
     def run(self,
             handle_user_profile_setup: Callable=None,
             handle_key_strokes: Callable=None, 
@@ -334,4 +396,23 @@ class OneBoxBase:
                     self.api.signals(session, resource_id="application", rank=0, correlation_id="noCorrelationID",
                                      action="end", userId=self.x_headers['X-User-ID']))
 
+    def wait_for_new_key_stroke(self) -> Awaitable:
+        raise NotImplementedError()
 
+    def wait_for_submitted_value(self) -> Awaitable:
+        raise NotImplementedError()
+
+    def handle_suggestion_list(self, response: Response) -> None:
+        raise NotImplementedError()
+
+    def handle_result_list(self, response: Response) -> None:
+        raise NotImplementedError()
+
+    def wait_for_selected_shortcut(self) -> Awaitable:
+        raise NotImplementedError()
+
+    def handle_result_details(self, response: Response) -> None:
+        raise NotImplementedError()
+
+    def handle_empty_text_submission(self, **kwargs) -> None:
+        raise NotImplementedError()

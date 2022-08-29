@@ -284,9 +284,10 @@ class OneBoxCatNearCat(OneBoxMap):
             near_id = item['nearPlace']['properties']['SearchPlace']['placeId']
             try:
                 find_lookup_resp = await asyncio.ensure_future(
-                    self.api.lookup(session, f'here:pds:place:{find_id}',
-                                    lang=self.language,
+                    self.api.lookup(f'here:pds:place:{find_id}',
                                     x_headers=self.x_headers,
+                                    session=session,
+                                    lang=self.language,
                                     **self.lookup_query_params))
                 data = {"clientSideAddition": True}
                 data.update(find_lookup_resp.data.copy())
@@ -295,9 +296,10 @@ class OneBoxCatNearCat(OneBoxMap):
                 if self.lg_children_details:
                     title = find_lookup_resp_copy.data["title"]
                     near_lookup_resp = await asyncio.ensure_future(
-                        self.api.lookup(session, f'here:pds:place:{near_id}',
-                                        lang=self.language,
+                        self.api.lookup(f'here:pds:place:{near_id}',
                                         x_headers=self.x_headers,
+                                        session=session,
+                                        lang=self.language,
                                         **self.lookup_query_params))
                     find_lookup_resp_copy.data["titleDetails"] = {
                         "findTitle": title,
@@ -323,8 +325,12 @@ class OneBoxCatNearCat(OneBoxMap):
     async def get_first_category_ontology(self, session: ClientSession,
                                           query: str, latitude: float, longitude: float) -> Tuple[Response, Optional[dict]]:
         autosuggest_resp = await asyncio.ensure_future(
-            self.api.autosuggest(query, latitude, longitude, x_headers=None, session=session, lang=self.language,
-                                 limit=self.suggestions_limit, termsLimit=self.terms_limit,
+            self.api.autosuggest(query, latitude, longitude,
+                                 x_headers=None,
+                                 session=session,
+                                 lang=self.language,
+                                 limit=self.suggestions_limit,
+                                 termsLimit=self.terms_limit,
                                  **self.autosuggest_query_params))
         for item in autosuggest_resp.data["items"]:
             if item["resultType"] == "categoryQuery" and "relationship" not in item:

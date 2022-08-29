@@ -79,14 +79,16 @@ class Profile:
         country_code, language = None, None
         async with ClientSession(raise_for_status=True) as session:
             api = API()
-            local_addresses = await asyncio.ensure_future(api.reverse_geocode(
-                session,
-                latitude=latitude,
-                longitude=longitude))
+            local_addresses = await asyncio.ensure_future(
+                api.reverse_geocode(latitude=latitude,
+                                    longitude=longitude,
+                                    session=session))
 
             if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
                 country_code = local_addresses.data["items"][0]["address"]["countryCode"]
-                address_details = await asyncio.ensure_future(api.lookup(session, id=local_addresses.data["items"][0]["id"]))
+                address_details = await asyncio.ensure_future(
+                    api.lookup(id=local_addresses.data["items"][0]["id"],
+                               session=session))
                 language = address_details.data["language"]
 
             return country_code, language

@@ -33,7 +33,7 @@ class API:
         self.options = options or {}
         self.cache = cache or {}
 
-    async def get(self, session: ClientSession, request: Request) -> Response:
+    async def get(self, request: Request, session: ClientSession = None) -> Response:
         """
         Returns from HERE Search backend the response for a specific Request, or from the cache if it has been cached.
         Cache the Response if returned by the HERE Search backend.
@@ -44,35 +44,46 @@ class API:
         """
         cache_key = request.key()
         if cache_key in self.cache:
-            cached_response = self.cache[cache_key]
-            data = cached_response.data.copy()
-            response = Response(data=data,
-                                x_headers=cached_response.x_headers,
-                                req=cached_response.req)
-            endpoint_str = response.req.url.split("/")[-1]
-            params = {k:(",".join(v) if isinstance(v, list) else v) for k, v in response.req.params.items()}
-            params.pop("apiKey", None)
-            params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
-            log_msg = await self._get_log_msg(endpoint_str, response.req.url, params_str, request.x_headers)
-            logger.info(f"{log_msg} | (cached)")
-            return response
+            return await self.__uncache(cache_key, request)
 
         request.params["apiKey"] = self.api_key
         params = {k: ",".join(v) if isinstance(v, list) else v for k, v in request.params.items()}
-        async with session.get(request.url, params=params, headers=request.x_headers or {}) as get_response:
-            endpoint_str = get_response.url.path.split("/")[-1]
-            params = dict(get_response.url.query)
-            params.pop("apiKey", None)
-            params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
-            log_msg = await self._get_log_msg(endpoint_str, get_response.url.human_repr(), params_str, request.x_headers)
-            logger.info(log_msg)
-            x_headers = {"X-Request-Id": get_response.headers["X-Request-Id"],
-                         "X-Correlation-ID": get_response.headers["X-Correlation-ID"]}
-            response = Response(data=await get_response.json(loads=loads),
-                                req=request,
-                                x_headers=x_headers)
-            self.cache[cache_key] = response
-            return response
+        if session:
+            async with session.get(request.url, params=params, headers=request.x_headers or {}) as get_response:
+                return await self.__get(get_response, request, cache_key)
+        else:
+            async with ClientSession(raise_for_status=True) as session:
+                async with session.get(request.url, params=params, headers=request.x_headers or {}) as get_response:
+                    return await self.__get(get_response, request, cache_key)
+
+    async def __uncache(self, cache_key, request):
+        cached_response = self.cache[cache_key]
+        data = cached_response.data.copy()
+        response = Response(data=data,
+                            x_headers=cached_response.x_headers,
+                            req=cached_response.req)
+        endpoint_str = response.req.url.split("/")[-1]
+        params = {k: (",".join(v) if isinstance(v, list) else v) for k, v in response.req.params.items()}
+        params.pop("apiKey", None)
+        params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
+        log_msg = await self._get_log_msg(endpoint_str, response.req.url, params_str, request.x_headers)
+        logger.info(f"{log_msg} | (cached)")
+        return response
+
+    async def __get(self, get_response, request, cache_key):
+        endpoint_str = get_response.url.path.split("/")[-1]
+        params = dict(get_response.url.query)
+        params.pop("apiKey", None)
+        params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
+        log_msg = await self._get_log_msg(endpoint_str, get_response.url.human_repr(), params_str, request.x_headers)
+        logger.info(log_msg)
+        x_headers = {"X-Request-Id": get_response.headers["X-Request-Id"],
+                     "X-Correlation-ID": get_response.headers["X-Correlation-ID"]}
+        response = Response(data=await get_response.json(loads=loads),
+                            req=request,
+                            x_headers=x_headers)
+        self.cache[cache_key] = response
+        return response
 
     async def _get_log_msg(self, endpoint_str: str, url: str, params_str: str, x_headers: dict=None):
         log_msg = f'<a href="{url}">/{endpoint_str}?{params_str}</a>'
@@ -100,16 +111,13 @@ class API:
                           params=params,
                           x_headers=x_headers)
         if session:
-            response = await self.get(session, request)
+            response = await self.get(request, session)
         else:
             async with ClientSession(raise_for_status=True) as session:
-                response = await self.get(session, request)
+                response = await self.get(request, session)
         return response
 
-    async def autosuggest_href(self, session: ClientSession,
-                               href: str,
-                               x_headers: dict = None,
-                               **kwargs) -> Response:
+    async def autosuggest_href(self, href: str, x_headers: dict = None, session: ClientSession = None, **kwargs) -> Response:
         """
         Calls HERE Search Autosuggest href follow-up
 
@@ -119,8 +127,14 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        return await self.get(session, Request(endpoint=Endpoint.AUTOSUGGEST_HREF,
-                                               url=href, params=kwargs, x_headers=x_headers))
+        request = Request(endpoint=Endpoint.AUTOSUGGEST_HREF,
+                          url=href, params=kwargs, x_headers=x_headers)
+        if session:
+            response = await self.get(request, session)
+        else:
+            async with ClientSession(raise_for_status=True) as session:
+                response = await self.get(request, session)
+        return response
 
     async def discover(self, q: str, latitude: float, longitude: float, x_headers: dict = None,
                        session: ClientSession = None, **kwargs) -> Response:
@@ -142,19 +156,19 @@ class API:
                           params=params,
                           x_headers=x_headers)
         if session:
-            response = await self.get(session, request)
+            response = await self.get(request, session)
         else:
             async with ClientSession(raise_for_status=True) as session:
-                response = await self.get(session, request)
+                response = await self.get(request, session)
         return response
 
-    async def browse(self, session: ClientSession,
+    async def browse(self,
                      latitude: float, longitude: float,
-                     categories: Optional[Sequence[str]],
-                     food_types: Optional[Sequence[str]],
-                     chains: Optional[Sequence[str]],
+                     categories: Optional[Sequence[str]] = None,
+                     food_types: Optional[Sequence[str]] = None,
+                     chains: Optional[Sequence[str]] = None,
                      x_headers: dict = None,
-                     **kwargs) -> Response:
+                     session: ClientSession = None, **kwargs) -> Response:
         """
         Calls HERE Search Browse endpoint
 
@@ -170,21 +184,24 @@ class API:
         params = self.options.get(Endpoint.BROWSE, {}).copy()
         params["at"] = f'{latitude},{longitude}'
         if categories:
-            params["categories"] = ",".join(sorted(set(categories)))
+            params["categories"] = ",".join(sorted(set(categories or [])))
         if food_types:
-            params["foodTypes"] = ",".join(sorted(set(food_types)))
+            params["foodTypes"] = ",".join(sorted(set(food_types or [])))
         if chains:
-            params["categories"] = ",".join(sorted(set(chains)))
+            params["categories"] = ",".join(sorted(set(chains or [])))
         params.update(kwargs)
-        return await self.get(session, Request(endpoint=Endpoint.BROWSE,
-                                               url=base_url[Endpoint.BROWSE],
-                                               params=params,
-                                               x_headers=x_headers))
+        request = Request(endpoint=Endpoint.BROWSE,
+                          url=base_url[Endpoint.BROWSE],
+                          params=params,
+                          x_headers=x_headers)
+        if session:
+            response = await self.get(request, session)
+        else:
+            async with ClientSession(raise_for_status=True) as session:
+                response = await self.get(request, session)
+        return response
 
-    async def lookup(self, session: ClientSession,
-                     id: str,
-                     x_headers: dict = None,
-                     **kwargs) -> Response:
+    async def lookup(self, id: str, x_headers: dict = None, session: ClientSession = None, **kwargs) -> Response:
         """
         Calls HERE Search Lookup for a specific id
 
@@ -196,15 +213,19 @@ class API:
         params = self.options.get(Endpoint.LOOKUP, {}).copy()
         params["id"] = id
         params.update(kwargs)
-        return await self.get(session, Request(endpoint=Endpoint.LOOKUP,
-                                               url=base_url[Endpoint.LOOKUP],
-                                               params=params,
-                                               x_headers=x_headers))
+        request = Request(endpoint=Endpoint.LOOKUP,
+                          url=base_url[Endpoint.LOOKUP],
+                          params=params,
+                          x_headers=x_headers)
+        if session:
+            response = await self.get(request, session)
+        else:
+            async with ClientSession(raise_for_status=True) as session:
+                response = await self.get(request, session)
+        return response
 
-    async def reverse_geocode(self, session: ClientSession,
-                              latitude: float, longitude: float,
-                              x_headers: dict = None,
-                              **kwargs) -> Response:
+    async def reverse_geocode(self, latitude: float, longitude: float, x_headers: dict = None,
+                              session: ClientSession = None, **kwargs) -> Response:
         """
         Calls HERE Reverese Geocode for a geo position
 
@@ -217,10 +238,17 @@ class API:
         params = self.options.get(Endpoint.REVGEOCODE, {}).copy()
         params["at"] = f"{latitude},{longitude}"
         params.update(kwargs)
-        return await self.get(session, Request(endpoint=Endpoint.REVGEOCODE,
-                                               url=base_url[Endpoint.REVGEOCODE],
-                                               params=params,
-                                               x_headers=x_headers))
+        request = Request(endpoint=Endpoint.REVGEOCODE,
+                           url=base_url[Endpoint.REVGEOCODE],
+                           params=params,
+                           x_headers=x_headers)
+        if session:
+            response = await self.get(request, session)
+        else:
+            async with ClientSession(raise_for_status=True) as session:
+                response = await self.get(request, session)
+        return response
+
 
 @dataclass
 class APIOption:

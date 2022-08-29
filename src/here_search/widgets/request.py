@@ -2,7 +2,7 @@ from IPython.display import display as Idisplay
 from ipywidgets import Widget, CallbackDispatcher, HBox, VBox, Text, Button, Layout, HTML
 from traitlets import observe
 
-from here_search.entities import Ontology
+from here_search.entities import OntologyItem
 from here_search.util import logger
 
 from typing import Awaitable, Tuple, Callable, Optional, Sequence
@@ -188,11 +188,11 @@ class OntologyButton(Button):
     """
     A Button returning an Ontology future
     """
-    ontology: Ontology
+    ontology_item: OntologyItem
     default_icon = 'question'
     default_layout = {'width': '32px'}
 
-    def __init__(self, ontology: Ontology, fa5_name: str, **kwargs):
+    def __init__(self, ontology_item: OntologyItem, fa5_name: str, **kwargs):
         """
         Creates a Button for an Ontology instance with a specific Font-Awesome icon.
         See: https://fontawesome.com/v5/search?m=free&s=regular
@@ -201,13 +201,13 @@ class OntologyButton(Button):
         :param ontology: Ontology instance
         :param kwargs: Button class other attributes
         """
-        self.ontology = ontology
+        self.ontology_item = ontology_item
         super().__init__(icon=fa5_name or OntologyButton.default_icon,
                          layout=OntologyButton.default_layout, **kwargs)
 
 
 class OntologyBox(HBox):
-    default_buttons = [OntologyButton(ontology=Ontology(name=""), fa5_name="")]
+    default_buttons = [OntologyButton(ontology_item=OntologyItem(name="_"), fa5_name="")]
 
     def __init__(self, buttons: Sequence[OntologyButton]):
         self.buttons = buttons
@@ -217,7 +217,7 @@ class OntologyBox(HBox):
         future = asyncio.Future()
         for button in self.buttons or OntologyBox.default_buttons:
             def getvalue(clicked_button):
-                future.set_result(clicked_button.ontology)
+                future.set_result(clicked_button.ontologyItem)
                 for other_button in self.buttons:
                     other_button._click_handlers.callbacks.clear()
             button.on_click(getvalue)
