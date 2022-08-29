@@ -16,7 +16,7 @@ class OneBoxBase:
 
     default_results_limit = 20
     default_suggestions_limit = 5
-    default_terms_limit = 0
+    default_terms_limit = 3
     default_headers = {'User-Agent': f'here-search-notebook-{__version__}'}
 
     def __init__(self,

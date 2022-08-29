@@ -13,6 +13,8 @@ from enum import Enum, auto
 from functools import partial
 import re
 
+Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
+
 
 class SubmittableText(Text):
     """A ipywidgets Text class enhanced with an on_submit() method"""
@@ -134,10 +136,13 @@ class TermsButtons(HBox):
     default_layout = {'width': '280px'}
     default_buttons_count = 3
 
-    def __init__(self, target_text_box: SubmittableTextBox, buttons_count: int=None, layout: dict=None):
-        if not isinstance(buttons_count, int):
+    def __init__(self, target_text_box: SubmittableTextBox, values: list[str]=None, buttons_count: int=None, index: int=None, layout: dict=None):
+        if values:
+            buttons_count = len(values)
+        elif not isinstance(buttons_count, int):
             buttons_count = TermsButtons.default_buttons_count
         width = int(100/buttons_count)
+        self.token_index = index
         box_layout = Layout(display="flex", justify_content="center", width=f"{width}%", border="solid 1px")
         buttons = []
         on_click_handler = self.__get_click_handler(target_text_box)
@@ -146,25 +151,32 @@ class TermsButtons(HBox):
             button.on_click(on_click_handler)
             buttons.append(button)
         HBox.__init__(self, buttons, layout=layout or TermsButtons.default_layout)
-        Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
+        self.set(values or [])
         self.add_class('term-button')
 
     def __get_click_handler(self, target_text_box: SubmittableTextBox) -> Callable:
         def handler(button):
             # replace the last token with the clicked button description and a whitespace
-            if target_text_box.text_w.value.endswith(' '):
+            if False: # target_text_box.text_w.value.endswith(' '):
                 target_text_box.text_w.value = f"{target_text_box.text_w.value}{button.description.strip()} "
             else:
                 tokens = target_text_box.text_w.value.strip().split(' ')
                 if tokens:
-                    head = tokens[:-1]
-                    head.extend([button.description.strip(), ''])
-                    target_text_box.text_w.value = ' '.join(head)
+                    if self.token_index is None:
+                        head, target, tail = [], [button.description.strip()], []
+                    elif self.token_index == -1:
+                        head, target, tail = tokens[:self.token_index], [button.description.strip()], ['']
+                    else:
+                        head, target, tail = (tokens[:self.token_index],
+                                              [button.description.strip()],
+                                              tokens[self.token_index+1:])
+                    target_text_box.text_w.value = ' '.join(head + target + tail)
 
-            self.set([])
+            #self.set(self.values)
         return handler
 
     def set(self, values: list[str]):
+        self.values = values
         for i, button in enumerate(self.children):
             try:
                 button.description = values[i]
