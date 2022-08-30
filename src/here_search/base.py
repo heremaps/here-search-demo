@@ -28,6 +28,7 @@ class OneBoxSimple:
         self.suggestions_limit = klass.default_suggestions_limit
         self.terms_limit = klass.default_terms_limit
         self.result_queue = asyncio.Queue()
+        self.tasks = []
 
     async def handle_key_strokes(self):
         """
@@ -38,6 +39,8 @@ class OneBoxSimple:
                 query_text = await self.wait_for_new_key_stroke()
                 if query_text:
                     await self._do_autosuggest(session, query_text)
+                else:
+                    self.handle_empty_text_submission()
 
     async def handle_text_submissions(self):
         """
@@ -48,6 +51,17 @@ class OneBoxSimple:
                 query_text = await self.wait_for_submitted_value()
                 if query_text:
                     await self._do_discover(session, query_text)
+
+    async def handle_ontology_selections(self):
+        """
+        This method is called for each shortcut button selected.
+        """
+        async with ClientSession(raise_for_status=True) as session:
+            while True:
+                ontology: Ontology = await self.wait_for_selected_ontology()
+                if ontology:
+                    print(ontology)
+                    await self._do_browse(session, ontology)
 
     async def _do_autosuggest(self, session, query_text, x_headers: dict=None) -> None:
         latitude, longitude = self.search_center
@@ -64,11 +78,31 @@ class OneBoxSimple:
         discover_resp = await discover_task
         self.handle_result_list(discover_resp)
 
-    def run(self,
-            handle_key_strokes: Callable=None,
-            handle_text_submissions: Callable=None):
-        asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
-        asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
+    async def _do_browse(self, session, ontology, x_headers: dict=None) -> None:
+        latitude, longitude = self.search_center
+        browse_task = asyncio.ensure_future(
+            self.api.browse(latitude, longitude,
+                            x_headers=x_headers,
+                            session=session,
+                            lang=self.language,
+                            limit=self.results_limit,
+                            **ontology.mapping))
+        browse_resp = await browse_task
+        self.handle_result_list(browse_resp)
+
+    def run(self) -> "OneBoxSimple":
+        self.tasks.extend([asyncio.ensure_future(self.handle_key_strokes()),
+                      asyncio.ensure_future(self.handle_text_submissions()),
+                      asyncio.ensure_future(self.handle_ontology_selections())])
+        return self
+
+    async def stop(self):
+        for task in self.tasks:
+            task.cancel()
+
+    def __del__(self):
+        loop = asyncio.get_running_loop()
+        loop.run_until_complete(self.stop())
 
     def wait_for_new_key_stroke(self) -> Awaitable:
         raise NotImplementedError()
@@ -76,10 +110,16 @@ class OneBoxSimple:
     def wait_for_submitted_value(self) -> Awaitable:
         raise NotImplementedError()
 
+    def wait_for_selected_ontology(self) -> Awaitable:
+        raise NotImplementedError()
+
     def handle_suggestion_list(self, response: Response) -> None:
         raise NotImplementedError()
 
     def handle_result_list(self, response: Response) -> None:
+        raise NotImplementedError()
+
+    def handle_empty_text_submission(self, **kwargs) -> None:
         raise NotImplementedError()
 
 
@@ -224,13 +264,13 @@ class OneBoxBase:
                 else:
                     await self._do_lookup(session, item, self.user_profile.share_experience, self.x_headers)
 
-    async def handle_shortcut_selections(self):
+    async def handle_ontology_selections(self):
         """
         This method is called for each shortcut button selected.
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             while True:
-                ontology: Ontology = await self.wait_for_selected_shortcut()
+                ontology: Ontology = await self.wait_for_selected_ontology()
                 if ontology is None:
                     break
                 if not ontology:
@@ -383,12 +423,12 @@ class OneBoxBase:
             handle_key_strokes: Callable=None, 
             handle_text_submissions: Callable=None, 
             handle_result_selections: Callable=None,
-            handle_shortcut_selections: Callable=None):
+            handle_ontology_selections: Callable=None):
 
         asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
         asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
         asyncio.ensure_future((handle_result_selections or self.handle_result_selections)())
-        asyncio.ensure_future((handle_shortcut_selections or self.handle_shortcut_selections)())
+        asyncio.ensure_future((handle_ontology_selections or self.handle_ontology_selections)())
 
     async def __astop(self):
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
@@ -408,7 +448,7 @@ class OneBoxBase:
     def handle_result_list(self, response: Response) -> None:
         raise NotImplementedError()
 
-    def wait_for_selected_shortcut(self) -> Awaitable:
+    def wait_for_selected_ontology(self) -> Awaitable:
         raise NotImplementedError()
 
     def handle_result_details(self, response: Response) -> None:
@@ -416,3 +456,4 @@ class OneBoxBase:
 
     def handle_empty_text_submission(self, **kwargs) -> None:
         raise NotImplementedError()
+

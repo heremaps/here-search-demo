@@ -1,8 +1,9 @@
 from IPython.display import display as Idisplay
+from here_map_widget import Map, Platform, ServiceNames, MapTileUrl, MapTile, TileLayer
 from ipywidgets import Widget, CallbackDispatcher, HBox, VBox, Text, Button, Layout, HTML
 from traitlets import observe
 
-from here_search.entities import OntologyItem
+from here_search.entities import OntologyItem, Ontology
 from here_search.util import logger
 
 from typing import Awaitable, Tuple, Callable, Optional, Sequence
@@ -137,6 +138,8 @@ class TermsButtons(HBox):
     default_buttons_count = 3
 
     def __init__(self, target_text_box: SubmittableTextBox, values: list[str]=None, buttons_count: int=None, index: int=None, layout: dict=None):
+        self.target_text_box = target_text_box
+        self.values = values or []
         if values:
             buttons_count = len(values)
         elif not isinstance(buttons_count, int):
@@ -145,22 +148,22 @@ class TermsButtons(HBox):
         self.token_index = index
         box_layout = Layout(display="flex", justify_content="center", width=f"{width}%", border="solid 1px")
         buttons = []
-        on_click_handler = self.__get_click_handler(target_text_box)
+        on_click_handler = self.__get_click_handler()
         for i in range(buttons_count):
             button = Button(layout=box_layout)
             button.on_click(on_click_handler)
             buttons.append(button)
         HBox.__init__(self, buttons, layout=layout or TermsButtons.default_layout)
-        self.set(values or [])
+        self.set(self.values)
         self.add_class('term-button')
 
-    def __get_click_handler(self, target_text_box: SubmittableTextBox) -> Callable:
+    def __get_click_handler(self) -> Callable:
         def handler(button):
             # replace the last token with the clicked button description and a whitespace
             if False: # target_text_box.text_w.value.endswith(' '):
-                target_text_box.text_w.value = f"{target_text_box.text_w.value}{button.description.strip()} "
+                self.target_text_box.text_w.value = f"{self.target_text_box.text_w.value}{button.description.strip()} "
             else:
-                tokens = target_text_box.text_w.value.strip().split(' ')
+                tokens = self.target_text_box.text_w.value.strip().split(' ')
                 if tokens:
                     if self.token_index is None:
                         head, target, tail = [], [button.description.strip()], []
@@ -170,7 +173,7 @@ class TermsButtons(HBox):
                         head, target, tail = (tokens[:self.token_index],
                                               [button.description.strip()],
                                               tokens[self.token_index+1:])
-                    target_text_box.text_w.value = ' '.join(head + target + tail)
+                    self.target_text_box.text_w.value = ' '.join(head + target + tail)
 
             #self.set(self.values)
         return handler
@@ -188,36 +191,42 @@ class OntologyButton(Button):
     """
     A Button returning an Ontology future
     """
-    ontology_item: OntologyItem
+    item: OntologyItem
     default_icon = 'question'
     default_layout = {'width': '32px'}
 
-    def __init__(self, ontology_item: OntologyItem, fa5_name: str, **kwargs):
+    def __init__(self, item: OntologyItem, icon: str, **kwargs):
         """
         Creates a Button for an Ontology instance with a specific Font-Awesome icon.
         See: https://fontawesome.com/v5/search?m=free&s=regular
+        And: https://use.fontawesome.com/releases/v5.12.0/fontawesome-free-5.12.0-web.zip
 
-        :param fa5_name: fontawesome-free v5.12.0 icon name (without fa- prefix)
+        :param icon: fontawesome-free v5.12.0 icon name (with fa- prefix) or text
         :param ontology: Ontology instance
         :param kwargs: Button class other attributes
         """
-        self.ontology_item = ontology_item
-        super().__init__(icon=fa5_name or OntologyButton.default_icon,
-                         layout=OntologyButton.default_layout, **kwargs)
+        self.item = item
+        if not icon:
+            kwargs.update({"icon": OntologyButton.default_icon})
+        elif icon.startswith("fa-"):
+            kwargs.update({"icon": icon[3:]})
+        else:
+            kwargs.update({"description": icon})
+        super().__init__(layout=OntologyButton.default_layout, **kwargs)
 
 
-class OntologyBox(HBox):
-    default_buttons = [OntologyButton(ontology_item=OntologyItem(name="_"), fa5_name="")]
+class OntologyButtons(HBox):
+    default_buttons = [OntologyButton(item=OntologyItem(name="_"), icon="")]
 
-    def __init__(self, buttons: Sequence[OntologyButton]):
-        self.buttons = buttons
-        HBox.__init__(self, list(buttons))
+    def __init__(self, ontology: Ontology, icons: Sequence[str]):
+        self.buttons = [OntologyButton(item, icon) for item, icon in zip(ontology._asdict().values(), icons)] or OntologyButtons.default_buttons
+        HBox.__init__(self, self.buttons)
 
     def get_ontology_future(self) -> Awaitable:
         future = asyncio.Future()
-        for button in self.buttons or OntologyBox.default_buttons:
+        for button in self.buttons or OntologyButtons.default_buttons:
             def getvalue(clicked_button):
-                future.set_result(clicked_button.ontologyItem)
+                future.set_result(clicked_button.item)
                 for other_button in self.buttons:
                     other_button._click_handlers.callbacks.clear()
             button.on_click(getvalue)
@@ -341,3 +350,46 @@ class NearbySimpleParser:
 
         return partial(self.__get_conjunction_mode, conjunctions=conjunctions, conjunction_parts=conjunction_parts)
 
+
+class PositionMap(Map):
+    default_zoom_level = 12
+    default_layout = {'height': '600px'}
+
+    def __init__(self, api_key: str,
+                 center: Tuple[float, float],
+                 position_handler: Callable[[float, float], None]=None,
+                 **kvargs):
+
+        platform = Platform(api_key=api_key, services_config={
+            ServiceNames.maptile: {
+                MapTileUrl.scheme: "https",
+                MapTileUrl.host: "maps.ls.hereapi.com",
+                MapTileUrl.path: "maptile/2.1",
+            }
+        })
+        map_tile = MapTile(
+            tile_type="maptile",
+            scheme="normal.day",
+            tile_size=256,
+            format="png",
+            platform=platform
+        )
+        maptile_layer = TileLayer(provider=map_tile, style={"max": 22})
+        Map.__init__(self,
+                     api_key=api_key,
+                     center=center,
+                     zoom=kvargs.pop('zoom', PositionMap.default_zoom_level),
+                     basemap=maptile_layer,
+                     layout = kvargs.pop('layout', PositionMap.default_layout))
+        if position_handler:
+            #self.set_position_handler(position_handler)
+            self.observe(position_handler)
+
+    def set_position_handler(self, position_handler: Callable[[float, float], None]):
+        def observe(change):
+            if change.type == "change": # TODO: test if this test is necessary
+                if change.name in "center":
+                    position_handler(*change.new[:2])
+                elif change.name == "zoom":
+                    position_handler(*self.center)
+        self.observe(observe)

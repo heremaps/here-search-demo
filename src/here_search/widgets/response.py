@@ -4,12 +4,10 @@ from IPython.display import display as Idisplay, Markdown
 from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML, Layout
 
 from here_map_widget import GeoJSON
-from here_map_widget import Platform, MapTile, TileLayer, Map
-from here_map_widget import ServiceNames, MapTileUrl
 
 from here_search.entities import Response, ResponseItem, Endpoint
 
-from typing import Callable, Tuple, List
+from typing import Tuple, List
 from dataclasses import dataclass
 import asyncio
 
@@ -237,47 +235,4 @@ class SearchFeatureCollection(GeoJSON):
                              "radius": 7}
                          )
 
-
-class PositionMap(Map):
-    default_zoom_level = 12
-    default_layout = {'height': '600px'}
-
-    def __init__(self, api_key: str,
-                 center: Tuple[float, float],
-                 position_handler: Callable[[float, float], None]=None,
-                 **kvargs):
-
-        platform = Platform(api_key=api_key, services_config={
-            ServiceNames.maptile: {
-                MapTileUrl.scheme: "https",
-                MapTileUrl.host: "maps.ls.hereapi.com",
-                MapTileUrl.path: "maptile/2.1",
-            }
-        })
-        map_tile = MapTile(
-            tile_type="maptile",
-            scheme="normal.day",
-            tile_size=256,
-            format="png",
-            platform=platform
-        )
-        maptile_layer = TileLayer(provider=map_tile, style={"max": 22})
-        Map.__init__(self,
-                     api_key=api_key,
-                     center=center,
-                     zoom=kvargs.pop('zoom', PositionMap.default_zoom_level),
-                     basemap=maptile_layer,
-                     layout = kvargs.pop('layout', PositionMap.default_layout))
-        if position_handler:
-            #self.set_position_handler(position_handler)
-            self.observe(position_handler)
-
-    def set_position_handler(self, position_handler: Callable[[float, float], None]):
-        def observe(change):
-            if change.type == "change": # TODO: test if this test is necessary
-                if change.name in "center":
-                    position_handler(*change.new[:2])
-                elif change.name == "zoom":
-                    position_handler(*self.center)
-        self.observe(observe)
 

@@ -8,11 +8,11 @@ import nest_asyncio
 
 from here_search.base import OneBoxBase
 from here_search.user import Profile
-from here_search.entities import Response
+from here_search.entities import Response, Ontology
 
 from .util import TableLogWidgetHandler
-from .request import SubmittableTextBox, TermsButtons, OntologyBox, OntologyButton
-from .response import SearchFeatureCollection, PositionMap
+from .request import SubmittableTextBox, TermsButtons, OntologyButtons, OntologyButton, PositionMap
+from .response import SearchFeatureCollection
 import here_search.widgets.design as design
 
 from typing import Callable, Awaitable, Tuple
@@ -57,7 +57,7 @@ class OneBoxMap(OneBoxBase):
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
         self.result_points_w: SearchFeatureCollection = None
         self.design = design or self.__class__.default_design
-        self.buttons_box_w = OntologyBox(buttons=ontology_buttons or [])
+        self.buttons_box_w = OntologyButtons(ontology=Ontology(), icons=[])
         self.result_list_w = tuple(out_class(widget=Output(),
                                         max_results_number=max(self.results_limit, self.suggestions_limit),
                                         result_queue=self.result_queue)
@@ -94,7 +94,7 @@ class OneBoxMap(OneBoxBase):
     def wait_for_submitted_value(self) -> Awaitable:
         return self.query_box_w.get_submitted_value_future()
 
-    def wait_for_selected_shortcut(self) -> Awaitable:
+    def wait_for_selected_ontology(self) -> Awaitable:
         return self.buttons_box_w.get_ontology_future()
 
     def handle_suggestion_list(self, autosuggest_resp: Response):
@@ -223,7 +223,7 @@ class OneBoxMap(OneBoxBase):
                        handle_key_strokes or self.handle_key_strokes,
                        handle_text_submissions or self.handle_text_submissions,
                        handle_result_selections or self.handle_result_selections,
-                       handle_shortcut_selections or self.handle_shortcut_selections)
+                       handle_shortcut_selections or self.handle_ontology_selections)
         self.show_logs()
 
     def __del__(self):

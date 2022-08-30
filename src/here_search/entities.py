@@ -47,13 +47,6 @@ class ResponseItem:
     data: dict = None
     rank: int = None
 
-@dataclass
-class Ontology:
-    name: str
-    categories: Optional[Sequence[str]] = None
-    food_types: Optional[Sequence[str]] = None
-    chains: Optional[Sequence[str]] = None
-
 
 class OntologyItem:
     def __init__(self, name: str,
@@ -75,5 +68,7 @@ class OntologyItem:
         return repr(self._tuple)
 
 
-def Ontology(items: Sequence[OntologyItem]):
+def Ontology(items: Sequence[OntologyItem]=None):
+    items = items or []
     return namedtuple("Ontology", [i.name for i in items])(*items)
+

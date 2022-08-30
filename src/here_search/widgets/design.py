@@ -1,8 +1,8 @@
 from ipywidgets import Box, HBox, VBox, Widget
 from here_map_widget import WidgetControl
 
-from .request import SubmittableTextBox, TermsButtons, OntologyBox
-from .response import PositionMap, SearchResultButtons, SearchResultJson
+from .request import SubmittableTextBox, TermsButtons, OntologyButtons, PositionMap
+from .response import SearchResultButtons, SearchResultJson
 
 from typing import List, Tuple
 
@@ -13,7 +13,7 @@ class Design:
     def widget(query_text: SubmittableTextBox,
                map: PositionMap,
                terms: TermsButtons,
-               buttons: OntologyBox,
+               buttons: OntologyButtons,
                out: Tuple[Box]) -> Widget:
         raise NotImplementedError()
 
@@ -22,10 +22,10 @@ class EmbeddedList(Design):
     out_classes = [SearchResultButtons]
     @staticmethod
     def widget(query_text: SubmittableTextBox,
-            map: PositionMap,
-            terms: TermsButtons,
-            buttons: OntologyBox,
-            out: Tuple[Box]) -> Widget:
+               map: PositionMap,
+               terms: TermsButtons,
+               buttons: OntologyButtons,
+               out: Tuple[Box]) -> Widget:
         """Map with an embedded search form and clickable result list"""
         if buttons:
             search_box = VBox([buttons, query_text, terms, out[0]], layout={'width': "280px"})
@@ -41,10 +41,10 @@ class Leftist(Design):
     out_classes = [SearchResultButtons]
     @staticmethod
     def widget(query_text: SubmittableTextBox,
-            map: PositionMap,
-            terms: TermsButtons,
-            buttons: OntologyBox,
-            out: Tuple[Box]) -> Widget:
+               map: PositionMap,
+               terms: TermsButtons,
+               buttons: OntologyButtons,
+               out: Tuple[Box]) -> Widget:
         """Map with a search form and clickable result list to its left side"""
         if buttons:
             search_box = VBox([buttons, query_text, terms, out[0]])
@@ -57,10 +57,10 @@ class MapJSON(Design):
     out_classes = [SearchResultButtons, SearchResultJson]
     @staticmethod
     def widget(query_text: SubmittableTextBox,
-          map: PositionMap,
-          terms: TermsButtons,
-          buttons: OntologyBox,
-          out: Tuple[Box]) -> Widget:
+               map: PositionMap,
+               terms: TermsButtons,
+               buttons: OntologyButtons,
+               out: Tuple[Box]) -> Widget:
         """Map with an embedded search form and clickable result list. The result list is duplicated as a JSON, on the right of the map"""
         if buttons:
             search_box = VBox([buttons, query_text, terms, out[0]], layout={'width': "280px"})
