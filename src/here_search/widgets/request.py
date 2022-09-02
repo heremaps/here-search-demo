@@ -1,18 +1,13 @@
 from IPython.display import display as Idisplay
 from here_map_widget import Map, Platform, ServiceNames, MapTileUrl, MapTile, TileLayer
-from ipywidgets import Widget, CallbackDispatcher, HBox, VBox, Text, Button, Layout, HTML
-from traitlets import observe
+from ipywidgets import HBox, VBox, Text, Button, Layout, HTML
 
-from here_search.entities import OntologyItem, Ontology
-from here_search.util import logger
+from here_search.entities import PlaceTaxonomyItem, PlaceTaxonomy
 
-from typing import Awaitable, Tuple, Callable, Optional, Sequence
+from typing import Awaitable, Tuple, Callable, Sequence
 from functools import reduce
 import asyncio
-from dataclasses import dataclass
-from enum import Enum, auto
-from functools import partial
-import re
+
 
 Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
 
@@ -94,7 +89,7 @@ class SubmittableTextBox(HBox):
         self.text_w.disabled = False
         self.lens_w.disabled = False
 
-    def get_key_stroke_future(self) -> Awaitable:
+    def get_text_change(self) -> Awaitable:
         """
         Returns an awaitable future set to the observed Text widget value
         :return: asyncio.Future instance
@@ -109,7 +104,7 @@ class SubmittableTextBox(HBox):
         self.observe_text(getvalue, 'value')
         return future
 
-    def get_submitted_value_future(self) -> Awaitable:
+    def get_text_submission(self) -> Awaitable:
         """
         Returns an awaitable future set to the submitted Text widget value
         :return: asyncio.Future instance
@@ -187,168 +182,50 @@ class TermsButtons(HBox):
                 button.description = ' '
 
 
-class OntologyButton(Button):
+class PlaceTaxonomyButton(Button):
     """
-    A Button returning an Ontology future
+    A Button returning an taxonomy future
     """
-    item: OntologyItem
+    item: PlaceTaxonomyItem
     default_icon = 'question'
     default_layout = {'width': '32px'}
 
-    def __init__(self, item: OntologyItem, icon: str, **kwargs):
+    def __init__(self, item: PlaceTaxonomyItem, icon: str, **kwargs):
         """
-        Creates a Button for an Ontology instance with a specific Font-Awesome icon.
+        Creates a Button for an taxonomy instance with a specific Font-Awesome icon.
         See: https://fontawesome.com/v5/search?m=free&s=regular
         And: https://use.fontawesome.com/releases/v5.12.0/fontawesome-free-5.12.0-web.zip
 
         :param icon: fontawesome-free v5.12.0 icon name (with fa- prefix) or text
-        :param ontology: Ontology instance
+        :param taxonomy: taxonomy instance
         :param kwargs: Button class other attributes
         """
         self.item = item
         if not icon:
-            kwargs.update({"icon": OntologyButton.default_icon})
+            kwargs.update({"icon": PlaceTaxonomyButton.default_icon})
         elif icon.startswith("fa-"):
             kwargs.update({"icon": icon[3:]})
         else:
             kwargs.update({"description": icon})
-        super().__init__(layout=OntologyButton.default_layout, **kwargs)
+        super().__init__(layout=PlaceTaxonomyButton.default_layout, **kwargs)
 
 
-class OntologyButtons(HBox):
-    default_buttons = [OntologyButton(item=OntologyItem(name="_"), icon="")]
+class PlaceTaxonomyButtons(HBox):
+    default_buttons = [PlaceTaxonomyButton(item=PlaceTaxonomyItem(name="_"), icon="")]
 
-    def __init__(self, ontology: Ontology, icons: Sequence[str]):
-        self.buttons = [OntologyButton(item, icon) for item, icon in zip(ontology._asdict().values(), icons)] or OntologyButtons.default_buttons
+    def __init__(self, taxonomy: PlaceTaxonomy, icons: Sequence[str]):
+        self.buttons = [PlaceTaxonomyButton(item, icon) for item, icon in zip(taxonomy._asdict().values(), icons)] or PlaceTaxonomyButtons.default_buttons
         HBox.__init__(self, self.buttons)
 
-    def get_ontology_future(self) -> Awaitable:
+    def get_taxonomy_item(self) -> Awaitable:
         future = asyncio.Future()
-        for button in self.buttons or OntologyButtons.default_buttons:
+        for button in self.buttons or PlaceTaxonomyButtons.default_buttons:
             def getvalue(clicked_button):
                 future.set_result(clicked_button.item)
                 for other_button in self.buttons:
                     other_button._click_handlers.callbacks.clear()
             button.on_click(getvalue)
         return future
-
-
-@dataclass
-class NearbySimpleParser:
-    language: str
-
-    class Mode(Enum):
-        TOKENS = auto()
-        TOKENS_SPACES = auto()
-        TOKENS_INCOMPLETE_CONJUNCTION = auto()   # tokens followed by first letters of conjunction
-        TOKENS_CONJUNCTION = auto()
-        TOKENS_CONJUNCTION_SPACES = auto()  # conjunction last, followed by spaces
-        TOKENS_CONJUNCTION_TOKENS = auto()   # conjunction surrounded by tokens
-
-    CONJUNCTIONS = {'cs': ['nedaleko'],
-                    'da': ['nærheden'],
-                    'de': ['bei', 'neben', 'nähe'],
-                    'el': ['κοντά σε'],
-                    'en': ['near', 'nearby', 'close to'],
-                    'es': ['cerca', 'junto'],
-                    'fi': ['lähellä paikkaa'],
-                    'fr': ['près de', 'proche de'],
-                    'it': ['vicino a'],
-                    'no': ['nærheten'],
-                    'pt': ['perto de'],
-                    'ru': ['рядом с'],
-                    'sv': ['nära'],
-                    'th': ['ใกล้กับ'],
-                    'uk': ['біля'],
-                    'vi': ['gần']}
-
-    CONJUNCTION_PARTS = {}
-    for language, terms in CONJUNCTIONS.items():
-        for term in terms:
-            for i in range(len(term)-1):
-                CONJUNCTION_PARTS.setdefault(language, {}).setdefault(term[:i+1], []).append(term)
-
-    @staticmethod
-    def __no_cunjunction_function(text) -> Tuple[Mode, str, str, str]:
-        return NearbySimpleParser.Mode.TOKENS, '', '', ''
-
-    @staticmethod
-    def __get_conjunction_mode(text: str, conjunctions: list, conjunction_parts: dict) -> Tuple[Mode, Optional[str], str, str]:
-        """
-        Example of auery parsing:
-        >>> text = '  sep  foo  sep  bar  sep  '
-        >>> for t in [text[:i+1] for i in range(len(text)-1)]:
-        ...   t = t.lstrip()
-        ...   print(f">{t}< {re.sub(' +', ' ', t).split(' ')} {re.sub(' +', ' ', t).partition(' sep ')}")
-        ...
-        >< [''] ('', '', '')                                                                                # TOKENS default
-        >< [''] ('', '', '')                                                                                #   ''
-        >s< ['s'] ('s', '', '')                                                                             #   ''
-        >se< ['se'] ('se', '', '')                                                                          #   ''
-        >sep< ['sep'] ('sep', '', '')                                                                       #   ''
-        >sep < ['sep', ''] ('sep ', '', '')                                                                 # TOKENS_SPACES last_token=='' and middle==''
-        >sep  < ['sep', ''] ('sep ', '', '')                                                                #   ''
-        >sep  f< ['sep', 'f'] ('sep f', '', '')                                                             # TOKENS
-        >sep  fo< ['sep', 'fo'] ('sep fo', '', '')                                                          #   ''
-        >sep  foo< ['sep', 'foo'] ('sep foo', '', '')                                                       #   ''
-        >sep  foo < ['sep', 'foo', ''] ('sep foo ', '', '')                                                 # TOKENS_SPACES
-        >sep  foo  < ['sep', 'foo', ''] ('sep foo ', '', '')                                                #   ''
-        >sep  foo  s< ['sep', 'foo', 's'] ('sep foo s', '', '')                                             # TOKENS_INCOMPLETE_CONJUNCTION middle=='' and last_token in conjunction_parts
-        >sep  foo  se< ['sep', 'foo', 'se'] ('sep foo se', '', '')                                          #   ''
-        >sep  foo  sep< ['sep', 'foo', 'sep'] ('sep foo sep', '', '')                                       # TOKENS_CONJUNCTION len(query_tokens)>1 and query_tokens[-1]==conjunction and middle==''
-        >sep  foo  sep < ['sep', 'foo', 'sep', ''] ('sep foo', ' sep ', '')                                 # TOKENS_CONJUNCTION_SPACES middle!='' and tail==''
-        >sep  foo  sep  < ['sep', 'foo', 'sep', ''] ('sep foo', ' sep ', '')                                #   ''
-        >sep  foo  sep  b< ['sep', 'foo', 'sep', 'b'] ('sep foo', ' sep ', 'b')                             # TOKENS_CONJUNCTION_TOKENS middle!='' and tail!=''
-        >sep  foo  sep  ba< ['sep', 'foo', 'sep', 'ba'] ('sep foo', ' sep ', 'ba')                          #   ''
-        >sep  foo  sep  bar< ['sep', 'foo', 'sep', 'bar'] ('sep foo', ' sep ', 'bar')                       #   ...
-        >sep  foo  sep  bar < ['sep', 'foo', 'sep', 'bar', ''] ('sep foo', ' sep ', 'bar ')
-        >sep  foo  sep  bar  < ['sep', 'foo', 'sep', 'bar', ''] ('sep foo', ' sep ', 'bar ')
-        >sep  foo  sep  bar  s< ['sep', 'foo', 'sep', 'bar', 's'] ('sep foo', ' sep ', 'bar s')
-        >sep  foo  sep  bar  se< ['sep', 'foo', 'sep', 'bar', 'se'] ('sep foo', ' sep ', 'bar se')
-        >sep  foo  sep  bar  sep< ['sep', 'foo', 'sep', 'bar', 'sep'] ('sep foo', ' sep ', 'bar sep')
-        >sep  foo  sep  bar  sep < ['sep', 'foo', 'sep', 'bar', 'sep', ''] ('sep foo', ' sep ', 'bar sep ') #   ''
-        """
-        norm_text = re.sub(' +', ' ', text.lstrip())
-        query_tails = {}
-        query_heads = {}
-        for conjunction in conjunctions:
-            query_head, query_middle, query_tail = norm_text.partition(f' {conjunction} ')
-            query_tail = query_tail.strip()
-            if query_middle:
-                query_tails[conjunction] = query_tail
-                query_heads[conjunction] = query_head
-
-        if not query_tails:
-            query_tokens = text.split(' ')
-            last_token = query_tokens[-1]
-            if last_token=='':
-                return NearbySimpleParser.Mode.TOKENS_SPACES, None, '', text
-            elif last_token in conjunctions and (query_head, query_middle, query_tail) == (norm_text, '', ''):
-                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION, last_token, '', text
-            elif last_token in conjunction_parts:
-                return NearbySimpleParser.Mode.TOKENS_INCOMPLETE_CONJUNCTION, conjunction_parts[last_token][0], '', text
-            else:
-                return NearbySimpleParser.Mode.TOKENS, None, '', text
-        else:
-            conjunction = min(query_tails)
-            query_tail = query_tails[conjunction]
-            query_head = query_heads[conjunction]
-            if query_tail == '':
-                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION_SPACES, None, '', ''
-            else:
-                return NearbySimpleParser.Mode.TOKENS_CONJUNCTION_TOKENS, conjunction, query_head, query_tail
-
-    def conjunction_mode_function(self) -> Callable:
-        if not self.language:
-            return self.__no_cunjunction_function
-        language = self.language.split('-')[0].lower()
-        if language not in NearbySimpleParser.CONJUNCTIONS:
-            return self.__no_cunjunction_function
-
-        conjunctions = NearbySimpleParser.CONJUNCTIONS[language]
-        conjunction_parts = NearbySimpleParser.CONJUNCTION_PARTS[language]
-
-        return partial(self.__get_conjunction_mode, conjunctions=conjunctions, conjunction_parts=conjunction_parts)
 
 
 class PositionMap(Map):
@@ -383,7 +260,7 @@ class PositionMap(Map):
                      layout = kvargs.pop('layout', PositionMap.default_layout))
         if position_handler:
             #self.set_position_handler(position_handler)
-            self.observe(position_handler)
+            self.set_position_handler(position_handler)
 
     def set_position_handler(self, position_handler: Callable[[float, float], None]):
         def observe(change):

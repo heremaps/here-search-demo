@@ -182,46 +182,13 @@ class SearchFeatureCollection(GeoJSON):
     bbox: Tuple[float, float, float, float]
 
     def __init__(self, resp: Response):
-        collection = {"type": "FeatureCollection", "features": []}
-        latitudes, longitudes = [], []
-        south, west, north, east = None, None, None, None
-        for item in resp.data["items"]:
-            if "position" not in item:
-                continue
-            longitude, latitude = item["position"]["lng"], item["position"]["lat"]
-            latitudes.append(latitude)
-            longitudes.append(longitude)
-            if "mapView" in item:
-                latitudes.append(item["mapView"]["north"])
-                latitudes.append(item["mapView"]["south"])
-                longitudes.append(item["mapView"]["west"])
-                longitudes.append(item["mapView"]["east"])
-            categories = [c["name"] for c in item["categories"]
-                          if c.get("primary")][0] if "categories" in item else None
-            collection["features"].append({"type": "Feature",
-                                           "geometry": {
-                                               "type": "Point",
-                                               "coordinates": [longitude, latitude]},
-                                           "properties": {"title": item["title"],
-                                                          "categories": categories}})
-            if False and "mapView" in item:
-                collection["features"].append({"type": "Feature",
-                                               "geometry": {
-                                                   "type": "Polygon",
-                                                   "coordinates":    [
-                                                       [ [item["mapView"]["west"], item["mapView"]["south"]],
-                                                         [item["mapView"]["east"], item["mapView"]["south"]],
-                                                         [item["mapView"]["east"], item["mapView"]["north"]],
-                                                         [item["mapView"]["west"], item["mapView"]["north"]],
-                                                         [item["mapView"]["west"], item["mapView"]["south"]] ]
-                                                   ]}})
-        if latitudes:
-            south, west, north, east = min(latitudes), min(longitudes), max(latitudes), max(longitudes)
-            collection["bbox"] = [south, west, north, east]
-            height = north-south
-            width = east-west
-            self.bbox = (south-height/8, north+height/8, east+width/8, west-width/8)
-            # [33.65, 49.46, 175.41, -109.68]
+        collection = resp.geojson()
+        bbox = resp.bbox()
+        if bbox:
+            bb_south, bb_west, bb_north, bb_east = collection["bbox"] = bbox
+            height = bb_north-bb_south
+            width = bb_east-bb_west
+            self.bbox = (bb_south-height/8, bb_north+height/8, bb_east+width/8, bb_west-width/8)
         else:
             self.bbox = None
 

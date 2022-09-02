@@ -188,7 +188,7 @@ class API:
         if food_types:
             params["foodTypes"] = ",".join(sorted(set(food_types or [])))
         if chains:
-            params["categories"] = ",".join(sorted(set(chains or [])))
+            params["chains"] = ",".join(sorted(set(chains or [])))
         params.update(kwargs)
         request = Request(endpoint=Endpoint.BROWSE,
                           url=base_url[Endpoint.BROWSE],

@@ -3,7 +3,7 @@ from aiohttp import ClientSession
 from . import __version__
 from .user import Profile, Default
 from .api import API
-from .entities import Response, Endpoint, ResponseItem, Ontology
+from .entities import Response, Endpoint, ResponseItem, PlaceTaxonomyItem
 from .util import Profiler
 
 from typing import Tuple, Awaitable, Callable
@@ -36,7 +36,7 @@ class OneBoxSimple:
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:
-                query_text = await self.wait_for_new_key_stroke()
+                query_text = await self.wait_for_text_extension()
                 if query_text:
                     await self._do_autosuggest(session, query_text)
                 else:
@@ -48,20 +48,19 @@ class OneBoxSimple:
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:
-                query_text = await self.wait_for_submitted_value()
+                query_text = await self.wait_for_text_submission()
                 if query_text:
                     await self._do_discover(session, query_text)
 
-    async def handle_ontology_selections(self):
+    async def handle_taxonomy_selections(self):
         """
         This method is called for each shortcut button selected.
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:
-                ontology: Ontology = await self.wait_for_selected_ontology()
-                if ontology:
-                    print(ontology)
-                    await self._do_browse(session, ontology)
+                taxonomy_item: PlaceTaxonomyItem = await self.wait_for_taxonomy_selection()
+                if taxonomy_item:
+                    await self._do_browse(session, taxonomy_item)
 
     async def _do_autosuggest(self, session, query_text, x_headers: dict=None) -> None:
         latitude, longitude = self.search_center
@@ -78,7 +77,7 @@ class OneBoxSimple:
         discover_resp = await discover_task
         self.handle_result_list(discover_resp)
 
-    async def _do_browse(self, session, ontology, x_headers: dict=None) -> None:
+    async def _do_browse(self, session, taxonomy_item, x_headers: dict=None) -> None:
         latitude, longitude = self.search_center
         browse_task = asyncio.ensure_future(
             self.api.browse(latitude, longitude,
@@ -86,14 +85,14 @@ class OneBoxSimple:
                             session=session,
                             lang=self.language,
                             limit=self.results_limit,
-                            **ontology.mapping))
+                            **taxonomy_item.mapping))
         browse_resp = await browse_task
         self.handle_result_list(browse_resp)
 
     def run(self) -> "OneBoxSimple":
         self.tasks.extend([asyncio.ensure_future(self.handle_key_strokes()),
-                      asyncio.ensure_future(self.handle_text_submissions()),
-                      asyncio.ensure_future(self.handle_ontology_selections())])
+                           asyncio.ensure_future(self.handle_text_submissions()),
+                           asyncio.ensure_future(self.handle_taxonomy_selections())])
         return self
 
     async def stop(self):
@@ -104,13 +103,13 @@ class OneBoxSimple:
         loop = asyncio.get_running_loop()
         loop.run_until_complete(self.stop())
 
-    def wait_for_new_key_stroke(self) -> Awaitable:
+    def wait_for_text_extension(self) -> Awaitable:
         raise NotImplementedError()
 
-    def wait_for_submitted_value(self) -> Awaitable:
+    def wait_for_text_submission(self) -> Awaitable:
         raise NotImplementedError()
 
-    def wait_for_selected_ontology(self) -> Awaitable:
+    def wait_for_taxonomy_selection(self) -> Awaitable:
         raise NotImplementedError()
 
     def handle_suggestion_list(self, response: Response) -> None:
@@ -145,7 +144,7 @@ class OneBoxBase:
 
         self.user_profile = user_profile or Default()
         self.api = api or API()
-        self.search_center = self._get_initial_search_center()
+        self.set_search_center(*self._get_initial_search_center())
         self.language = None
         self.initial_query = initial_query
         self.results_limit = results_limit or self.__class__.default_results_limit
@@ -180,7 +179,7 @@ class OneBoxBase:
                 if self.language is None:
                     self.language = await self.get_preferred_location_language(session)
             while True:
-                query_text = await self.wait_for_new_key_stroke()
+                query_text = await self.wait_for_text_extension()
                 if query_text is None:
                     self.result_queue.put_nowait(None)
                     break
@@ -205,7 +204,7 @@ class OneBoxBase:
                 await self._do_discover(self.initial_query, session, x_headers)
 
             while True:
-                query_text = await self.wait_for_submitted_value()
+                query_text = await self.wait_for_text_submission()
 
                 if query_text is None:
                     self._do_profiler_stop()
@@ -264,21 +263,21 @@ class OneBoxBase:
                 else:
                     await self._do_lookup(session, item, self.user_profile.share_experience, self.x_headers)
 
-    async def handle_ontology_selections(self):
+    async def handle_taxonomy_selections(self):
         """
         This method is called for each shortcut button selected.
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             while True:
-                ontology: Ontology = await self.wait_for_selected_ontology()
-                if ontology is None:
+                taxonomy_item: PlaceTaxonomyItem = await self.wait_for_taxonomy_selection()
+                if taxonomy_item is None:
                     break
-                if not ontology:
+                if not taxonomy_item:
                     continue
 
                 x_headers = self.x_headers.copy()
                 x_headers.pop('X-AS-Session-ID', None)
-                await self._do_browse(session, ontology, {})
+                await self._do_browse(session, taxonomy_item, x_headers)
 
     async def _do_discover(self, session, query_text, x_headers) -> set:
         latitude, longitude = self.search_center
@@ -322,21 +321,22 @@ class OneBoxBase:
     async def share_autosuggest_result_selection(self, item, session, x_headers) -> None:
         pass
 
-    async def _do_browse(self, session, ontology, x_headers) -> set:
+    async def _do_browse(self, session, taxonomy_item, x_headers) -> set:
         latitude, longitude = self.search_center
         extra_params = self.api.options.get(Endpoint.BROWSE, {}).copy()
         extra_params.update(self.extra_api_params.get(Endpoint.BROWSE, {}))
         extra_params.update(self.user_profile.api_options.get(Endpoint.BROWSE, {}))
-        browse_resp = await asyncio.ensure_future(
+        browse_task = asyncio.ensure_future(
             self.api.browse(latitude, longitude,
                             x_headers=x_headers,
                             session=session,
-                            categories=ontology.categories,
-                            food_types=ontology.food_types,
-                            chains=ontology.chains,
+                            categories=taxonomy_item.categories,
+                            food_types=taxonomy_item.food_types,
+                            chains=taxonomy_item.chains,
                             lang=self.language,
                             limit=self.results_limit,
                             **extra_params))
+        browse_resp = await browse_task
         self.handle_result_list(browse_resp)
         return {item["address"]["countryCode"] for item in browse_resp.data["items"]}
 
@@ -411,6 +411,9 @@ class OneBoxBase:
             except RuntimeError:
                 pass
 
+    def set_search_center(self, latitude: float, longitude: float):
+        self.search_center = latitude, longitude
+
     def renew_session_id(self):
         if self.user_profile.share_experience:
             self.x_headers['X-AS-Session-ID'] = str(uuid.uuid4())
@@ -420,15 +423,15 @@ class OneBoxBase:
 
     def run(self,
             handle_user_profile_setup: Callable=None,
-            handle_key_strokes: Callable=None, 
-            handle_text_submissions: Callable=None, 
+            handle_key_strokes: Callable=None,
+            handle_text_submissions: Callable=None,
             handle_result_selections: Callable=None,
-            handle_ontology_selections: Callable=None):
+            handle_taxonomy_selections: Callable=None):
 
         asyncio.ensure_future((handle_key_strokes or self.handle_key_strokes)())
         asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
         asyncio.ensure_future((handle_result_selections or self.handle_result_selections)())
-        asyncio.ensure_future((handle_ontology_selections or self.handle_ontology_selections)())
+        asyncio.ensure_future((handle_taxonomy_selections or self.handle_taxonomy_selections)())
 
     async def __astop(self):
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
@@ -436,19 +439,19 @@ class OneBoxBase:
                     self.api.signals(session, resource_id="application", rank=0, correlation_id="noCorrelationID",
                                      action="end", userId=self.x_headers['X-User-ID']))
 
-    def wait_for_new_key_stroke(self) -> Awaitable:
+    def wait_for_text_extension(self) -> Awaitable:
         raise NotImplementedError()
 
-    def wait_for_submitted_value(self) -> Awaitable:
+    def wait_for_text_submission(self) -> Awaitable:
+        raise NotImplementedError()
+
+    def wait_for_taxonomy_selection(self) -> Awaitable:
         raise NotImplementedError()
 
     def handle_suggestion_list(self, response: Response) -> None:
         raise NotImplementedError()
 
     def handle_result_list(self, response: Response) -> None:
-        raise NotImplementedError()
-
-    def wait_for_selected_ontology(self) -> Awaitable:
         raise NotImplementedError()
 
     def handle_result_details(self, response: Response) -> None:

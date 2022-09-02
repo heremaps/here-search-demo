@@ -1,8 +1,23 @@
 from IPython.display import display as Idisplay, Markdown
 from IPython.core.interactiveshell import InteractiveShell
-from ipywidgets import Output
+from ipywidgets import Output as OutputBase
 
 import logging
+
+
+class Output(OutputBase):
+    default_height = 30
+    out_stream = lambda t: {'name': 'stdout', 'output_type': 'stream', 'text': t}
+
+    def __init__(self, **kwargs):
+        height = kwargs.get("height", Output.default_height)
+        super().__init__(layout={'height': f'{height}px', 'border': '1px solid black', 'overflow': 'auto', 'white-space': 'nowrap'})
+
+    def replace(self, message: str):
+        self.outputs = (Output.out_stream(message), )
+
+    def add(self, message: str):
+        self.outputs = (Output.out_stream(message), ) + self.out.outputs
 
 
 class LogWidgetHandler(logging.Handler):
@@ -13,24 +28,12 @@ class LogWidgetHandler(logging.Handler):
 
     def __init__(self, *args, **kwargs):
         super(LogWidgetHandler, self).__init__(*args, **kwargs)
-        layout = {
-            'width': '100%',
-            'height': '160px',
-            'border': '1px solid black',
-            'overflow': 'auto',
-            'white-space': 'nowrap'
-        }
-        self.out = Output(layout=layout)
+        self.out = Output(height=160)
 
     def emit(self, record):
         """ Overload of logging.Handler method """
         formatted_record = self.format(record)
-        new_output = {
-            'name': 'stdout',
-            'output_type': 'stream',
-            'text': formatted_record+'\n'
-        }
-        self.out.outputs = (new_output, ) + self.out.outputs
+        self.out.add(formatted_record)
 
     def show_logs(self):
         """ Show the logs """

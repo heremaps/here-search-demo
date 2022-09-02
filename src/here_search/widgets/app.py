@@ -8,14 +8,14 @@ import nest_asyncio
 
 from here_search.base import OneBoxBase
 from here_search.user import Profile
-from here_search.entities import Response, Ontology
+from here_search.entities import Response, taxonomy, taxonomy_icons
 
 from .util import TableLogWidgetHandler
-from .request import SubmittableTextBox, TermsButtons, OntologyButtons, OntologyButton, PositionMap
+from .request import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons, PositionMap
 from .response import SearchFeatureCollection
 import here_search.widgets.design as design
 
-from typing import Callable, Awaitable, Tuple
+from typing import Callable, Awaitable
 import asyncio
 import logging
 
@@ -30,13 +30,14 @@ class OneBoxMap(OneBoxBase):
     default_placeholder = "free text"
     default_output_format = 'text'
     default_design = design.EmbeddedList
+    default_taxonomy, default_icons = taxonomy, taxonomy_icons
 
     def __init__(self,
                  user_profile: Profile=None,
                  results_limit: int=None,
                  suggestions_limit: int=None,
                  terms_limit: int=None,
-                 ontology_buttons: Tuple[OntologyButton]=None,
+                 place_taxonomy_buttons: PlaceTaxonomyButtons=None,
                  extra_api_params: dict=None,
                  design: Callable=None,
                  **kwargs):
@@ -57,10 +58,10 @@ class OneBoxMap(OneBoxBase):
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
         self.result_points_w: SearchFeatureCollection = None
         self.design = design or self.__class__.default_design
-        self.buttons_box_w = OntologyButtons(ontology=Ontology(), icons=[])
+        self.buttons_box_w = place_taxonomy_buttons or PlaceTaxonomyButtons(taxonomy=OneBoxMap.default_taxonomy, icons=OneBoxMap.default_icons)
         self.result_list_w = tuple(out_class(widget=Output(),
-                                        max_results_number=max(self.results_limit, self.suggestions_limit),
-                                        result_queue=self.result_queue)
+                                             max_results_number=max(self.results_limit, self.suggestions_limit),
+                                             result_queue=self.result_queue)
                               for out_class in self.design.out_classes)
 
         self.log_handler = TableLogWidgetHandler()
@@ -74,28 +75,17 @@ class OneBoxMap(OneBoxBase):
         Initialisation of the asynchronous parts of OneBoxMap. Calls in OneBoxMap.run()
         :return:
         """
-        self.map_w = PositionMap(api_key=self.api.api_key, center=self.search_center, position_handler=self.search_center_observer())
+        self.map_w = PositionMap(api_key=self.api.api_key, center=self.search_center, position_handler=self.set_search_center)
         self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.buttons_box_w, self.result_list_w)
 
-    def search_center_observer(self):
-        def observe(change):
-            if change.type == "change":
-                if change.name in "center":
-                    latitude, longitude = change.new[:2]
-                    self.search_center = round(latitude, 5), round(longitude, 5)
-                elif change.name == "zoom":
-                    latitude, longitude = self.map_w.center
-                    self.search_center = round(latitude, 5), round(longitude, 5)
-        return observe
+    def wait_for_text_extension(self) -> Awaitable:
+        return self.query_box_w.get_text_change()
 
-    def wait_for_new_key_stroke(self) -> Awaitable:
-        return self.query_box_w.get_key_stroke_future()
+    def wait_for_text_submission(self) -> Awaitable:
+        return self.query_box_w.get_text_submission()
 
-    def wait_for_submitted_value(self) -> Awaitable:
-        return self.query_box_w.get_submitted_value_future()
-
-    def wait_for_selected_ontology(self) -> Awaitable:
-        return self.buttons_box_w.get_ontology_future()
+    def wait_for_taxonomy_selection(self) -> Awaitable:
+        return self.buttons_box_w.get_taxonomy_item()
 
     def handle_suggestion_list(self, autosuggest_resp: Response):
         """
@@ -209,7 +199,7 @@ class OneBoxMap(OneBoxBase):
             handle_key_strokes: Callable=None,
             handle_text_submissions: Callable=None,
             handle_result_selections: Callable=None,
-            handle_shortcut_selections: Callable=None):
+            handle_taxonomy_selections: Callable=None):
 
         nest_asyncio.apply()
         try:
@@ -223,7 +213,7 @@ class OneBoxMap(OneBoxBase):
                        handle_key_strokes or self.handle_key_strokes,
                        handle_text_submissions or self.handle_text_submissions,
                        handle_result_selections or self.handle_result_selections,
-                       handle_shortcut_selections or self.handle_ontology_selections)
+                       handle_taxonomy_selections or self.handle_taxonomy_selections)
         self.show_logs()
 
     def __del__(self):

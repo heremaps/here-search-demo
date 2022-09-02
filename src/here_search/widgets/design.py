@@ -1,7 +1,7 @@
 from ipywidgets import Box, HBox, VBox, Widget
 from here_map_widget import WidgetControl
 
-from .request import SubmittableTextBox, TermsButtons, OntologyButtons, PositionMap
+from .request import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons, PositionMap
 from .response import SearchResultButtons, SearchResultJson
 
 from typing import List, Tuple
@@ -13,7 +13,7 @@ class Design:
     def widget(query_text: SubmittableTextBox,
                map: PositionMap,
                terms: TermsButtons,
-               buttons: OntologyButtons,
+               buttons: PlaceTaxonomyButtons,
                out: Tuple[Box]) -> Widget:
         raise NotImplementedError()
 
@@ -24,7 +24,7 @@ class EmbeddedList(Design):
     def widget(query_text: SubmittableTextBox,
                map: PositionMap,
                terms: TermsButtons,
-               buttons: OntologyButtons,
+               buttons: PlaceTaxonomyButtons,
                out: Tuple[Box]) -> Widget:
         """Map with an embedded search form and clickable result list"""
         if buttons:
@@ -43,7 +43,7 @@ class Leftist(Design):
     def widget(query_text: SubmittableTextBox,
                map: PositionMap,
                terms: TermsButtons,
-               buttons: OntologyButtons,
+               buttons: PlaceTaxonomyButtons,
                out: Tuple[Box]) -> Widget:
         """Map with a search form and clickable result list to its left side"""
         if buttons:
@@ -59,7 +59,7 @@ class MapJSON(Design):
     def widget(query_text: SubmittableTextBox,
                map: PositionMap,
                terms: TermsButtons,
-               buttons: OntologyButtons,
+               buttons: PlaceTaxonomyButtons,
                out: Tuple[Box]) -> Widget:
         """Map with an embedded search form and clickable result list. The result list is duplicated as a JSON, on the right of the map"""
         if buttons:
