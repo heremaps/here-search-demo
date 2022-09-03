@@ -6,6 +6,7 @@ from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectM
 from here_map_widget import GeoJSON
 
 from here_search.entities import Response, ResponseItem, Endpoint
+from .request import PositionMap
 
 from typing import Tuple, List
 from dataclasses import dataclass
@@ -178,28 +179,24 @@ class SearchResultRadioButtons(SearchResultList):
         return buttons
 
 
-class SearchFeatureCollection(GeoJSON):
-    bbox: Tuple[float, float, float, float]
+class ResponseMap(PositionMap):
+    minimum_zoom_level = 11
+    default_point_style = {"strokeColor": "white", "lineWidth": 1, "fillColor": "blue", "fillOpacity": 0.7, "radius": 7}
 
-    def __init__(self, resp: Response):
-        collection = resp.geojson()
-        bbox = resp.bbox()
-        if bbox:
-            bb_south, bb_west, bb_north, bb_east = collection["bbox"] = bbox
-            height = bb_north-bb_south
-            width = bb_east-bb_west
-            self.bbox = (bb_south-height/8, bb_north+height/8, bb_east+width/8, bb_west-width/8)
-        else:
-            self.bbox = None
+    def __init__(self, **kwargs):
+        self.collection = None
+        super().__init__(**kwargs)
 
-        GeoJSON.__init__(self, data=collection,
-                         show_bubble=True,
-                         point_style={
-                             "strokeColor": "white",
-                             "lineWidth": 1,
-                             "fillColor": "blue",
-                             "fillOpacity": 0.7,
-                             "radius": 7}
-                         )
-
+    def display(self, resp: Response):
+        if self.collection:
+            self.remove_layer(self.collection)
+        self.collection = GeoJSON(data=resp.geojson(), show_bubble=True, point_style=ResponseMap.default_point_style)
+        self.add_layer(self.collection)
+        south, north, east, west = resp.bbox()
+        height = north-south
+        width = east-west
+        # https://github.com/heremaps/here-map-widget-for-jupyter/issues/37
+        self.bounds = south-height/8, north+height/8, east+width/8, west-width/8
+        if len(resp.data.get("items", [])) == 1:
+            self.zoom = ResponseMap.minimum_zoom_level
 

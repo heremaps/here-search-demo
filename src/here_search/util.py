@@ -1,8 +1,4 @@
-from aiohttp import ClientSession
-try:
-    from pyinstrument import Profiler
-except ImportError:
-    Profiler = None
+from aiohttp import ClientSession, ClientConnectorError
 
 from importlib import reload
 import logging
@@ -21,8 +17,14 @@ def setLevel(level: int):
 
 
 async def get_lat_lon(session: ClientSession) -> Tuple[float, float]:
-    async with session.get('https://get.geojs.io/v1/ip/geo.json') as response:
-        geo = await response.json()
-        return float(geo["latitude"]), float(geo["longitude"])
+    geojs = 'https://get.geojs.io/v1/ip/geo.json'
+    try:
+        async with session.get(geojs) as response:
+            geo = await response.json()
+            return float(geo["latitude"]), float(geo["longitude"])
+    except ClientConnectorError as e:
+        logger.warning(f"Error connecting to {geojs}")
+        return
+
 
 

@@ -1,18 +1,14 @@
 from IPython.display import display as Idisplay
 from ipywidgets import Output
-from flexpolyline import decode
-from here_map_widget import LineString as LineStringW, Polyline as PolylineW, Polygon as PolygonW, GeoPolygon as GeoPolygonW
-from geopandas import GeoSeries
-from shapely.geometry import LineString
 import nest_asyncio
 
 from here_search.base import OneBoxBase
 from here_search.user import Profile
-from here_search.entities import Response, taxonomy, taxonomy_icons
+from here_search.entities import Response, PlaceTaxonomyExample
 
 from .util import TableLogWidgetHandler
-from .request import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons, PositionMap
-from .response import SearchFeatureCollection
+from .request import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons
+from .response import FeatureCollection, ResponseMap
 import here_search.widgets.design as design
 
 from typing import Callable, Awaitable
@@ -25,12 +21,11 @@ class OneBoxMap(OneBoxBase):
     default_results_limit = 20
     default_suggestions_limit = 5
     default_terms_limit = 3
-    minimum_zoom_level = 11
     default_search_box_layout = {'width': '240px'}
     default_placeholder = "free text"
     default_output_format = 'text'
     default_design = design.EmbeddedList
-    default_taxonomy, default_icons = taxonomy, taxonomy_icons
+    default_taxonomy, default_icons = PlaceTaxonomyExample.taxonomy, PlaceTaxonomyExample.icons
 
     def __init__(self,
                  user_profile: Profile=None,
@@ -56,7 +51,6 @@ class OneBoxMap(OneBoxBase):
                                               placeholder=kwargs.pop('placeholder', self.__class__.default_placeholder),
                                               **kwargs)
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
-        self.result_points_w: SearchFeatureCollection = None
         self.design = design or self.__class__.default_design
         self.buttons_box_w = place_taxonomy_buttons or PlaceTaxonomyButtons(taxonomy=OneBoxMap.default_taxonomy, icons=OneBoxMap.default_icons)
         self.result_list_w = tuple(out_class(widget=Output(),
@@ -65,17 +59,7 @@ class OneBoxMap(OneBoxBase):
                               for out_class in self.design.out_classes)
 
         self.log_handler = TableLogWidgetHandler()
-
-        # Below variable will be actually initialized in __ainit method.
-        self.map_w = None
-        self.app_design_w = None
-
-    async def __ainit(self):
-        """
-        Initialisation of the asynchronous parts of OneBoxMap. Calls in OneBoxMap.run()
-        :return:
-        """
-        self.map_w = PositionMap(api_key=self.api.api_key, center=self.search_center, position_handler=self.set_search_center)
+        self.map_w = ResponseMap(api_key=self.api.api_key, center=self.search_center, position_handler=self.set_search_center)
         self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.buttons_box_w, self.result_list_w)
 
     def wait_for_text_extension(self) -> Awaitable:
@@ -113,9 +97,8 @@ class OneBoxMap(OneBoxBase):
         """
         for result_list_w in self.result_list_w:
             result_list_w.display(discover_resp)
-        self.display_result_map(discover_resp, update_search_center=True)
+        self.display_result_map(discover_resp)
         self.clear_query_text()
-        self.renew_session_id()
 
     def handle_result_details(self, lookup_resp: Response):
         """
@@ -126,7 +109,7 @@ class OneBoxMap(OneBoxBase):
         if len(self.result_list_w) > 1:
             self.result_list_w[1].display(lookup_resp)
         lookup_resp.data = {"items": [lookup_resp.data]}
-        self.display_result_map(lookup_resp, update_search_center=True)
+        self.display_result_map(lookup_resp)
 
     def display_terms(self, autosuggest_resp: Response):
         terms = {term['term']: None for term in autosuggest_resp.data.get('queryTerms', [])}
@@ -136,52 +119,12 @@ class OneBoxMap(OneBoxBase):
         for result_list_w in self.result_list_w:
             result_list_w.display(autosuggest_resp)
 
-        search_feature = SearchFeatureCollection(autosuggest_resp)
-        if search_feature.bbox:
-            if self.result_points_w:
-                self.map_w.remove_layer(self.result_points_w)
-            self.result_points_w = search_feature
-            self.map_w.add_layer(self.result_points_w)
-        #self.display_result_map(autosuggest_resp, update_search_center=False)
-
     def clear_query_text(self):
         self.query_box_w.text_w.value = ''
         self.query_terms_w.set([])
 
-    def display_result_map(self, resp: Response, update_search_center: bool=False):
-        if self.result_points_w:
-            self.map_w.remove_layer(self.result_points_w)
-
-        self.result_points_w = SearchFeatureCollection(resp)
-        self.map_w.add_layer(self.result_points_w)
-        route_pg = self._get_route_polygon(resp)
-        if route_pg:
-            self.map_w.add_object(route_pg)
-        if self.result_points_w.bbox:
-            self.map_w.bounds = self.result_points_w.bbox
-            if len(resp.data["items"]) == 1:
-                self.map_w.zoom = OneBoxMap.minimum_zoom_level
-            latitude, longitude = self.map_w.center
-            self.search_center = round(latitude, 5), round(longitude, 5)
-
-    def _get_route_polyline(self, resp: Response) -> PolylineW:
-        if "route" in resp.req.params:
-            encoded = resp.req.params["route"][0].split(";")[0]
-            points = [p for ps in decode(encoded) for p in [ps[0], ps[1], 0]]
-            ls = LineStringW(points=points)
-            pl = PolylineW(object=ls, style={"lineWidth": 3})
-            return pl
-
-    def _get_route_polygon(self, resp: Response) -> PolygonW:
-        if "route" in resp.req.params:
-            encoded_width = resp.req.params["route"][0].split(";")
-            encoded = encoded_width[0]
-            width = int(encoded_width[1].split("=")[1]) if len(encoded_width) > 1 else 1000
-            points = [ps[:2] for ps in decode(encoded)]
-            gs = GeoSeries(LineString(points), crs = "epsg:4326")
-            pg = gs.to_crs("epsg:3174").buffer(width).to_crs("epsg:4326")
-            l = [p for ps in pg.exterior.tolist()[0].coords for p in [ps[0], ps[1], 0]]
-            return PolygonW(object=GeoPolygonW(linestring=LineStringW(points=l)), style={"lineWidth": 3}, draggable=False)
+    def display_result_map(self, resp: Response):
+        self.map_w.display(resp)
 
     def show_logs(self, level: int=None) -> "OneBoxMap":
         self.logger.addHandler(self.log_handler)
@@ -206,7 +149,6 @@ class OneBoxMap(OneBoxBase):
             loop = asyncio.get_running_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
-        loop.run_until_complete(self.__ainit())
         Idisplay(self.app_design_w)
         OneBoxBase.run(self,
                        handle_user_profile_setup,

@@ -214,7 +214,7 @@ class PlaceTaxonomyButtons(HBox):
     default_buttons = [PlaceTaxonomyButton(item=PlaceTaxonomyItem(name="_"), icon="")]
 
     def __init__(self, taxonomy: PlaceTaxonomy, icons: Sequence[str]):
-        self.buttons = [PlaceTaxonomyButton(item, icon) for item, icon in zip(taxonomy._asdict().values(), icons)] or PlaceTaxonomyButtons.default_buttons
+        self.buttons = [PlaceTaxonomyButton(item, icon) for item, icon in zip(taxonomy.items.values(), icons)] or PlaceTaxonomyButtons.default_buttons
         HBox.__init__(self, self.buttons)
 
     def get_taxonomy_item(self) -> Awaitable:

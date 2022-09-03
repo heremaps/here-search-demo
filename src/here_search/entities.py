@@ -42,6 +42,10 @@ class Response:
         else:
             return [i["title"] for i in self.data["items"]]
 
+    @property
+    def terms(self):
+        return list({term['term']: None for term in self.data.get('queryTerms', [])}.keys())
+
     def bbox(self) -> Optional[Tuple[float, float, float, float]]:
         """
         Returns response bounding rectangle (south latitude, north latitude, east longitude, west longitude)
@@ -59,7 +63,7 @@ class Response:
                 longitudes.append(item["mapView"]["west"])
                 longitudes.append(item["mapView"]["east"])
         if latitudes:
-            return min(latitudes), min(longitudes), max(latitudes), max(longitudes)
+            return min(latitudes), max(latitudes), max(longitudes), min(longitudes)
         else:
             return None
 
@@ -112,21 +116,35 @@ class PlaceTaxonomyItem:
         return f"{self.name}({self.categories}, {self.food_types}, {self.chains})"
 
 
-def PlaceTaxonomy(items: Sequence[PlaceTaxonomyItem]=None):
-    items = items or []
-    return namedtuple("PlaceTaxonomy", [i.name for i in items])(*items)
+class PlaceTaxonomy:
+    def __init__(self, name: str, items: Sequence[PlaceTaxonomyItem]):
+        self.name = name
+        self.items = {i.name: i for i in items or []}
+
+    def __getattr__(self, item_name: str):
+        return self.items[item_name]
+
+    def __repr__(self):
+        items = ", ".join(map(str, self.items.values()))
+        return f"{self.name}({items})"
 
 
-taxonomy_items, taxonomy_icons = zip(*[
-    (PlaceTaxonomyItem("gas",     ["700-7600-0000",
-                                   "700-7600-0116",
-                                   "700-7600-0444"], None,       None),    "fa-gas-pump"),
-    (PlaceTaxonomyItem("eat",     ["100"],           None,       None),    "fa-utensils"),
-    (PlaceTaxonomyItem("sleep",   ["500-5000"],      None,       None),    "fa-bed"),
-    (PlaceTaxonomyItem("park",    ["400-4300",
-                                   "800-8500"],      None,       None),    "fa-parking"),
-    (PlaceTaxonomyItem("ATM",     ["700-7010-0108"], None,       None),    "fa-euro-sign"),
-    (PlaceTaxonomyItem("pizza",    None,            ["800-057"], None),    "fa-pizza-slice"),
-    (PlaceTaxonomyItem("fastfood", None,             None,      ["1566",
-                                                                 "1498"]), "fa-hamburger")])
-taxonomy = PlaceTaxonomy(taxonomy_items)
+class PlaceTaxonomyExample:
+    items, icons = zip(*[
+        #                --------------------------------------------------------------------
+        #                | item name | categories     | food types | chains  | icon         |
+        #                --------------------------------------------------------------------
+        (PlaceTaxonomyItem("gas",     ["700-7600-0000",
+                                       "700-7600-0116",
+                                       "700-7600-0444"], None,       None),    "fa-gas-pump"),
+        (PlaceTaxonomyItem("eat",     ["100"],           None,       None),    "fa-utensils"),
+        (PlaceTaxonomyItem("sleep",   ["500-5000"],      None,       None),    "fa-bed"),
+        (PlaceTaxonomyItem("park",    ["400-4300",
+                                       "800-8500"],      None,       None),    "fa-parking"),
+        (PlaceTaxonomyItem("ATM",     ["700-7010-0108"], None,       None),    "fa-euro-sign"),
+        (PlaceTaxonomyItem("pizza",    None,            ["800-057"], None),    "fa-pizza-slice"),
+        (PlaceTaxonomyItem("fastfood", None,             None,      ["1566",
+                                                                     "1498"]), "fa-hamburger")])
+    taxonomy = PlaceTaxonomy("example", items)
+
+

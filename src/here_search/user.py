@@ -27,13 +27,11 @@ class Profile:
 
     def __init__(self,
                  use_positioning: bool,
-                 share_experience: bool,
                  api_options: APIOptions=None,
                  languages: dict=None,
                  name: str=None):
         """
         :param use_position: Mandatory opt-in/out about position usage
-        :param share_experience: Mandatory opt-in/out about activity usage
         :param api: Optional API instance
         :param languages: Optional user language preferences
         :param name: Optional user name
@@ -42,7 +40,6 @@ class Profile:
         self.id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{self.name}{uuid.getnode()}'))
 
         self.__use_positioning = use_positioning
-        self.__share_experience = share_experience
 
         self.preferred_languages = languages or {}
         self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name])
@@ -59,10 +56,6 @@ class Profile:
     @property
     def use_positioning(self):
         return self.__use_positioning
-
-    @property
-    def share_experience(self):
-        return self.__share_experience
 
     def send_signal(self, body: list):
         pass
@@ -118,4 +111,4 @@ class Profile:
 
 class Default(Profile):
     def __init__(self, **kwargs):
-        Profile.__init__(self, use_positioning=True, share_experience=True, **kwargs)
+        Profile.__init__(self, use_positioning=True, **kwargs)

@@ -4,7 +4,6 @@ from . import __version__
 from .user import Profile, Default
 from .api import API
 from .entities import Response, Endpoint, ResponseItem, PlaceTaxonomyItem
-from .util import Profiler
 
 from typing import Tuple, Awaitable, Callable
 import asyncio
@@ -140,12 +139,10 @@ class OneBoxBase:
                  result_queue: asyncio.Queue=None,
                  **kwargs):
 
-        self._do_profiler_start(kwargs)
-
         self.user_profile = user_profile or Default()
         self.api = api or API()
-        self.set_search_center(*self._get_initial_search_center())
-        self.language = None
+        self.search_center = self.user_profile.current_latitude, self.user_profile.current_longitude
+        self.language = self.user_profile.language
         self.initial_query = initial_query
         self.results_limit = results_limit or self.__class__.default_results_limit
         self.suggestions_limit = suggestions_limit or self.__class__.default_suggestions_limit
@@ -155,29 +152,12 @@ class OneBoxBase:
 
         self.x_headers = None
         self.headers = OneBoxBase.default_headers
-        if self.user_profile.share_experience:
-            self.x_headers = {'X-User-ID': self.user_profile.id,
-                              'X-AS-Session-ID': str(uuid.uuid4())}
-            self.headers.update(self.x_headers)
-
-    def _get_initial_search_center(self) -> Tuple[float, float]:
-        """
-        Returns the initial search center used at application start
-        :return: a (latitude, longitude) tuple of floats
-        """
-        return self.user_profile.current_latitude, self.user_profile.current_longitude
 
     async def handle_key_strokes(self):
         """
         This method repeatedly waits on key strokes in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
-            x_headers = self.x_headers
-            if self.user_profile.share_experience:
-                await self.signal_application_start()
-            if not self.initial_query:
-                if self.language is None:
-                    self.language = await self.get_preferred_location_language(session)
             while True:
                 query_text = await self.wait_for_text_extension()
                 if query_text is None:
@@ -185,12 +165,9 @@ class OneBoxBase:
                     break
 
                 if query_text:
-                    await self._do_autosuggest(session, query_text, x_headers)
+                    await self._do_autosuggest(session, query_text, self.x_headers)
                 else:
                     self.handle_empty_text_submission()
-
-    async def signal_application_start(self) -> None:
-        pass
 
     async def handle_text_submissions(self):
         """
@@ -199,15 +176,11 @@ class OneBoxBase:
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             x_headers = self.x_headers
             if self.initial_query:
-                if self.language is None:
-                    self.language = await self.get_preferred_location_language(session)
                 await self._do_discover(self.initial_query, session, x_headers)
-
             while True:
                 query_text = await self.wait_for_text_submission()
 
                 if query_text is None:
-                    self._do_profiler_stop()
                     break
                 elif query_text.strip() == '':
                     self.handle_empty_text_submission()
@@ -219,32 +192,6 @@ class OneBoxBase:
                     language = preferred_languages.pop()
                     if language != self.language:
                         self.language = language
-
-        await self.__astop()
-
-    async def get_preferred_location_language(self, session) -> str:
-        if self.user_profile.preferred_languages is None:
-            country_code, language = await self.get_position_locale(session)
-        elif list(self.user_profile.preferred_languages.keys()) == [Profile.default_name]:
-            language = self.user_profile.preferred_languages[Profile.default_name]
-        else:
-            country_code, country_language = await self.get_position_locale(session)
-            preferred_language = self.user_profile.get_preferred_language(country_code)
-            language = preferred_language or country_language
-        return language
-
-    async def get_position_locale(self, session):
-        country_code, language = None, None
-        latitude, longitude = self.search_center
-        x_headers = self.x_headers.copy()
-        x_headers.pop('X-AS-Session-ID', None)
-        local_addresses = await self._do_revgeocode(session, latitude, longitude, x_headers)
-        if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
-            country_code = local_addresses.data["items"][0]["address"]["countryCode"]
-            address_details = await asyncio.ensure_future(
-                self.api.lookup(id=local_addresses.data["items"][0]["id"], session=session))
-            language = address_details.data["language"]
-        return country_code, language
 
     async def handle_result_selections(self):
         """
@@ -259,9 +206,9 @@ class OneBoxBase:
                 if not item: continue
 
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    await self._do_autosuggest_expansion(session, item, self.user_profile.share_experience, self.x_headers)
+                    await self._do_autosuggest_expansion(session, item, self.x_headers)
                 else:
-                    await self._do_lookup(session, item, self.user_profile.share_experience, self.x_headers)
+                    await self._do_lookup(session, item, self.x_headers)
 
     async def handle_taxonomy_selections(self):
         """
@@ -275,41 +222,29 @@ class OneBoxBase:
                 if not taxonomy_item:
                     continue
 
-                x_headers = self.x_headers.copy()
-                x_headers.pop('X-AS-Session-ID', None)
-                await self._do_browse(session, taxonomy_item, x_headers)
+                await self._do_browse(session, taxonomy_item, self.x_headers)
 
     async def _do_discover(self, session, query_text, x_headers) -> set:
         latitude, longitude = self.search_center
-        extra_params = self.api.options.get(Endpoint.DISCOVER, {})
-        extra_params.update(self.extra_api_params.get(Endpoint.DISCOVER, {}))
-        extra_params.update(self.user_profile.api_options.get(Endpoint.DISCOVER, {}))
         discover_task = asyncio.ensure_future(
             self.api.discover(query_text, latitude, longitude, x_headers=x_headers, session=session, lang=self.language,
-                              limit=self.results_limit, **extra_params))
+                              limit=self.results_limit, **self.get_extra_params(Endpoint.DISCOVER)))
         discover_resp = await discover_task
         self.handle_result_list(discover_resp)
         return {item["address"]["countryCode"] for item in discover_resp.data["items"]}
 
     async def _do_autosuggest(self, session, query_text, x_headers):
         latitude, longitude = self.search_center
-        extra_params = self.api.options.get(Endpoint.AUTOSUGGEST, {})
-        extra_params.update(self.extra_api_params.get(Endpoint.AUTOSUGGEST, {}))
-        extra_params.update(self.user_profile.api_options.get(Endpoint.AUTOSUGGEST, {}))
         autosuggest_resp = await asyncio.ensure_future(
             self.api.autosuggest(query_text, latitude, longitude, x_headers=x_headers, session=session,
                                  lang=self.language, limit=self.suggestions_limit, termsLimit=self.terms_limit,
-                                 **extra_params))
+                                 **self.get_extra_params(Endpoint.AUTOSUGGEST)))
         self.handle_suggestion_list(autosuggest_resp)
 
-    async def _do_autosuggest_expansion(self, session, item, share_experience, x_headers):
-        if share_experience:
-            await self.share_autosuggest_result_selection(item, session, x_headers)
-
+    async def _do_autosuggest_expansion(self, session, item, x_headers):
         # patch against OSQ-32323
         orig_show = item.resp.req.params.get("show")
         params = {"show": orig_show} if orig_show else {}
-
         discover_resp = await asyncio.ensure_future(
             self.api.autosuggest_href(item.data["href"],
                                       x_headers=x_headers,
@@ -318,14 +253,8 @@ class OneBoxBase:
                                       **params))
         self.handle_result_list(discover_resp)
 
-    async def share_autosuggest_result_selection(self, item, session, x_headers) -> None:
-        pass
-
     async def _do_browse(self, session, taxonomy_item, x_headers) -> set:
         latitude, longitude = self.search_center
-        extra_params = self.api.options.get(Endpoint.BROWSE, {}).copy()
-        extra_params.update(self.extra_api_params.get(Endpoint.BROWSE, {}))
-        extra_params.update(self.user_profile.api_options.get(Endpoint.BROWSE, {}))
         browse_task = asyncio.ensure_future(
             self.api.browse(latitude, longitude,
                             x_headers=x_headers,
@@ -335,53 +264,36 @@ class OneBoxBase:
                             chains=taxonomy_item.chains,
                             lang=self.language,
                             limit=self.results_limit,
-                            **extra_params))
+                            **self.get_extra_params(Endpoint.BROWSE)))
         browse_resp = await browse_task
         self.handle_result_list(browse_resp)
         return {item["address"]["countryCode"] for item in browse_resp.data["items"]}
 
-    async def _do_lookup(self, session, item, share_experience, x_headers):
+    async def _do_lookup(self, session, item, x_headers):
         """
         Perfooms a location id lookup
         :param session:
         :param item:
-        :param share_experience:
         :param x_headers:
         :return:
         """
         if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
-            if share_experience:
-                await asyncio.ensure_future(
-                    self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
-                                     correlation_id=item.resp.x_headers['X-Correlation-ID'],
-                                     action="here:gs:action:view", userId=x_headers['X-User-ID'],
-                                     asSessionId=x_headers['X-AS-Session-ID']))
             lookup_resp = await asyncio.ensure_future(
                 self.api.lookup(item.data["id"],
                                 x_headers=x_headers,
                                 lang=self.language,
                                 session=session))
         else:
-            if share_experience and item.resp.x_headers:
-                await asyncio.ensure_future(
-                    self.api.signals(session, resource_id=item.data['id'], rank=item.rank,
-                                     correlation_id=item.resp.x_headers['X-Correlation-ID'],
-                                     action="here:gs:action:view", userId=x_headers['X-User-ID']))
-            extra_params = self.api.options.get(Endpoint.LOOKUP, {})
-            extra_params.update(self.extra_api_params.get(Endpoint.LOOKUP, {}))
-            extra_params.update(self.user_profile.api_options.get(Endpoint.LOOKUP, {}))
             lookup_resp = await asyncio.ensure_future(
                 self.api.lookup(item.data["id"],
                                 x_headers=None,
                                 session=session,
                                 lang=self.language,
-                                **extra_params))
+                                **self.get_extra_params(Endpoint.LOOKUP)))
         self.handle_result_details(lookup_resp)
 
     async def _do_revgeocode(self, session, latitude, longitude, x_headers) -> Response:
-        extra_params = self.api.options.get(Endpoint.REVGEOCODE, {})
-        extra_params.update(self.extra_api_params.get(Endpoint.REVGEOCODE, {}))
-        extra_params.update(self.user_profile.api_options.get(Endpoint.REVGEOCODE, {}))
+        extra_params = self.get_extra_params(Endpoint.REVGEOCODE)
         if self.language:
             extra_params["lang"] = self.language
         revgeocode_resp = await asyncio.ensure_future(
@@ -392,31 +304,14 @@ class OneBoxBase:
                                      **extra_params))
         return revgeocode_resp
 
-    def _do_profiler_start(self, kwargs):
-        profiling = kwargs.pop("profiling", None)
-        if profiling and Profiler:
-            self.profiler = Profiler(async_mode="enabled")
-            try:
-                self.profiler.start()
-            except RuntimeError:  # Previous self.profiler.stop() is not completely stopping the profiler....
-                pass
-        else:
-            self.profiler = False
-
-    def _do_profiler_stop(self):
-        if self.profiler:
-            try:
-                self.profiler.stop()
-                self.profiler.open_in_browser()
-            except RuntimeError:
-                pass
+    def get_extra_params(self, endpoint) -> dict:
+        extra_params = self.api.options.get(endpoint, {})
+        extra_params.update(self.extra_api_params.get(endpoint, {}))
+        extra_params.update(self.user_profile.api_options.get(endpoint, {}))
+        return extra_params
 
     def set_search_center(self, latitude: float, longitude: float):
         self.search_center = latitude, longitude
-
-    def renew_session_id(self):
-        if self.user_profile.share_experience:
-            self.x_headers['X-AS-Session-ID'] = str(uuid.uuid4())
 
     def wait_for_selected_result(self) -> Awaitable:
         return self.result_queue.get()
@@ -432,12 +327,6 @@ class OneBoxBase:
         asyncio.ensure_future((handle_text_submissions or self.handle_text_submissions)())
         asyncio.ensure_future((handle_result_selections or self.handle_result_selections)())
         asyncio.ensure_future((handle_taxonomy_selections or self.handle_taxonomy_selections)())
-
-    async def __astop(self):
-        async with ClientSession(raise_for_status=True, headers=self.headers) as session:
-            await asyncio.ensure_future(
-                    self.api.signals(session, resource_id="application", rank=0, correlation_id="noCorrelationID",
-                                     action="end", userId=self.x_headers['X-User-ID']))
 
     def wait_for_text_extension(self) -> Awaitable:
         raise NotImplementedError()
