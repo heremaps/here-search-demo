@@ -8,7 +8,7 @@ from here_search.entities import Response, PlaceTaxonomyExample
 
 from .util import TableLogWidgetHandler
 from .request import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons
-from .response import FeatureCollection, ResponseMap
+from .response import ResponseMap
 import here_search.widgets.design as design
 
 from typing import Callable, Awaitable
@@ -138,20 +138,14 @@ class OneBoxMap(OneBoxBase):
         self.log_handler.close()
 
     def run(self,
-            handle_user_profile_setup: Callable=None,
             handle_key_strokes: Callable=None,
             handle_text_submissions: Callable=None,
             handle_result_selections: Callable=None,
             handle_taxonomy_selections: Callable=None):
 
         nest_asyncio.apply()
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
         Idisplay(self.app_design_w)
         OneBoxBase.run(self,
-                       handle_user_profile_setup,
                        handle_key_strokes or self.handle_key_strokes,
                        handle_text_submissions or self.handle_text_submissions,
                        handle_result_selections or self.handle_result_selections,
