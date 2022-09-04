@@ -45,7 +45,8 @@ class OneBoxSimple:
             while True:
                 query_text = await self.wait_for_text_extension()
                 if query_text:
-                    await self._do_autosuggest(session, query_text)
+                    resp = await self._do_autosuggest(session, query_text)
+                    self.handle_suggestion_list(resp)
                 else:
                     self.handle_empty_text_submission()
 
@@ -57,7 +58,8 @@ class OneBoxSimple:
             while True:
                 query_text = await self.wait_for_text_submission()
                 if query_text:
-                    await self._do_discover(session, query_text)
+                    resp = await self._do_discover(session, query_text)
+                    self.handle_result_list(resp)
 
     async def handle_taxonomy_selections(self):
         """
@@ -67,27 +69,24 @@ class OneBoxSimple:
             while True:
                 taxonomy_item: PlaceTaxonomyItem = await self.wait_for_taxonomy_selection()
                 if taxonomy_item:
-                    await self._do_browse(session, taxonomy_item)
+                    resp = await self._do_browse(session, taxonomy_item)
+                    self.handle_result_list(resp)
 
-    async def _do_autosuggest(self, session, query_text, x_headers: dict=None, **kwargs) -> None:
+    async def _do_autosuggest(self, session, query_text, x_headers: dict=None, **kwargs) -> Response:
         latitude, longitude = self.search_center
-        autosuggest_resp = await asyncio.ensure_future(
+        return await asyncio.ensure_future(
             self.api.autosuggest(query_text, latitude, longitude, x_headers=x_headers, session=session,
                                  lang=self.language, limit=self.suggestions_limit, termsLimit=self.terms_limit, **kwargs))
-        self.handle_suggestion_list(autosuggest_resp)
 
-    async def _do_discover(self, session, query_text, x_headers: dict=None, **kwargs) -> set:
+    async def _do_discover(self, session, query_text, x_headers: dict=None, **kwargs) -> Response:
         latitude, longitude = self.search_center
-        discover_task = asyncio.ensure_future(
+        return await asyncio.ensure_future(
             self.api.discover(query_text, latitude, longitude, x_headers=x_headers, session=session, lang=self.language,
                               limit=self.results_limit, **kwargs))
-        discover_resp = await discover_task
-        self.handle_result_list(discover_resp)
-        return {item["address"]["countryCode"] for item in discover_resp.data["items"]}
 
-    async def _do_browse(self, session, taxonomy_item, x_headers: dict=None, **kwargs) -> set:
+    async def _do_browse(self, session, taxonomy_item, x_headers: dict=None, **kwargs) -> Response:
         latitude, longitude = self.search_center
-        browse_task = asyncio.ensure_future(
+        return await asyncio.ensure_future(
             self.api.browse(latitude, longitude,
                             x_headers=x_headers,
                             session=session,
@@ -95,9 +94,6 @@ class OneBoxSimple:
                             limit=self.results_limit,
                             **taxonomy_item.mapping,
                             **kwargs))
-        browse_resp = await browse_task
-        self.handle_result_list(browse_resp)
-        return {item["address"]["countryCode"] for item in browse_resp.data["items"]}
 
     def wait_for_text_extension(self) -> Awaitable:
         raise NotImplementedError()
@@ -171,12 +167,14 @@ class OneBoxBase(OneBoxSimple):
                     self.handle_empty_text_submission()
                     continue
 
-                country_codes = await self._do_discover(session, query_text)
+                resp = await self._do_discover(session, query_text)
+                country_codes = {item["address"]["countryCode"] for item in resp.data["items"]}
                 preferred_languages = {self.user_profile.get_preferred_language(country_code) for country_code in country_codes}
                 if len(preferred_languages) == 1 and preferred_languages != {None}:
                     language = preferred_languages.pop()
                     if language != self.language:
                         self.language = language
+                self.handle_result_list(resp)
 
     async def handle_result_selections(self):
         """
@@ -191,32 +189,33 @@ class OneBoxBase(OneBoxSimple):
                 if not item: continue
 
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    await self._do_autosuggest_expansion(session, item)
+                    resp = await self._do_autosuggest_expansion(session, item)
+                    self.handle_result_list(resp)
                 else:
-                    await self._do_lookup(session, item)
+                    resp = await self._do_lookup(session, item)
+                    self.handle_result_details(resp)
 
-    async def _do_discover(self, session, query_text, x_headers: dict=None, **kwargs) -> set:
+    async def _do_discover(self, session, query_text, x_headers: dict=None, **kwargs) -> Response:
         return await super()._do_discover(session, query_text, x_headers, **self.get_extra_params(Endpoint.DISCOVER))
 
-    async def _do_autosuggest(self, session, query_text, x_headers: dict=None, **kwargs):
+    async def _do_autosuggest(self, session, query_text, x_headers: dict=None, **kwargs) -> Response:
         return await super()._do_autosuggest(session, query_text, x_headers, **self.get_extra_params(Endpoint.AUTOSUGGEST))
 
-    async def _do_browse(self, session, taxonomy_item, x_headers: dict=None, **kwargs) -> set:
+    async def _do_browse(self, session, taxonomy_item, x_headers: dict=None, **kwargs) -> Response:
         return await super()._do_browse(session, taxonomy_item, x_headers, **self.get_extra_params(Endpoint.DISCOVER))
 
-    async def _do_autosuggest_expansion(self, session, item, x_headers: dict=None):
+    async def _do_autosuggest_expansion(self, session, item, x_headers: dict=None) -> Response:
         # patch against OSQ-32323
         orig_show = item.resp.req.params.get("show")
         params = {"show": orig_show} if orig_show else {}
-        discover_resp = await asyncio.ensure_future(
+        return await asyncio.ensure_future(
             self.api.autosuggest_href(item.data["href"],
                                       x_headers=x_headers,
                                       limit=self.results_limit,
                                       session=session,
                                       **params))
-        self.handle_result_list(discover_resp)
 
-    async def _do_lookup(self, session, item, x_headers: dict=None):
+    async def _do_lookup(self, session, item, x_headers: dict=None) -> Response:
         """
         Perfooms a location id lookup
         :param session:
@@ -225,31 +224,29 @@ class OneBoxBase(OneBoxSimple):
         :return:
         """
         if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
-            lookup_resp = await asyncio.ensure_future(
+            return await asyncio.ensure_future(
                 self.api.lookup(item.data["id"],
                                 x_headers=x_headers,
                                 lang=self.language,
                                 session=session))
         else:
-            lookup_resp = await asyncio.ensure_future(
+            return await asyncio.ensure_future(
                 self.api.lookup(item.data["id"],
                                 x_headers=None,
-                                session=session,
                                 lang=self.language,
+                                session=session,
                                 **self.get_extra_params(Endpoint.LOOKUP)))
-        self.handle_result_details(lookup_resp)
 
     async def _do_revgeocode(self, session, latitude, longitude, x_headers: dict=None) -> Response:
         extra_params = self.get_extra_params(Endpoint.REVGEOCODE)
         if self.language:
             extra_params["lang"] = self.language
-        revgeocode_resp = await asyncio.ensure_future(
+        return await asyncio.ensure_future(
             self.api.reverse_geocode(latitude, longitude,
                                      x_headers=x_headers,
                                      session=session,
                                      limit=self.results_limit,
                                      **extra_params))
-        return revgeocode_resp
 
     def get_extra_params(self, endpoint) -> dict:
         extra_params = self.api.options.get(endpoint, {})

@@ -1,6 +1,4 @@
-import panel
-from panel.pane import JSON as IJSON
-from IPython.display import display as Idisplay, Markdown
+from IPython.display import display_html, Markdown, JSON as IJSON
 from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML, Layout
 
 from here_map_widget import GeoJSON
@@ -8,13 +6,12 @@ from here_map_widget import GeoJSON
 from here_search.entities import Response, ResponseItem, Endpoint
 from .request import PositionMap
 
-from typing import Tuple, List
+from typing import List
 from dataclasses import dataclass
 import asyncio
 
-
-panel.extension()
-
+display_html("<style>.result-button div, .result-button button { font-size: 10px; }</style>")
+display_html("<style>.result-radio label { font-size: 10px; }</style>")
 
 @dataclass
 class SearchResultList(HBox):
@@ -27,7 +24,7 @@ class SearchResultList(HBox):
 
     def __post_init__(self):
         if self.layout is None:
-            self.layout = self.__class__.default_layout
+            self.layout = type(self).default_layout
         VBox.__init__(self, [self.widget])
         self.futures = []
 
@@ -97,11 +94,7 @@ class SearchResultList(HBox):
 class SearchResultJson(SearchResultList):
     def _display(self, resp: Response) -> Widget:
         out = self._clear()
-        out.append_display_data(IJSON({"data": resp.data, "x_headers": resp.x_headers,
-                                            "request": {"url": resp.req.url,
-                                                        "params": resp.req.params,
-                                                        "x_headers": resp.req.x_headers}},
-                                            height=600, theme="light", depth=4))
+        out.append_display_data(IJSON(resp.data, expanded=True))
         return out
 
     def _clear(self) -> Widget:
@@ -148,7 +141,6 @@ class SearchResultButtons(SearchResultList):
                 self.result_queue.put_nowait(button.value)
             search_result.button.on_click(getvalue)
             self.buttons.append(search_result)
-        Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10px; }</style>"))
         super().__post_init__()
 
     def _display(self, resp: Response) -> Widget:
@@ -167,7 +159,6 @@ class SearchResultRadioButtons(SearchResultList):
 
     def __post_init__(self):
         if not SearchResultButtons.css_displayed:
-            Idisplay(HTML("<style>.result-radio label { font-size: 10px; }</style>"))
             SearchResultButtons.css_displayed = True
         super().__post_init__()
 

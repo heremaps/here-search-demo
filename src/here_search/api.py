@@ -1,5 +1,5 @@
 from aiohttp import ClientSession
-from ujson import loads
+from json import loads
 
 from .entities import Request, Response, Endpoint
 from .util import logger

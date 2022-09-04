@@ -1,4 +1,4 @@
-from IPython.display import display as Idisplay
+from IPython.display import display_html
 from here_map_widget import Map, Platform, ServiceNames, MapTileUrl, MapTile, TileLayer
 from ipywidgets import HBox, VBox, Text, Button, Layout, HTML
 
@@ -9,7 +9,7 @@ from functools import reduce
 import asyncio
 
 
-Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"))
+display_html("<style>.term-button button { font-size: 10px; }</style>")
 
 
 class SubmittableText(Text):
@@ -259,7 +259,6 @@ class PositionMap(Map):
                      basemap=maptile_layer,
                      layout = kvargs.pop('layout', PositionMap.default_layout))
         if position_handler:
-            #self.set_position_handler(position_handler)
             self.set_position_handler(position_handler)
 
     def set_position_handler(self, position_handler: Callable[[float, float], None]):

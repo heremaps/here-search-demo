@@ -1,6 +1,6 @@
-from IPython.display import display as Idisplay
-from ipywidgets import Output
+from ipywidgets import Output, HBox, VBox
 import nest_asyncio
+from here_map_widget import WidgetControl
 
 from here_search.base import OneBoxBase
 from here_search.user import Profile
@@ -8,15 +8,14 @@ from here_search.entities import Response, PlaceTaxonomyExample
 
 from .util import TableLogWidgetHandler
 from .request import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons
-from .response import ResponseMap
-import here_search.widgets.design as design
+from .response import ResponseMap, SearchResultButtons, SearchResultJson
 
 from typing import Callable, Awaitable
 import asyncio
 import logging
 
 
-class OneBoxMap(OneBoxBase):
+class OneBoxMap(OneBoxBase, VBox):
 
     default_results_limit = 20
     default_suggestions_limit = 5
@@ -24,7 +23,6 @@ class OneBoxMap(OneBoxBase):
     default_search_box_layout = {'width': '240px'}
     default_placeholder = "free text"
     default_output_format = 'text'
-    default_design = design.EmbeddedList
     default_taxonomy, default_icons = PlaceTaxonomyExample.taxonomy, PlaceTaxonomyExample.icons
 
     def __init__(self,
@@ -34,7 +32,6 @@ class OneBoxMap(OneBoxBase):
                  terms_limit: int=None,
                  place_taxonomy_buttons: PlaceTaxonomyButtons=None,
                  extra_api_params: dict=None,
-                 design: Callable=None,
                  **kwargs):
 
         self.logger = logging.getLogger("here_search")
@@ -51,16 +48,23 @@ class OneBoxMap(OneBoxBase):
                                               placeholder=kwargs.pop('placeholder', self.__class__.default_placeholder),
                                               **kwargs)
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
-        self.design = design or self.__class__.default_design
         self.buttons_box_w = place_taxonomy_buttons or PlaceTaxonomyButtons(taxonomy=OneBoxMap.default_taxonomy, icons=OneBoxMap.default_icons)
-        self.result_list_w = tuple(out_class(widget=Output(),
-                                             max_results_number=max(self.results_limit, self.suggestions_limit),
-                                             result_queue=self.result_queue)
-                              for out_class in self.design.out_classes)
+        self.result_list_w = [klass(widget=Output(),
+                                    max_results_number=max(self.results_limit, self.suggestions_limit),
+                                    result_queue=self.result_queue)
+                              for klass in (SearchResultButtons, SearchResultJson)]
 
-        self.log_handler = TableLogWidgetHandler()
         self.map_w = ResponseMap(api_key=self.api.api_key, center=self.search_center, position_handler=self.set_search_center)
-        self.app_design_w = self.design.widget(self.query_box_w, self.map_w, self.query_terms_w, self.buttons_box_w, self.result_list_w)
+        search_box = VBox(([self.buttons_box_w] if self.buttons_box_w else []) + [self.query_box_w, self.query_terms_w, self.result_list_w[0]], layout={'width': "280px"})
+        widget_control = WidgetControl(widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=False)
+        self.map_w.add_control(widget_control)
+        self.map_w.zoom_control_instance.alignment = "RIGHT_TOP"
+        self.result_list_w[1].layout = {'width': "400px", "max_height": "600px"}
+        self.result_list_w[1].display(Response(data={}))
+        self.log_handler = TableLogWidgetHandler()
+        self.logger.addHandler(self.log_handler)
+        self.logger.setLevel(logging.INFO)
+        VBox.__init__(self, [HBox([self.map_w, self.result_list_w[1]]), self.log_handler.out])
 
     def wait_for_text_extension(self) -> Awaitable:
         return self.query_box_w.get_text_change()
@@ -127,10 +131,8 @@ class OneBoxMap(OneBoxBase):
         self.map_w.display(resp)
 
     def show_logs(self, level: int=None) -> "OneBoxMap":
-        self.logger.addHandler(self.log_handler)
+        self.logger.addHandler(self.log_handler.handler)
         self.logger.setLevel(level or logging.INFO)
-        self.log_handler.show_logs()
-        return self
 
     def clear_logs(self):
         self.logger.removeHandler(self.log_handler)
@@ -144,13 +146,12 @@ class OneBoxMap(OneBoxBase):
             handle_taxonomy_selections: Callable=None):
 
         nest_asyncio.apply()
-        Idisplay(self.app_design_w)
         OneBoxBase.run(self,
                        handle_key_strokes or self.handle_key_strokes,
                        handle_text_submissions or self.handle_text_submissions,
                        handle_result_selections or self.handle_result_selections,
                        handle_taxonomy_selections or self.handle_taxonomy_selections)
-        self.show_logs()
+        return self
 
     def __del__(self):
         self.logger.removeHandler(self.log_handler)
