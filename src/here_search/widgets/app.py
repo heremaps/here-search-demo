@@ -49,22 +49,22 @@ class OneBoxMap(OneBoxBase, VBox):
                                               **kwargs)
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
         self.buttons_box_w = place_taxonomy_buttons or PlaceTaxonomyButtons(taxonomy=OneBoxMap.default_taxonomy, icons=OneBoxMap.default_icons)
-        self.result_list_w = [klass(widget=Output(),
-                                    max_results_number=max(self.results_limit, self.suggestions_limit),
-                                    result_queue=self.result_queue)
-                              for klass in (SearchResultButtons, SearchResultJson)]
-
+        self.result_buttons_w = SearchResultButtons(max_results_number=max(self.results_limit, self.suggestions_limit),
+                                                    result_queue=self.result_queue)
+        self.result_json_w = SearchResultJson(max_results_number=max(self.results_limit, self.suggestions_limit),
+                                              result_queue=self.result_queue,
+                                              layout={'width': "400px", "max_height": "600px"})
+        self.result_json_w.display(Response(data={}))
         self.map_w = ResponseMap(api_key=self.api.api_key, center=self.search_center, position_handler=self.set_search_center)
-        search_box = VBox(([self.buttons_box_w] if self.buttons_box_w else []) + [self.query_box_w, self.query_terms_w, self.result_list_w[0]], layout={'width': "280px"})
+        search_box = VBox(([self.buttons_box_w] if self.buttons_box_w else []) +
+                           [self.query_box_w, self.query_terms_w, self.result_buttons_w], layout={'width': "280px"})
         widget_control = WidgetControl(widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=False)
         self.map_w.add_control(widget_control)
         self.map_w.zoom_control_instance.alignment = "RIGHT_TOP"
-        self.result_list_w[1].layout = {'width': "400px", "max_height": "600px"}
-        self.result_list_w[1].display(Response(data={}))
         self.log_handler = TableLogWidgetHandler()
         self.logger.addHandler(self.log_handler)
         self.logger.setLevel(logging.INFO)
-        VBox.__init__(self, [HBox([self.map_w, self.result_list_w[1]]), self.log_handler.out])
+        VBox.__init__(self, [HBox([self.map_w, self.result_json_w]), self.log_handler.out])
 
     def wait_for_text_extension(self) -> Awaitable:
         return self.query_box_w.get_text_change()
@@ -99,8 +99,8 @@ class OneBoxMap(OneBoxBase, VBox):
         :param autosuggest_resp:
         :return: None
         """
-        for result_list_w in self.result_list_w:
-            result_list_w.display(discover_resp)
+        self.result_buttons_w.display(discover_resp)
+        self.result_json_w.display(discover_resp)
         self.display_result_map(discover_resp)
         self.clear_query_text()
 
@@ -110,8 +110,8 @@ class OneBoxMap(OneBoxBase, VBox):
         :param autosuggest_resp:
         :return: None
         """
-        if len(self.result_list_w) > 1:
-            self.result_list_w[1].display(lookup_resp)
+        self.result_buttons_w.display(lookup_resp)
+        self.result_json_w.display(lookup_resp)
         lookup_resp.data = {"items": [lookup_resp.data]}
         self.display_result_map(lookup_resp)
 
@@ -120,8 +120,8 @@ class OneBoxMap(OneBoxBase, VBox):
         self.query_terms_w.set(list(terms.keys()))
 
     def display_suggestions(self, autosuggest_resp: Response) -> None:
-        for result_list_w in self.result_list_w:
-            result_list_w.display(autosuggest_resp)
+        self.result_buttons_w.display(autosuggest_resp)
+        self.result_json_w.display(autosuggest_resp)
 
     def clear_query_text(self):
         self.query_box_w.text_w.value = ''

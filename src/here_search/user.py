@@ -2,7 +2,7 @@ from aiohttp import ClientSession
 import nest_asyncio
 
 from .util import get_lat_lon
-from .api import API, APIOptions
+from .api import API
 
 from typing import Tuple
 import asyncio
@@ -27,7 +27,6 @@ class Profile:
 
     def __init__(self,
                  use_positioning: bool,
-                 api_options: APIOptions=None,
                  languages: dict=None,
                  name: str=None):
         """
@@ -43,7 +42,6 @@ class Profile:
 
         self.preferred_languages = languages or {}
         self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name])
-        self.api_options = api_options or {}
 
         self.language = None
         nest_asyncio.apply()
@@ -60,10 +58,11 @@ class Profile:
     def send_signal(self, body: list):
         pass
 
-    def set_position(self, latitude, longitude):
+    def set_position(self, latitude, longitude) -> "Profile":
         self.current_latitude = latitude
         self.current_longitude = longitude
         self.current_country_code, self.language = asyncio.get_running_loop().run_until_complete(self.get_preferred_locale(latitude, longitude))
+        return self
 
     def get_preferred_language(self, country_code: str):
         return self.preferred_languages.get(country_code, self.preferred_languages.get(self.__class__.default_name, None))

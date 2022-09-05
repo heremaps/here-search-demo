@@ -2,6 +2,7 @@ from IPython.display import display as Idisplay, Markdown
 from IPython.core.interactiveshell import InteractiveShell
 from ipywidgets import Output as OutputBase
 
+from typing import Sequence
 import logging
 
 
@@ -25,33 +26,57 @@ class Output(OutputBase):
         self.outputs = (self._format(text=message), ) + self.out.outputs
 
 
-class TableLogHandler(OutputBase):
+class TableOutput(OutputBase):
     """
     Custom logging handler sending logs to an output widget
     Ref: https://ipywidgets.readthedocs.io/en/stable/examples/Output%20Widget.html#Integrating-output-widgets-with-the-logging-module
     """
-    default_separator = "|"
     default_height = 160
 
     def __init__(self, *args, **kwargs):
-        height = kwargs.get("height", TableLogHandler.default_height)
-        self.handler = logging.Handler(*args, **kwargs)
+        height = kwargs.get("height", TableOutput.default_height)
         self.lines = []
-        self.separator = kwargs.pop("separator", TableLogHandler.default_separator)
         self.columns_count = 1
         super().__init__(layout={'height': f'{height}px', 'border': '1px solid black', 'overflow': 'auto', 'white-space': 'nowrap'})
-        self.handler.emit = self.emit
 
-    def emit(self, record):
-        formatted_record = self.handler.format(record)
-        self.lines.insert(0, f"| {formatted_record} |")
+    def _format(self, **kwargs) -> dict:
+        fmt = {'output_type': 'display_data'}
+        fmt.update(kwargs)
+        return fmt
 
-        self.columns_count = max(self.columns_count, len(formatted_record.split(self.separator)))
+    def info(self, row: Sequence[str]):
+        record = "|".join(row)
+        self.lines.insert(0, f"| {record} |")
+        self.columns_count = max(self.columns_count, len(record.split(self.separator)))
         header = [f'| {"&nbsp; "*100} |' + '| '*(self.columns_count-1), f"{'|:-'*self.columns_count}|"]
 
         log_output = Markdown("\n".join(header + self.lines))
         data, metadata = self.fmt(log_output)
         self.outputs = {'output_type': 'display_data', 'data': data, 'metadata': metadata},
+
+
+class LogWidgetHandler(logging.Handler):
+    """
+    Custom logging handler sending logs to an output widget
+    Ref: https://ipywidgets.readthedocs.io/en/stable/examples/Output%20Widget.html#Integrating-output-widgets-with-the-logging-module
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(LogWidgetHandler, self).__init__(*args, **kwargs)
+        self.out = Output(height=160)
+
+    def emit(self, record):
+        """ Do the actual logging """
+        formatted_record = self.format(record)
+        self.out.add(formatted_record)
+
+    def show_logs(self):
+        """ Show the logs """
+        Idisplay(self.out)
+
+    def clear_logs(self):
+        """ Clear the current logs """
+        self.out.clear_output()
 
 
 class TableLogWidgetHandler(logging.Handler):

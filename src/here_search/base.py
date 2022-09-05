@@ -195,15 +195,6 @@ class OneBoxBase(OneBoxSimple):
                     resp = await self._do_lookup(session, item)
                     self.handle_result_details(resp)
 
-    async def _do_discover(self, session, query_text, x_headers: dict=None, **kwargs) -> Response:
-        return await super()._do_discover(session, query_text, x_headers, **self.get_extra_params(Endpoint.DISCOVER))
-
-    async def _do_autosuggest(self, session, query_text, x_headers: dict=None, **kwargs) -> Response:
-        return await super()._do_autosuggest(session, query_text, x_headers, **self.get_extra_params(Endpoint.AUTOSUGGEST))
-
-    async def _do_browse(self, session, taxonomy_item, x_headers: dict=None, **kwargs) -> Response:
-        return await super()._do_browse(session, taxonomy_item, x_headers, **self.get_extra_params(Endpoint.DISCOVER))
-
     async def _do_autosuggest_expansion(self, session, item, x_headers: dict=None) -> Response:
         # patch against OSQ-32323
         orig_show = item.resp.req.params.get("show")
@@ -238,7 +229,7 @@ class OneBoxBase(OneBoxSimple):
                                 **self.get_extra_params(Endpoint.LOOKUP)))
 
     async def _do_revgeocode(self, session, latitude, longitude, x_headers: dict=None) -> Response:
-        extra_params = self.get_extra_params(Endpoint.REVGEOCODE)
+        extra_params = {}
         if self.language:
             extra_params["lang"] = self.language
         return await asyncio.ensure_future(
@@ -247,12 +238,6 @@ class OneBoxBase(OneBoxSimple):
                                      session=session,
                                      limit=self.results_limit,
                                      **extra_params))
-
-    def get_extra_params(self, endpoint) -> dict:
-        extra_params = self.api.options.get(endpoint, {})
-        extra_params.update(self.extra_api_params.get(endpoint, {}))
-        extra_params.update(self.user_profile.api_options.get(endpoint, {}))
-        return extra_params
 
     def set_search_center(self, latitude: float, longitude: float):
         self.search_center = latitude, longitude

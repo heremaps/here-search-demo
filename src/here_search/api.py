@@ -4,9 +4,8 @@ from json import loads
 from .entities import Request, Response, Endpoint
 from .util import logger
 
-from dataclasses import dataclass
 from typing import Dict, Sequence, Optional
-import os, sys
+import os
 import urllib.parse
 from getpass import getpass
 
@@ -25,12 +24,10 @@ class API:
     https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
     """
     api_key: str
-    options: "APIOptions"
     cache: Dict[str, Response]
 
-    def __init__(self, api_key: str = None, options: "APIOptions" = None, cache: dict = None):
+    def __init__(self, api_key: str = None, cache: dict = None):
         self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="api key: ")
-        self.options = options or {}
         self.cache = cache or {}
 
     async def get(self, request: Request, session: ClientSession = None) -> Response:
@@ -103,8 +100,7 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = self.options.get(Endpoint.AUTOSUGGEST, {}).copy()
-        params.update(q=q, at=f'{latitude},{longitude}')
+        params = {"q": q, "at": f'{latitude},{longitude}'}
         params.update(kwargs)
         request = Request(endpoint=Endpoint.AUTOSUGGEST,
                           url=base_url[Endpoint.AUTOSUGGEST],
@@ -148,8 +144,7 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = self.options.get(Endpoint.DISCOVER, {}).copy()
-        params.update(q=q, at=f'{latitude},{longitude}')
+        params = {"q": q, "at": f'{latitude},{longitude}'}
         params.update(kwargs)
         request = Request(endpoint=Endpoint.DISCOVER,
                           url=base_url[Endpoint.DISCOVER],
@@ -181,8 +176,7 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = self.options.get(Endpoint.BROWSE, {}).copy()
-        params["at"] = f'{latitude},{longitude}'
+        params = {"at": f'{latitude},{longitude}'}
         if categories:
             params["categories"] = ",".join(sorted(set(categories or [])))
         if food_types:
@@ -210,8 +204,7 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = self.options.get(Endpoint.LOOKUP, {}).copy()
-        params["id"] = id
+        params = {"id": id}
         params.update(kwargs)
         request = Request(endpoint=Endpoint.LOOKUP,
                           url=base_url[Endpoint.LOOKUP],
@@ -235,50 +228,15 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = self.options.get(Endpoint.REVGEOCODE, {}).copy()
-        params["at"] = f"{latitude},{longitude}"
+        params = {"at": f"{latitude},{longitude}"}
         params.update(kwargs)
         request = Request(endpoint=Endpoint.REVGEOCODE,
-                           url=base_url[Endpoint.REVGEOCODE],
-                           params=params,
-                           x_headers=x_headers)
+                          url=base_url[Endpoint.REVGEOCODE],
+                          params=params,
+                          x_headers=x_headers)
         if session:
             response = await self.get(request, session)
         else:
             async with ClientSession(raise_for_status=True) as session:
                 response = await self.get(request, session)
         return response
-
-
-@dataclass
-class APIOption:
-    key: str
-    values: Sequence[str]
-    endpoints = []
-
-
-class At(APIOption):
-    endpoints = Endpoint.DISCOVER, Endpoint.AUTOSUGGEST, Endpoint.BROWSE, Endpoint.REVGEOCODE
-
-    def __init__(self, latitude: float, longitude: float):
-        self.key = "at"
-        self.values = [f"{latitude},{longitude}"]
-
-
-class Route(APIOption):
-    endpoints = Endpoint.DISCOVER, Endpoint.AUTOSUGGEST, Endpoint.BROWSE
-
-    def __init__(self, polyline: str, width: int):
-        self.key = "route"
-        self.values = [f"{polyline};w={width}"]
-
-
-class APIOptions(dict):
-    def __init__(self, options: dict):
-        _options = {}
-        for endpoint, ep_options in options.items():
-            for option in ep_options:
-                assert not option.endpoints or endpoint in option.endpoints, f"Option {option.__class__.__name__} illegal for endpoint {endpoint}"
-                _options.setdefault(endpoint, {}).setdefault(option.key, []).extend(option.values)
-        super().__init__(_options)
-

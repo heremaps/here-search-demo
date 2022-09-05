@@ -1,4 +1,4 @@
-from IPython.display import display_html, Markdown, JSON as IJSON
+from IPython.display import display as Idisplay, display_html, Markdown, JSON as IJSON
 from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML, Layout
 
 from here_map_widget import GeoJSON
@@ -7,26 +7,26 @@ from here_search.entities import Response, ResponseItem, Endpoint
 from .request import PositionMap
 
 from typing import List
-from dataclasses import dataclass
 import asyncio
 
-display_html("<style>.result-button div, .result-button button { font-size: 10px; }</style>")
-display_html("<style>.result-radio label { font-size: 10px; }</style>")
+Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10px; }</style>"))
 
-@dataclass
+
 class SearchResultList(HBox):
-    widget: Widget
-    max_results_number: int
-    result_queue: asyncio.Queue=None
-    layout: dict=None
-
     default_layout = {'display': 'flex', 'width': '276px', 'height': '400px', 'justify_content': 'flex-start', 'overflow_y': 'scroll', 'overflow': 'scroll'}
+    default_max_results_count = 20
 
-    def __post_init__(self):
-        if self.layout is None:
-            self.layout = type(self).default_layout
-        VBox.__init__(self, [self.widget])
+    def __init__(self, widget: Widget=None,
+                 max_results_number: int=None,
+                 result_queue: asyncio.Queue=None,
+                 layout: dict=None,
+                 **kwargs):
+        self.widget = widget or Output()
+        self.max_results_number = max_results_number or type(self).default_max_results_count
+        self.result_queue = result_queue or asyncio.Queue()
+        self.layout = layout or type(self).default_layout
         self.futures = []
+        super().__init__([self.widget], **kwargs)
 
     @classmethod
     def get_primary_category(cls, place_item):
@@ -134,21 +134,26 @@ class SearchResultButtons(SearchResultList):
     buttons: List[SearchResultButton] = []
     default_layout = {'display': 'flex', 'width': '276px', 'height': '400px', 'justify_content': 'flex-start', 'overflow': 'auto'}
 
-    def __post_init__(self):
+    def __init__(self,
+                 widget: Widget=None,
+                 max_results_number: int=None,
+                 result_queue: asyncio.Queue=None,
+                 layout: dict=None,
+                 **kwargs):
+        super().__init__(widget, max_results_number, result_queue, layout, **kwargs)
         for i in range(self.max_results_number):
             search_result = SearchResultButton(item=ResponseItem())
             def getvalue(button: Button):
                 self.result_queue.put_nowait(button.value)
             search_result.button.on_click(getvalue)
             self.buttons.append(search_result)
-        super().__post_init__()
 
     def _display(self, resp: Response) -> Widget:
-        items = [resp.data] if resp.req.endpoint == Endpoint.LOOKUP else resp.data["items"]
+        items = [resp.data] if resp.req.endpoint == Endpoint.LOOKUP else resp.data.get("items", [])
         for rank, item_data in enumerate(items):
             self.buttons[rank].set_result(item_data, rank, resp)
         out = self.buttons[:len(items)]
-        return VBox(out, layout=Layout(**self.layout))
+        return VBox(out, layout=self.layout)
 
     def _clear(self) -> Widget:
         return VBox([])
@@ -157,10 +162,16 @@ class SearchResultButtons(SearchResultList):
 class SearchResultRadioButtons(SearchResultList):
     css_displayed = False
 
-    def __post_init__(self):
+    def __init__(self,
+                 widget: Widget=None,
+                 max_results_number: int=None,
+                 result_queue: asyncio.Queue=None,
+                 layout: dict=None,
+                 **kwargs):
+        super().__init__(widget, max_results_number, result_queue, layout, **kwargs)
         if not SearchResultButtons.css_displayed:
+            Idisplay(HTML("<style>.result-radio label { font-size: 10px; }</style>"))
             SearchResultButtons.css_displayed = True
-        super().__post_init__()
 
     def _display(self, resp: Response) -> Widget:
         buttons = RadioButtons(options=[item["title"] for item in resp.data["items"]],
