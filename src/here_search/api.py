@@ -4,9 +4,8 @@ from json import loads
 from .entities import Request, Response, Endpoint
 from .util import logger
 
-from typing import Dict, Sequence, Optional
+from typing import Dict, Sequence, Optional, Callable
 import os
-import urllib.parse
 from getpass import getpass
 
 base_url = {ep: f'https://{eps}.search.hereapi.com/v1/{eps}'
@@ -26,9 +25,10 @@ class API:
     api_key: str
     cache: Dict[str, Response]
 
-    def __init__(self, api_key: str = None, cache: dict = None):
+    def __init__(self, api_key: str = None, cache: dict = None, url_format_fn: Callable[[str], str] = None):
         self.api_key = api_key or os.environ.get('API_KEY') or getpass(prompt="api key: ")
         self.cache = cache or {}
+        self.format_url = url_format_fn or (lambda x: x)
 
     async def get(self, request: Request, session: ClientSession = None) -> Response:
         """
@@ -41,7 +41,7 @@ class API:
         """
         cache_key = request.key()
         if cache_key in self.cache:
-            return await self.__uncache(cache_key, request)
+            return self.__uncache(cache_key)
 
         request.params["apiKey"] = self.api_key
         params = {k: ",".join(v) if isinstance(v, list) else v for k, v in request.params.items()}
@@ -53,40 +53,26 @@ class API:
                 async with session.get(request.url, params=params, headers=request.x_headers or {}) as get_response:
                     return await self.__get(get_response, request, cache_key)
 
-    async def __uncache(self, cache_key, request):
-        cached_response = self.cache[cache_key]
+    def __uncache(self, cache_key):
+        actual_url, cached_response = self.cache[cache_key]
         data = cached_response.data.copy()
         response = Response(data=data,
                             x_headers=cached_response.x_headers,
                             req=cached_response.req)
-        endpoint_str = response.req.url.split("/")[-1]
-        params = {k: (",".join(v) if isinstance(v, list) else v) for k, v in response.req.params.items()}
-        params.pop("apiKey", None)
-        params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
-        log_msg = await self._get_log_msg(endpoint_str, response.req.url, params_str, request.x_headers)
-        logger.info(f"{log_msg} | (cached)")
+        formatted_msg = self.format_url(actual_url)
+        logger.info(f"{formatted_msg} (cached)")
         return response
 
     async def __get(self, get_response, request, cache_key):
-        endpoint_str = get_response.url.path.split("/")[-1]
-        params = dict(get_response.url.query)
-        params.pop("apiKey", None)
-        params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
-        log_msg = await self._get_log_msg(endpoint_str, get_response.url.human_repr(), params_str, request.x_headers)
-        logger.info(log_msg)
+        formatted_msg = self.format_url(get_response.url.human_repr())
+        logger.info(formatted_msg)
         x_headers = {"X-Request-Id": get_response.headers["X-Request-Id"],
                      "X-Correlation-ID": get_response.headers["X-Correlation-ID"]}
         response = Response(data=await get_response.json(loads=loads),
                             req=request,
                             x_headers=x_headers)
-        self.cache[cache_key] = response
+        self.cache[cache_key] = get_response.url.human_repr(), response
         return response
-
-    async def _get_log_msg(self, endpoint_str: str, url: str, params_str: str, x_headers: dict=None):
-        log_msg = f'<a href="{url}">/{endpoint_str}?{params_str}</a>'
-        if x_headers and 'X-AS-Session-ID' in x_headers:
-            log_msg = f"{log_msg} | {x_headers['X-AS-Session-ID']}"
-        return log_msg
 
     async def autosuggest(self, q: str, latitude: float, longitude: float, x_headers: dict = None,
                           session: ClientSession = None, **kwargs) -> Response:

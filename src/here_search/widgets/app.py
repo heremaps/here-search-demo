@@ -2,6 +2,7 @@ from ipywidgets import Output, HBox, VBox
 import nest_asyncio
 from here_map_widget import WidgetControl
 
+from here_search.api import API
 from here_search.base import OneBoxBase
 from here_search.user import Profile
 from here_search.entities import Response, PlaceTaxonomyExample
@@ -26,17 +27,18 @@ class OneBoxMap(OneBoxBase, VBox):
     default_taxonomy, default_icons = PlaceTaxonomyExample.taxonomy, PlaceTaxonomyExample.icons
 
     def __init__(self,
-                 user_profile: Profile=None,
-                 results_limit: int=None,
-                 suggestions_limit: int=None,
-                 terms_limit: int=None,
-                 place_taxonomy_buttons: PlaceTaxonomyButtons=None,
-                 extra_api_params: dict=None,
+                 user_profile: Profile = None,
+                 results_limit: int = None,
+                 suggestions_limit: int = None,
+                 terms_limit: int = None,
+                 place_taxonomy_buttons: PlaceTaxonomyButtons = None,
+                 extra_api_params: dict = None,
                  **kwargs):
 
         self.logger = logging.getLogger("here_search")
         self.result_queue: asyncio.Queue = asyncio.Queue()
         OneBoxBase.__init__(self,
+                            api=API(url_format_fn=TableLogWidgetHandler.format_url),
                             user_profile=user_profile,
                             results_limit=results_limit or OneBoxMap.default_results_limit,
                             suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,

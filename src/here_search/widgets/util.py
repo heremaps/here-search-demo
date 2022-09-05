@@ -4,6 +4,7 @@ from ipywidgets import Output as OutputBase
 
 from typing import Sequence
 import logging
+import urllib.parse
 
 
 class Output(OutputBase):
@@ -26,35 +27,6 @@ class Output(OutputBase):
         self.outputs = (self._format(text=message), ) + self.out.outputs
 
 
-class TableOutput(OutputBase):
-    """
-    Custom logging handler sending logs to an output widget
-    Ref: https://ipywidgets.readthedocs.io/en/stable/examples/Output%20Widget.html#Integrating-output-widgets-with-the-logging-module
-    """
-    default_height = 160
-
-    def __init__(self, *args, **kwargs):
-        height = kwargs.get("height", TableOutput.default_height)
-        self.lines = []
-        self.columns_count = 1
-        super().__init__(layout={'height': f'{height}px', 'border': '1px solid black', 'overflow': 'auto', 'white-space': 'nowrap'})
-
-    def _format(self, **kwargs) -> dict:
-        fmt = {'output_type': 'display_data'}
-        fmt.update(kwargs)
-        return fmt
-
-    def info(self, row: Sequence[str]):
-        record = "|".join(row)
-        self.lines.insert(0, f"| {record} |")
-        self.columns_count = max(self.columns_count, len(record.split(self.separator)))
-        header = [f'| {"&nbsp; "*100} |' + '| '*(self.columns_count-1), f"{'|:-'*self.columns_count}|"]
-
-        log_output = Markdown("\n".join(header + self.lines))
-        data, metadata = self.fmt(log_output)
-        self.outputs = {'output_type': 'display_data', 'data': data, 'metadata': metadata},
-
-
 class LogWidgetHandler(logging.Handler):
     """
     Custom logging handler sending logs to an output widget
@@ -65,7 +37,7 @@ class LogWidgetHandler(logging.Handler):
         super(LogWidgetHandler, self).__init__(*args, **kwargs)
         self.out = Output(height=160)
 
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord):
         """ Do the actual logging """
         formatted_record = self.format(record)
         self.out.add(formatted_record)
@@ -94,10 +66,20 @@ class TableLogWidgetHandler(logging.Handler):
         self.fmt = InteractiveShell.instance().display_formatter.format
         self.columns_count = 1
 
-    def emit(self, record):
+    @staticmethod
+    def format_url(url: str) -> str:
+        parts = urllib.parse.urlparse(url)
+        endpoint_str = parts.path.split("/")[-1]
+        params = {k: (",".join(v) if isinstance(v, list) else v) for k, v in urllib.parse.parse_qs(parts.query).items()}
+        params.pop("apiKey", None)
+        params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
+        return f'[/{endpoint_str}?{params_str}]({url})'
+
+    def emit(self, record: logging.LogRecord):
         """
         Log the specified logging record.
         """
+        record.msg = "|".join(record.getMessage().split())
         formatted_record = self.format(record)
         self.lines.insert(0, f"| {formatted_record} |")
 
