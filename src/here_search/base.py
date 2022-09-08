@@ -45,12 +45,15 @@ class OneBoxSimple:
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:
-                query_text = await self.wait_for_text_extension()
-                if query_text:
-                    resp = await self._do_autosuggest(session, query_text)
-                    self.handle_suggestion_list(resp)
-                else:
-                    self.handle_empty_text_submission()
+                await self.handle_key_stroke(session)
+
+    async def handle_key_stroke(self, session: ClientSession):
+        query_text = await self.wait_for_text_extension()
+        if query_text:
+            resp = await self._do_autosuggest(session, query_text)
+            self.handle_suggestion_list(resp)
+        else:
+            self.handle_empty_text_submission()
 
     async def handle_text_submissions(self):
         """
@@ -58,10 +61,13 @@ class OneBoxSimple:
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:
-                query_text = await self.wait_for_text_submission()
-                if query_text:
-                    resp = await self._do_discover(session, query_text)
-                    self.handle_result_list(resp)
+                await self.handle_text_submission(session)
+
+    async def handle_text_submission(self, session):
+        query_text = await self.wait_for_text_submission()
+        if query_text:
+            resp = await self._do_discover(session, query_text)
+            self.handle_result_list(resp)
 
     async def handle_taxonomy_selections(self):
         """
@@ -69,10 +75,13 @@ class OneBoxSimple:
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:
-                taxonomy_item: PlaceTaxonomyItem = await self.wait_for_taxonomy_selection()
-                if taxonomy_item:
-                    resp = await self._do_browse(session, taxonomy_item)
-                    self.handle_result_list(resp)
+                await self.handle_taxonomy_selection(session)
+
+    async def handle_taxonomy_selection(self, session):
+        taxonomy_item: PlaceTaxonomyItem = await self.wait_for_taxonomy_selection()
+        if taxonomy_item:
+            resp = await self._do_browse(session, taxonomy_item)
+            self.handle_result_list(resp)
 
     async def _do_autosuggest(self, session, query_text, x_headers: dict = None, **kwargs) -> Response:
         latitude, longitude = self.search_center

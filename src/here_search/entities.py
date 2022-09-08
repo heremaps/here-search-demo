@@ -21,6 +21,7 @@ class Request:
     params: Dict[str, str] = None
     x_headers: dict = None
 
+    @property
     def key(self) -> str:
         return self.url + "".join(f"{k}{v}" for k, v in self.params.items())
 
@@ -38,9 +39,9 @@ class Response:
     @property
     def titles(self):
         if self.req.endpoint == Endpoint.LOOKUP:
-            return [self.data.get("title")]
+            return [self.data["title"]]
         else:
-            return [i["title"] for i in self.data["items"]]
+            return [i["title"] for i in self.data.get("items", [])]
 
     @property
     def terms(self):

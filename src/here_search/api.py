@@ -43,7 +43,7 @@ class API:
         :param request: Search Request object
         :return: a Response object
         """
-        cache_key = request.key()
+        cache_key = request.key
         if cache_key in self.cache:
             return self.__uncache(cache_key)
 
