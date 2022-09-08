@@ -28,7 +28,7 @@ stages:
 
 test:
   stage: test
-  image: docker-local.artifactory.in.here.com/onesearch-build-base-alpine:latest
+  image: docker-local.artifactory.in.here.com/python:latest
   script:
     - pip install -e .
     - pip install -r requirements_dev.txt
