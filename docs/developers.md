@@ -89,8 +89,30 @@ Optionally:
    ```
    bash macos_run.sh <YOUR API KEY>
    ```
-   
+
 3. Browse to the displayed URL
+
+### Test on MacOS / python3.7
+
+1. Build Python 3.7.9 for `pyenv`
+
+   ```
+   brew install zlib bzip2 openssl@1.1 readline xz
+   CFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix bzip2)/include -I$(brew --prefix readline)/include -I$(xcrun --show-sdk-path)/usr/include"
+   LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix readline)/lib -L$(brew --prefix zlib)/lib -L$(brew --prefix bzip2)/lib"
+   pyenv install 3.7.9
+   ```
+
+2. Create virtual environment
+
+   ```
+   pyenv virtualenv 3.7.9 venv3.7
+   pyenv activate venv3.7
+   pyenv local venv3.7 && python -V
+   pip install -e .
+   pip install -r requirements_dev.txt
+   ```
+
 
 ## External pointers
 

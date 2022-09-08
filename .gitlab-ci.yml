@@ -35,38 +35,25 @@ coverage:
     - coverage run --source src -m pytest
     - coverage report -m
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
+  #when: manual
 
-test36:
+test38:
   stage: test
-  image: "hcr.data.here.com/public_mirror/python:3.6-slim"
+  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
   script:
     - pip install -e .
     - pip install -r requirements_dev.txt
     - pytest
+  #when: manual
 
-test37:
+test39:
   stage: test
-  image: "hcr.data.here.com/public_mirror/python:3.7.9-slim"
+  image: "hcr.data.here.com/public_mirror/python:3.9-slim"
   script:
     - pip install -e .
     - pip install -r requirements_dev.txt
     - pytest
-
-#test38:
-#  stage: test
-#  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
-#  script:
-#    - pip install -e .
-#    - pip install -r requirements_dev.txt
-#    - pytest
-
-#test39:
-#  stage: test
-#  image: "hcr.data.here.com/public_mirror/python:3.9-slim"
-#  script:
-#    - pip install -e .
-#    - pip install -r requirements_dev.txt
-#    - pytest
+  #when: manual
 
 test310:
   stage: test
@@ -75,6 +62,7 @@ test310:
     - pip install -e .
     - pip install -r requirements_dev.txt
     - pytest
+  #when: manual
 
 build:
   stage: build
@@ -93,3 +81,4 @@ build:
     - docker tag ${CONTAINER_NAME} ${ARTIFACTORY_URL}/${CONTAINER_NAME}:$DEPLOYMENT_ID
     - docker tag ${CONTAINER_NAME} ${ARTIFACTORY_URL}/${CONTAINER_NAME}:latest
     - docker push ${ARTIFACTORY_URL}/${CONTAINER_NAME}:latest
+  when: manual

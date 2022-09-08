@@ -1,5 +1,3 @@
-asyncmock
-asynctest
 pytest
 pytest-asyncio
 coverage

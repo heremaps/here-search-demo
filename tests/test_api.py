@@ -1,19 +1,10 @@
-import here_search.api
-from src.here_search.entities import Request, Response, Endpoint
-from unittest.mock import Mock, patch
-
-try:
-    from unittest.mock import AsyncMock
-except ImportError:  # python3.6, python3.7
-    from asynctest import MagicMock as AsyncMock
-
-    async def async_magic():
-        pass
-
-    AsyncMock.__aexit__.__await__ = lambda x: async_magic().__await__()
-    AsyncMock.__await__ = lambda x: async_magic().__await__()
-
 import pytest
+
+import here_search.api
+from here_search.entities import Request, Response, Endpoint
+
+from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock
 
 expected_response_data = {"a": "b"}
 expected_x_headers = {"X-Request-Id": "userid", "X-Correlation-ID": "correlationId"}
