@@ -15,16 +15,18 @@ class OneBoxSimple:
     default_terms_limit = 3
     default_search_center = 52.51604, 13.37691
     default_language = "en"
-    default_headers = {'User-Agent': f'here-search-notebook-{__version__}'}
+    default_headers = {"User-Agent": f"here-search-notebook-{__version__}"}
 
-    def __init__(self,
-                 api: API=None,
-                 search_center: Tuple[float, float]=None,
-                 language: str=None,
-                 results_limit: int=None,
-                 suggestions_limit: int=None,
-                 terms_limit: int=None,
-                 **kwargs):
+    def __init__(
+        self,
+        api: API = None,
+        search_center: Tuple[float, float] = None,
+        language: str = None,
+        results_limit: int = None,
+        suggestions_limit: int = None,
+        terms_limit: int = None,
+        **kwargs,
+    ):
 
         self.api = api or API()
         klass = type(self)
@@ -72,28 +74,51 @@ class OneBoxSimple:
                     resp = await self._do_browse(session, taxonomy_item)
                     self.handle_result_list(resp)
 
-    async def _do_autosuggest(self, session, query_text, x_headers: dict=None, **kwargs) -> Response:
+    async def _do_autosuggest(self, session, query_text, x_headers: dict = None, **kwargs) -> Response:
         latitude, longitude = self.search_center
         return await asyncio.ensure_future(
-            self.api.autosuggest(query_text, latitude, longitude, x_headers=x_headers, session=session,
-                                 lang=self.language, limit=self.suggestions_limit, termsLimit=self.terms_limit, **kwargs))
+            self.api.autosuggest(
+                query_text,
+                latitude,
+                longitude,
+                x_headers=x_headers,
+                session=session,
+                lang=self.language,
+                limit=self.suggestions_limit,
+                termsLimit=self.terms_limit,
+                **kwargs,
+            )
+        )
 
-    async def _do_discover(self, session, query_text, x_headers: dict=None, **kwargs) -> Response:
+    async def _do_discover(self, session, query_text, x_headers: dict = None, **kwargs) -> Response:
         latitude, longitude = self.search_center
         return await asyncio.ensure_future(
-            self.api.discover(query_text, latitude, longitude, x_headers=x_headers, session=session, lang=self.language,
-                              limit=self.results_limit, **kwargs))
+            self.api.discover(
+                query_text,
+                latitude,
+                longitude,
+                x_headers=x_headers,
+                session=session,
+                lang=self.language,
+                limit=self.results_limit,
+                **kwargs,
+            )
+        )
 
-    async def _do_browse(self, session, taxonomy_item, x_headers: dict=None, **kwargs) -> Response:
+    async def _do_browse(self, session, taxonomy_item, x_headers: dict = None, **kwargs) -> Response:
         latitude, longitude = self.search_center
         return await asyncio.ensure_future(
-            self.api.browse(latitude, longitude,
-                            x_headers=x_headers,
-                            session=session,
-                            lang=self.language,
-                            limit=self.results_limit,
-                            **taxonomy_item.mapping,
-                            **kwargs))
+            self.api.browse(
+                latitude,
+                longitude,
+                x_headers=x_headers,
+                session=session,
+                lang=self.language,
+                limit=self.results_limit,
+                **taxonomy_item.mapping,
+                **kwargs,
+            )
+        )
 
     def wait_for_text_extension(self) -> Awaitable:
         raise NotImplementedError()
@@ -113,13 +138,19 @@ class OneBoxSimple:
     def handle_empty_text_submission(self, **kwargs) -> None:
         raise NotImplementedError()
 
-    def run(self,
-            handle_key_strokes: Callable=None,
-            handle_text_submissions: Callable=None,
-            handle_taxonomy_selections: Callable=None) -> "OneBoxSimple":
-        self.tasks.extend([asyncio.ensure_future(self.handle_key_strokes()),
-                           asyncio.ensure_future(self.handle_text_submissions()),
-                           asyncio.ensure_future(self.handle_taxonomy_selections())])
+    def run(
+        self,
+        handle_key_strokes: Callable = None,
+        handle_text_submissions: Callable = None,
+        handle_taxonomy_selections: Callable = None,
+    ) -> "OneBoxSimple":
+        self.tasks.extend(
+            [
+                asyncio.ensure_future(self.handle_key_strokes()),
+                asyncio.ensure_future(self.handle_text_submissions()),
+                asyncio.ensure_future(self.handle_taxonomy_selections()),
+            ]
+        )
         return self
 
     async def stop(self):
@@ -132,24 +163,27 @@ class OneBoxSimple:
 
 
 class OneBoxBase(OneBoxSimple):
-
-    def __init__(self,
-                 user_profile: Profile=None,
-                 api: API=None,
-                 results_limit: int=None,
-                 suggestions_limit: int=None,
-                 terms_limit: int=None,
-                 extra_api_params: dict=None,
-                 initial_query: str=None,
-                 **kwargs):
+    def __init__(
+        self,
+        user_profile: Profile = None,
+        api: API = None,
+        results_limit: int = None,
+        suggestions_limit: int = None,
+        terms_limit: int = None,
+        extra_api_params: dict = None,
+        initial_query: str = None,
+        **kwargs,
+    ):
 
         self.user_profile = user_profile or Default()
-        super().__init__(api=api,
-                         search_center=(self.user_profile.current_latitude, self.user_profile.current_longitude),
-                         language = self.user_profile.language,
-                         results_limit=results_limit,
-                         suggestions_limit=suggestions_limit,
-                         terms_limit=terms_limit)
+        super().__init__(
+            api=api,
+            search_center=(self.user_profile.current_latitude, self.user_profile.current_longitude),
+            language=self.user_profile.language,
+            results_limit=results_limit,
+            suggestions_limit=suggestions_limit,
+            terms_limit=terms_limit,
+        )
 
         self.extra_api_params = extra_api_params or {}
         self.initial_query = initial_query
@@ -163,13 +197,15 @@ class OneBoxBase(OneBoxSimple):
                 await self._do_discover(self.initial_query, session)
             while True:
                 query_text = await self.wait_for_text_submission()
-                if query_text.strip() == '':
+                if query_text.strip() == "":
                     self.handle_empty_text_submission()
                     continue
 
                 resp = await self._do_discover(session, query_text)
                 country_codes = {item["address"]["countryCode"] for item in resp.data["items"]}
-                preferred_languages = {self.user_profile.get_preferred_language(country_code) for country_code in country_codes}
+                preferred_languages = {
+                    self.user_profile.get_preferred_language(country_code) for country_code in country_codes
+                }
                 if len(preferred_languages) == 1 and preferred_languages != {None}:
                     language = preferred_languages.pop()
                     if language != self.language:
@@ -185,8 +221,10 @@ class OneBoxBase(OneBoxSimple):
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
             while True:
                 item: ResponseItem = await self.wait_for_selected_result()
-                if item is None:  break
-                if not item: continue
+                if item is None:
+                    break
+                if not item:
+                    continue
 
                 if item.data["resultType"] in ("categoryQuery", "chainQuery"):
                     resp = await self._do_autosuggest_expansion(session, item)
@@ -195,18 +233,17 @@ class OneBoxBase(OneBoxSimple):
                     resp = await self._do_lookup(session, item)
                     self.handle_result_details(resp)
 
-    async def _do_autosuggest_expansion(self, session, item, x_headers: dict=None) -> Response:
+    async def _do_autosuggest_expansion(self, session, item, x_headers: dict = None) -> Response:
         # patch against OSQ-32323
         orig_show = item.resp.req.params.get("show")
         params = {"show": orig_show} if orig_show else {}
         return await asyncio.ensure_future(
-            self.api.autosuggest_href(item.data["href"],
-                                      x_headers=x_headers,
-                                      limit=self.results_limit,
-                                      session=session,
-                                      **params))
+            self.api.autosuggest_href(
+                item.data["href"], x_headers=x_headers, limit=self.results_limit, session=session, **params
+            )
+        )
 
-    async def _do_lookup(self, session, item, x_headers: dict=None) -> Response:
+    async def _do_lookup(self, session, item, x_headers: dict = None) -> Response:
         """
         Perfooms a location id lookup
         :param session:
@@ -216,28 +253,28 @@ class OneBoxBase(OneBoxSimple):
         """
         if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
             return await asyncio.ensure_future(
-                self.api.lookup(item.data["id"],
-                                x_headers=x_headers,
-                                lang=self.language,
-                                session=session))
+                self.api.lookup(item.data["id"], x_headers=x_headers, lang=self.language, session=session)
+            )
         else:
             return await asyncio.ensure_future(
-                self.api.lookup(item.data["id"],
-                                x_headers=None,
-                                lang=self.language,
-                                session=session,
-                                **self.get_extra_params(Endpoint.LOOKUP)))
+                self.api.lookup(
+                    item.data["id"],
+                    x_headers=None,
+                    lang=self.language,
+                    session=session,
+                    **self.get_extra_params(Endpoint.LOOKUP),
+                )
+            )
 
-    async def _do_revgeocode(self, session, latitude, longitude, x_headers: dict=None) -> Response:
+    async def _do_revgeocode(self, session, latitude, longitude, x_headers: dict = None) -> Response:
         extra_params = {}
         if self.language:
             extra_params["lang"] = self.language
         return await asyncio.ensure_future(
-            self.api.reverse_geocode(latitude, longitude,
-                                     x_headers=x_headers,
-                                     session=session,
-                                     limit=self.results_limit,
-                                     **extra_params))
+            self.api.reverse_geocode(
+                latitude, longitude, x_headers=x_headers, session=session, limit=self.results_limit, **extra_params
+            )
+        )
 
     def set_search_center(self, latitude: float, longitude: float):
         self.search_center = latitude, longitude
@@ -248,11 +285,13 @@ class OneBoxBase(OneBoxSimple):
     def handle_result_details(self, response: Response) -> None:
         raise NotImplementedError()
 
-    def run(self,
-            handle_key_strokes: Callable=None,
-            handle_text_submissions: Callable=None,
-            handle_taxonomy_selections: Callable=None,
-            handle_result_selections: Callable=None):
+    def run(
+        self,
+        handle_key_strokes: Callable = None,
+        handle_text_submissions: Callable = None,
+        handle_taxonomy_selections: Callable = None,
+        handle_result_selections: Callable = None,
+    ):
         super().run(handle_key_strokes, handle_text_submissions, handle_taxonomy_selections)
         self.tasks.append(asyncio.ensure_future((handle_result_selections or self.handle_result_selections)()))
         return self

@@ -13,14 +13,24 @@ Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10p
 
 
 class SearchResultList(HBox):
-    default_layout = {'display': 'flex', 'width': '276px', 'height': '400px', 'justify_content': 'flex-start', 'overflow_y': 'scroll', 'overflow': 'scroll'}
+    default_layout = {
+        "display": "flex",
+        "width": "276px",
+        "height": "400px",
+        "justify_content": "flex-start",
+        "overflow_y": "scroll",
+        "overflow": "scroll",
+    }
     default_max_results_count = 20
 
-    def __init__(self, widget: Widget=None,
-                 max_results_number: int=None,
-                 result_queue: asyncio.Queue=None,
-                 layout: dict=None,
-                 **kwargs):
+    def __init__(
+        self,
+        widget: Widget = None,
+        max_results_number: int = None,
+        result_queue: asyncio.Queue = None,
+        layout: dict = None,
+        **kwargs,
+    ):
         self.widget = widget or Output()
         self.max_results_number = max_results_number or type(self).default_max_results_count
         self.result_queue = result_queue or asyncio.Queue()
@@ -55,7 +65,7 @@ class SearchResultList(HBox):
 
     def _display(self, resp: Response) -> Widget:
         out = Output(layout=self.layout)
-        text = ['| | |', '|:-|:-|']
+        text = ["| | |", "|:-|:-|"]
         for i, item in enumerate(resp.data["items"]):
             if "contacts" in item:
                 category_id, category_name = self.get_primary_category(item)
@@ -66,11 +76,13 @@ class SearchResultList(HBox):
             text.append(f"| <font size='1px'>{i: <2}</font> | <font size='1px'>{title}</font> |")
             if item["resultType"] in ("categoryQuery", "chainQuery"):
                 text.append(f"| | <font size='1px'><sup>{item['resultType']}</sup></font> |")
-            elif item["resultType"] == 'place':
-                address = item['address']['label'].partition(', ')[-1]
+            elif item["resultType"] == "place":
+                address = item["address"]["label"].partition(", ")[-1]
                 text.append(f"| | <font size='1px'><sup>{address}</sup></font> |")
                 if "media" in item and "images" in item["media"]:
-                    text.append(f'| | <img src="{item["media"]["images"]["items"][0]["href"]}" width="32" height="32"/> |')
+                    text.append(
+                        f'| | <img src="{item["media"]["images"]["items"][0]["href"]}" width="32" height="32"/> |'
+                    )
         out.append_display_data(Markdown("\n".join(text)))
         return out
 
@@ -103,48 +115,74 @@ class SearchResultJson(SearchResultList):
 
 class SearchResultSelectMultiple(SearchResultList):
     def _display(self, resp: Response) -> Widget:
-        return SelectMultiple(options=[item["title"] for item in resp.data["items"]],
-                              rows=len(resp["items"]),
-                              disabled=False)
+        return SelectMultiple(
+            options=[item["title"] for item in resp.data["items"]], rows=len(resp["items"]), disabled=False
+        )
 
 
 class SearchResultButton(HBox):
-    default_layout = {'display': 'flex', 'width': '270px', 'justify_content': 'flex-start', 'height': '24px', 'min_height': '24px', 'overflow': 'visible'}
+    default_layout = {
+        "display": "flex",
+        "width": "270px",
+        "justify_content": "flex-start",
+        "height": "24px",
+        "min_height": "24px",
+        "overflow": "visible",
+    }
 
     def __init__(self, item: ResponseItem, **kvargs):
-        self.label = Label(value='', layout={'width': '20px'})
+        self.label = Label(value="", layout={"width": "20px"})
         # TODO: create a class derived from Both Button and ResponseItem
-        self.button = Button(description='',  icon='',
-                             layout=Layout(display='flex', justify_content='flex-start', height='24px', min_height='24px', width='270px')
-                             )
+        self.button = Button(
+            description="",
+            icon="",
+            layout=Layout(
+                display="flex", justify_content="flex-start", height="24px", min_height="24px", width="270px"
+            ),
+        )
         self.button.value = item
         if item.data is not None:
             self.set_result(item.data, item.rank, item.resp)
-        HBox.__init__(self, [self.label, self.button], layout=Layout(**kvargs.pop('layout', self.__class__.default_layout)), **kvargs)
-        self.add_class('result-button')
+        HBox.__init__(
+            self,
+            [self.label, self.button],
+            layout=Layout(**kvargs.pop("layout", self.__class__.default_layout)),
+            **kvargs,
+        )
+        self.add_class("result-button")
 
     def set_result(self, data: dict, rank: int, resp: Response):
         self.button.value = ResponseItem(data=data, rank=rank or 0, resp=resp)
         self.button.description = data["title"]
-        self.label.value = f'{self.button.value.rank+1: <2}'
-        self.button.icon = 'search' if "Query" in data["resultType"] else '' # That's a hack...
+        self.label.value = f"{self.button.value.rank+1: <2}"
+        self.button.icon = "search" if "Query" in data["resultType"] else ""  # That's a hack...
 
 
 class SearchResultButtons(SearchResultList):
     buttons: List[SearchResultButton] = []
-    default_layout = {'display': 'flex', 'width': '276px', 'height': '400px', 'justify_content': 'flex-start', 'overflow': 'auto'}
+    default_layout = {
+        "display": "flex",
+        "width": "276px",
+        "height": "400px",
+        "justify_content": "flex-start",
+        "overflow": "auto",
+    }
 
-    def __init__(self,
-                 widget: Widget=None,
-                 max_results_number: int=None,
-                 result_queue: asyncio.Queue=None,
-                 layout: dict=None,
-                 **kwargs):
+    def __init__(
+        self,
+        widget: Widget = None,
+        max_results_number: int = None,
+        result_queue: asyncio.Queue = None,
+        layout: dict = None,
+        **kwargs,
+    ):
         super().__init__(widget, max_results_number, result_queue, layout, **kwargs)
         for i in range(self.max_results_number):
             search_result = SearchResultButton(item=ResponseItem())
+
             def getvalue(button: Button):
                 self.result_queue.put_nowait(button.value)
+
             search_result.button.on_click(getvalue)
             self.buttons.append(search_result)
 
@@ -152,7 +190,7 @@ class SearchResultButtons(SearchResultList):
         items = [resp.data] if resp.req.endpoint == Endpoint.LOOKUP else resp.data.get("items", [])
         for rank, item_data in enumerate(items):
             self.buttons[rank].set_result(item_data, rank, resp)
-        out = self.buttons[:len(items)]
+        out = self.buttons[: len(items)]
         return VBox(out, layout=self.layout)
 
     def _clear(self) -> Widget:
@@ -162,21 +200,22 @@ class SearchResultButtons(SearchResultList):
 class SearchResultRadioButtons(SearchResultList):
     css_displayed = False
 
-    def __init__(self,
-                 widget: Widget=None,
-                 max_results_number: int=None,
-                 result_queue: asyncio.Queue=None,
-                 layout: dict=None,
-                 **kwargs):
+    def __init__(
+        self,
+        widget: Widget = None,
+        max_results_number: int = None,
+        result_queue: asyncio.Queue = None,
+        layout: dict = None,
+        **kwargs,
+    ):
         super().__init__(widget, max_results_number, result_queue, layout, **kwargs)
         if not SearchResultButtons.css_displayed:
             Idisplay(HTML("<style>.result-radio label { font-size: 10px; }</style>"))
             SearchResultButtons.css_displayed = True
 
     def _display(self, resp: Response) -> Widget:
-        buttons = RadioButtons(options=[item["title"] for item in resp.data["items"]],
-                               disabled=False)
-        buttons.add_class('result-radio')
+        buttons = RadioButtons(options=[item["title"] for item in resp.data["items"]], disabled=False)
+        buttons.add_class("result-radio")
         # TODO: create a class derived from RadioButtons, able to host an item (A SearchResultRadioButton class)
         return buttons
 
@@ -195,10 +234,9 @@ class ResponseMap(PositionMap):
         self.collection = GeoJSON(data=resp.geojson(), show_bubble=True, point_style=ResponseMap.default_point_style)
         self.add_layer(self.collection)
         south, north, east, west = resp.bbox()
-        height = north-south
-        width = east-west
+        height = north - south
+        width = east - west
         # https://github.com/heremaps/here-map-widget-for-jupyter/issues/37
-        self.bounds = south-height/8, north+height/8, east+width/8, west-width/8
+        self.bounds = south - height / 8, north + height / 8, east + width / 8, west - width / 8
         if len(resp.data.get("items", [])) == 1:
             self.zoom = ResponseMap.minimum_zoom_level
-

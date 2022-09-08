@@ -25,10 +25,7 @@ class Profile:
     chicago = 41.87478, -87.62977
     berlin = 52.51604, 13.37691
 
-    def __init__(self,
-                 use_positioning: bool,
-                 languages: dict=None,
-                 name: str=None):
+    def __init__(self, use_positioning: bool, languages: dict = None, name: str = None):
         """
         :param use_position: Mandatory opt-in/out about position usage
         :param api: Optional API instance
@@ -36,12 +33,14 @@ class Profile:
         :param name: Optional user name
         """
         self.name = name or Profile.default_name
-        self.id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{self.name}{uuid.getnode()}'))
+        self.id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{self.name}{uuid.getnode()}"))
 
         self.__use_positioning = use_positioning
 
         self.preferred_languages = languages or {}
-        self.has_country_preferences = not (self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name])
+        self.has_country_preferences = not (
+            self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name]
+        )
 
         self.language = None
         nest_asyncio.apply()
@@ -61,26 +60,29 @@ class Profile:
     def set_position(self, latitude, longitude) -> "Profile":
         self.current_latitude = latitude
         self.current_longitude = longitude
-        self.current_country_code, self.language = asyncio.get_running_loop().run_until_complete(self.get_preferred_locale(latitude, longitude))
+        self.current_country_code, self.language = asyncio.get_running_loop().run_until_complete(
+            self.get_preferred_locale(latitude, longitude)
+        )
         return self
 
     def get_preferred_language(self, country_code: str):
-        return self.preferred_languages.get(country_code, self.preferred_languages.get(self.__class__.default_name, None))
+        return self.preferred_languages.get(
+            country_code, self.preferred_languages.get(self.__class__.default_name, None)
+        )
 
     async def get_preferred_locale(self, latitude: float, longitude: float) -> Tuple[str, str]:
         country_code, language = None, None
         async with ClientSession(raise_for_status=True) as session:
             api = API()
             local_addresses = await asyncio.ensure_future(
-                api.reverse_geocode(latitude=latitude,
-                                    longitude=longitude,
-                                    session=session))
+                api.reverse_geocode(latitude=latitude, longitude=longitude, session=session)
+            )
 
             if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
                 country_code = local_addresses.data["items"][0]["address"]["countryCode"]
                 address_details = await asyncio.ensure_future(
-                    api.lookup(id=local_addresses.data["items"][0]["id"],
-                               session=session))
+                    api.lookup(id=local_addresses.data["items"][0]["id"], session=session)
+                )
                 language = address_details.data["language"]
 
             return country_code, language
@@ -93,7 +95,9 @@ class Profile:
         else:
             async with ClientSession(raise_for_status=True) as session:
                 self.current_latitude, self.current_longitude = await get_lat_lon(session)
-            self.current_country_code, self.language = await self.get_preferred_locale(self.current_latitude, self.current_longitude)
+            self.current_country_code, self.language = await self.get_preferred_locale(
+                self.current_latitude, self.current_longitude
+            )
 
     def get_current_language(self):
         if self.current_country_code in self.preferred_languages:

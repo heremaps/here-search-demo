@@ -22,7 +22,7 @@ class Request:
     x_headers: dict = None
 
     def key(self) -> str:
-        return self.url+"".join(f"{k}{v}"for k, v in self.params.items())
+        return self.url + "".join(f"{k}{v}" for k, v in self.params.items())
 
     @property
     def full(self):
@@ -44,7 +44,7 @@ class Response:
 
     @property
     def terms(self):
-        return list({term['term']: None for term in self.data.get('queryTerms', [])}.keys())
+        return list({term["term"]: None for term in self.data.get("queryTerms", [])}.keys())
 
     def bbox(self) -> Optional[Tuple[float, float, float, float]]:
         """
@@ -73,23 +73,34 @@ class Response:
             if "position" not in item:
                 continue
             longitude, latitude = item["position"]["lng"], item["position"]["lat"]
-            categories = [c["name"] for c in item["categories"]
-                          if c.get("primary")][0] if "categories" in item else None
-            collection["features"].append({"type": "Feature",
-                                           "geometry": {
-                                               "type": "Point",
-                                               "coordinates": [longitude, latitude]},
-                                           "properties": {"title": item["title"],
-                                                          "categories": categories}})
+            categories = (
+                [c["name"] for c in item["categories"] if c.get("primary")][0] if "categories" in item else None
+            )
+            collection["features"].append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [longitude, latitude]},
+                    "properties": {"title": item["title"], "categories": categories},
+                }
+            )
             if False and "mapView" in item:
-                west, south, east, north = item["mapView"]["west"], item["mapView"]["south"], item["mapView"]["east"], item["mapView"]["north"]
-                collection["features"].append({"type": "Feature",
-                                               "geometry": {
-                                                   "type": "Polygon",
-                                                   "coordinates":    [[west, south], [east, south], [east, north],
-                                                                      [west, north], [west, south]]
-                                               }})
+                west, south, east, north = (
+                    item["mapView"]["west"],
+                    item["mapView"]["south"],
+                    item["mapView"]["east"],
+                    item["mapView"]["north"],
+                )
+                collection["features"].append(
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [[west, south], [east, south], [east, north], [west, north], [west, south]],
+                        },
+                    }
+                )
         return collection
+
 
 @dataclass
 class ResponseItem:
@@ -99,10 +110,13 @@ class ResponseItem:
 
 
 class PlaceTaxonomyItem:
-    def __init__(self, name: str,
-                 categories: Optional[Sequence[str]] = None,
-                 food_types: Optional[Sequence[str]] = None,
-                 chains: Optional[Sequence[str]] = None):
+    def __init__(
+        self,
+        name: str,
+        categories: Optional[Sequence[str]] = None,
+        food_types: Optional[Sequence[str]] = None,
+        chains: Optional[Sequence[str]] = None,
+    ):
         self.name = name
         self.categories = categories
         self.food_types = food_types
@@ -130,21 +144,18 @@ class PlaceTaxonomy:
 
 
 class PlaceTaxonomyExample:
-    items, icons = zip(*[
-        #                --------------------------------------------------------------------
-        #                | item name | categories     | food types | chains  | icon         |
-        #                --------------------------------------------------------------------
-        (PlaceTaxonomyItem("gas",     ["700-7600-0000",
-                                       "700-7600-0116",
-                                       "700-7600-0444"], None,       None),    "fa-gas-pump"),
-        (PlaceTaxonomyItem("eat",     ["100"],           None,       None),    "fa-utensils"),
-        (PlaceTaxonomyItem("sleep",   ["500-5000"],      None,       None),    "fa-bed"),
-        (PlaceTaxonomyItem("park",    ["400-4300",
-                                       "800-8500"],      None,       None),    "fa-parking"),
-        (PlaceTaxonomyItem("ATM",     ["700-7010-0108"], None,       None),    "fa-euro-sign"),
-        (PlaceTaxonomyItem("pizza",    None,            ["800-057"], None),    "fa-pizza-slice"),
-        (PlaceTaxonomyItem("fastfood", None,             None,      ["1566",
-                                                                     "1498"]), "fa-hamburger")])
+    items, icons = zip(
+        *[
+            #                --------------------------------------------------------------------
+            #                | item name | categories     | food types | chains  | icon         |
+            #                --------------------------------------------------------------------
+            (PlaceTaxonomyItem("gas", ["700-7600-0000", "700-7600-0116", "700-7600-0444"], None, None), "fa-gas-pump"),
+            (PlaceTaxonomyItem("eat", ["100"], None, None), "fa-utensils"),
+            (PlaceTaxonomyItem("sleep", ["500-5000"], None, None), "fa-bed"),
+            (PlaceTaxonomyItem("park", ["400-4300", "800-8500"], None, None), "fa-parking"),
+            (PlaceTaxonomyItem("ATM", ["700-7010-0108"], None, None), "fa-euro-sign"),
+            (PlaceTaxonomyItem("pizza", None, ["800-057"], None), "fa-pizza-slice"),
+            (PlaceTaxonomyItem("fastfood", None, None, ["1566", "1498"]), "fa-hamburger"),
+        ]
+    )
     taxonomy = PlaceTaxonomy("example", items)
-
-
