@@ -61,6 +61,14 @@ test39:
     - pip install -r requirements_dev.txt
     - pytest
 
+test310:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.10-slim"
+  script:
+    - pip install -e .
+    - pip install -r requirements_dev.txt
+    - pytest
+
 build:
   stage: build
   script:

@@ -1,6 +1,11 @@
 import here_search.api
 from src.here_search.entities import Request, Response, Endpoint
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, patch
+try:
+    from unittest.mock import AsyncMock
+except ImportError:  # python3.6, python3.7
+    from asyncmock import AsyncMock
+
 import pytest
 
 expected_response_data = {"a": "b"}
