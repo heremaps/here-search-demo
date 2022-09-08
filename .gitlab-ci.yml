@@ -28,7 +28,7 @@ stages:
 
 test:
   stage: test
-  image: hcr.data.here.com/public_mirror/python:latest
+  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
   script:
     - pip install -e .
     - pip install -r requirements_dev.txt
