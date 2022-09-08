@@ -17,7 +17,6 @@ setup(name=project_name,
       license='MIT',
       classifiers=[
             'Intended Audience :: Developers',
-            'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
             'Programming Language :: Python :: 3.8',
             'Programming Language :: Python :: 3.9',
@@ -29,5 +28,5 @@ setup(name=project_name,
       package_data={f'{package_name}.notebooks': ['*.ipynb']},
       install_requires=[p for p in Path(Path(__file__).parent, 'requirements.txt').open().readlines()
                         if not p.startswith("--")],
-      python_requires=">=3.6",
+      python_requires=">=3.7",
       zip_safe=False)
