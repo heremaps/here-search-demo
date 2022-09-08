@@ -36,6 +36,13 @@ coverage:
     - coverage report -m
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
 
+test36:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.6-slim"
+  script:
+    - pip install -e .
+    - pip install -r requirements_dev.txt
+    - pytest
 
 test37:
   stage: test
@@ -45,25 +52,25 @@ test37:
     - pip install -r requirements_dev.txt
     - pytest
 
-test38:
-  stage: test
-  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
-  script:
-    - pip install -e .
-    - pip install -r requirements_dev.txt
-    - pytest
+#test38:
+#  stage: test
+#  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
+#  script:
+#    - pip install -e .
+#    - pip install -r requirements_dev.txt
+#    - pytest
 
-test39:
-  stage: test
-  image: "hcr.data.here.com/public_mirror/python:3.9-slim"
-  script:
-    - pip install -e .
-    - pip install -r requirements_dev.txt
-    - pytest
+#test39:
+#  stage: test
+#  image: "hcr.data.here.com/public_mirror/python:3.9-slim"
+#  script:
+#    - pip install -e .
+#    - pip install -r requirements_dev.txt
+#    - pytest
 
 test310:
   stage: test
-  image: "hcr.data.here.com/public_mirror/python:3.10-slim"
+  image: "hcr.data.here.com/public_mirror/python:3.10-alpine"
   script:
     - pip install -e .
     - pip install -r requirements_dev.txt

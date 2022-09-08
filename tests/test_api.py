@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 try:
     from unittest.mock import AsyncMock
 except ImportError:  # python3.6, python3.7
-    from asyncmock import AsyncMock
+    from asynctest import MagicMock as AsyncMock
 
 import pytest
 
@@ -23,17 +23,6 @@ aiohttp_response = AsyncMock(**{'url': Mock(**{'human_repr.return_value': "human
 aiohttp_session = AsyncMock(get=Mock(**{'return_value.__aenter__': AsyncMock(return_value=aiohttp_response),
                                         'return_value.__aexit__': AsyncMock(return_value=None)}))
 
-
-async def response() -> Response:
-    api = here_search.api.API(api_key="api_key")
-
-    aiohttp_response = AsyncMock(**{'json.return_value': expected_response_data, 'headers': expected_x_headers})
-    aiohttp_session = AsyncMock(get=Mock(**{'return_value.__aenter__': AsyncMock(return_value=aiohttp_response),
-                                            'return_value.__aexit__': AsyncMock(return_value=None)}))
-
-    response = await api.get(request, aiohttp_session)
-
-    return response
 
 @pytest.mark.asyncio
 async def test_retrieve_response():
@@ -60,14 +49,6 @@ async def test_retrieve_response():
     assert expected_x_headers == response.x_headers
     assert request == response.req
     assert api.cache[cache_key] == (aiohttp_response.url.human_repr(), response)
-
-
-def test_request_key():
-    request = Request(endpoint=Endpoint.AUTOSUGGEST,
-                      url="url",
-                      x_headers={'X-a': 1, 'Y-b': 2},
-                      params={'p1': 'v1', 'p2': 'v2'})
-    assert request.key() == "urlp1v1p2v2"
 
 
 @pytest.mark.asyncio
