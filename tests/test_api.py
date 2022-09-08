@@ -10,6 +10,7 @@ except ImportError:  # python3.6, python3.7
     async def async_magic():
         pass
 
+    AsyncMock.__aexit__.__await__ = lambda x: async_magic().__await__()
     AsyncMock.__await__ = lambda x: async_magic().__await__()
 
 import pytest
