@@ -22,18 +22,24 @@ services:
     done ; [ $STATUS -ne 0 ] && exit 1
 
 stages:
+  - test
   - build
   - push
 
-before_script:
-  - apk add --update --no-cache sudo bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make 
-  - ln -sf python /usr/bin/python
-  - pip install --no-cache --upgrade pip setuptools
-  
+test:
+  image: python:3.7
+  stage: test
+  script:
+    - pip install -r requirements_dev.txt
+    - pytest
+
 build:
   stage: build
   script:
     - *artfactory_login
+    - apk add --update --no-cache sudo bash py-pip python3-dev libffi-dev openssl-dev gcc libc-dev make
+    - ln -sf python /usr/bin/python
+    - pip install --no-cache --upgrade pip setuptools
     - PATH=/home/search:/home/search/.local/bin:$PATH
     - pip install jupyter-repo2docker --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
     - adduser -h /home search -S -D -u 1999
