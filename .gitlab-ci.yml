@@ -27,9 +27,9 @@ stages:
   - push
 
 test:
-  image: python:3.7
   stage: test
   script:
+    - pip install -e .
     - pip install -r requirements_dev.txt
     - pytest
 
