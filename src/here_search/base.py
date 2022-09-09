@@ -44,13 +44,25 @@ class OneBoxSimple:
         This method repeatedly waits on key strokes in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True) as session:
-            while True:
+            while True:  # pragma: no cover
                 await self.handle_key_stroke(session)
 
     async def handle_key_stroke(self, session: ClientSession):
         query_text = await self.wait_for_text_extension()
         if query_text:
-            resp = await self._do_autosuggest(session, query_text)
+            latitude, longitude = self.search_center
+            resp = await asyncio.ensure_future(
+                self.api.autosuggest(
+                    query_text,
+                    latitude,
+                    longitude,
+                    x_headers=None,
+                    session=session,
+                    lang=self.language,
+                    limit=self.suggestions_limit,
+                    termsLimit=self.terms_limit
+                )
+            )
             self.handle_suggestion_list(resp)
         else:
             self.handle_empty_text_submission()
@@ -60,7 +72,7 @@ class OneBoxSimple:
         This method repeatedly waits for texts submitted in the one box search Text form.
         """
         async with ClientSession(raise_for_status=True) as session:
-            while True:
+            while True:  # pragma: no cover
                 await self.handle_text_submission(session)
 
     async def handle_text_submission(self, session):
@@ -74,7 +86,7 @@ class OneBoxSimple:
         This method is called for each shortcut button selected.
         """
         async with ClientSession(raise_for_status=True) as session:
-            while True:
+            while True:  # pragma: no cover
                 await self.handle_taxonomy_selection(session)
 
     async def handle_taxonomy_selection(self, session):
@@ -82,22 +94,6 @@ class OneBoxSimple:
         if taxonomy_item:
             resp = await self._do_browse(session, taxonomy_item)
             self.handle_result_list(resp)
-
-    async def _do_autosuggest(self, session, query_text, x_headers: dict = None, **kwargs) -> Response:
-        latitude, longitude = self.search_center
-        return await asyncio.ensure_future(
-            self.api.autosuggest(
-                query_text,
-                latitude,
-                longitude,
-                x_headers=x_headers,
-                session=session,
-                lang=self.language,
-                limit=self.suggestions_limit,
-                termsLimit=self.terms_limit,
-                **kwargs,
-            )
-        )
 
     async def _do_discover(self, session, query_text, x_headers: dict = None, **kwargs) -> Response:
         latitude, longitude = self.search_center
@@ -167,8 +163,7 @@ class OneBoxSimple:
             task.cancel()
 
     def __del__(self):
-        loop = asyncio.get_running_loop()
-        loop.run_until_complete(self.stop())
+        asyncio.run(self.stop())
 
 
 class OneBoxBase(OneBoxSimple):

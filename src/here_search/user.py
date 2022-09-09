@@ -105,10 +105,7 @@ class Profile:
         return self.preferred_languages[Profile.default_name]
 
     def __repr__(self):
-        if self.preferred_languages:
-            languages = self.preferred_languages
-        else:
-            languages = self.language
+        languages = self.preferred_languages or self.language
         return f"{self.__class__.__name__}(name={self.name}, id={self.id}, lang={languages}, opt_in={self.__use_positioning}/{self.__share_experience})"
 
 

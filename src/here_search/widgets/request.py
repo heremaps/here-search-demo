@@ -3,6 +3,7 @@ from here_map_widget import Map, Platform, ServiceNames, MapTileUrl, MapTile, Ti
 from ipywidgets import HBox, VBox, Text, Button, Layout, HTML
 
 from here_search.entities import PlaceTaxonomyItem, PlaceTaxonomy
+from here_search.util import set_dict_values
 
 from typing import Awaitable, Tuple, Callable, Sequence
 from functools import reduce
@@ -17,20 +18,6 @@ class SubmittableText(Text):
 
     def on_submit(self, callback, remove=False):
         self._submission_callbacks.register_callback(callback, remove=remove)
-
-    @staticmethod
-    def _put_buffers(state: dict, buffer_paths: Sequence[Sequence[str]], buffers: list):
-        """
-        Set specific state dict deeper values to specific buffers values specified by
-        the buffer_paths list of paths in the state dict.
-
-        Refactoring of widget._put_buffers(method)
-        :param state: Nested dict. Typically only contains {"value": <str>}
-        :param buffer_paths: successive of keys in the state nested dict
-        :param buffers: list of values to set in state
-        """
-        for buffer_path, buffer in zip(buffer_paths, buffers):
-            reduce(dict.get, buffer_path, state)[buffer_path[-1]] = buffer
 
     def _handle_msg(self, msg: dict) -> None:
         """
@@ -47,7 +34,7 @@ class SubmittableText(Text):
             if "state" in data:
                 state = data["state"]
                 if "buffer_paths" in data:
-                    SubmittableText._put_buffers(state, data["buffer_paths"], msg["buffers"])
+                    state = set_dict_values(state, data["buffer_paths"], msg["buffers"])
                 self.set_state(state)
         elif method == "request_state":
             self.send_state()
