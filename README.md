@@ -17,7 +17,7 @@ A typical way to run a Python notebook such as the `here-search-notebook`, is to
 1. Install the Python package
 
    ```
-   $ pip -v install here-search-demo --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
+   $ pip -v install here-search-widget --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
    ```
 
 2. Configure Jupyter

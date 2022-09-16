@@ -26,7 +26,5 @@ setup(name=project_name,
       scripts=[Path(package_path, package_name, "scripts", "here-search-notebooks").as_posix()],
       package_dir={'': package_path},
       package_data={f'{package_name}.notebooks': ['*.ipynb']},
-      install_requires=[p for p in Path(Path(__file__).parent, 'requirements.txt').open().readlines()
-                        if not p.startswith("--")],
       python_requires=">=3.8",
       zip_safe=False)
