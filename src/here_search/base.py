@@ -192,29 +192,24 @@ class OneBoxBase(OneBoxSimple):
         self.extra_api_params = extra_api_params or {}
         self.initial_query = initial_query
 
-    async def handle_text_submissions(self):
-        """
-        This method repeatedly waits for texts submitted in the one box search Text form.
-        """
-        async with ClientSession(raise_for_status=True, headers=self.headers) as session:
-            if self.initial_query:
-                await self._do_discover(self.initial_query, session)
-            while True:
-                query_text = await self.wait_for_text_submission()
-                if query_text.strip() == "":
-                    self.handle_empty_text_submission()
-                    continue
+    async def handle_text_submission(self, session):
+        query_text = await self.wait_for_text_submission()
+        if query_text.strip() == "":
+            self.handle_empty_text_submission()
+        else:
+            resp = await self._do_discover(session, query_text)
+            await self.adapt_language(resp)
+            self.handle_result_list(resp)
 
-                resp = await self._do_discover(session, query_text)
-                country_codes = {item["address"]["countryCode"] for item in resp.data["items"]}
-                preferred_languages = {
-                    self.user_profile.get_preferred_language(country_code) for country_code in country_codes
-                }
-                if len(preferred_languages) == 1 and preferred_languages != {None}:
-                    language = preferred_languages.pop()
-                    if language != self.language:
-                        self.language = language
-                self.handle_result_list(resp)
+    async def adapt_language(self, resp):
+        country_codes = {item["address"]["countryCode"] for item in resp.data["items"]}
+        preferred_languages = {
+            self.user_profile.get_preferred_language(country_code) for country_code in country_codes
+        }
+        if len(preferred_languages) == 1 and preferred_languages != {None}:
+            language = preferred_languages.pop()
+            if language != self.language:
+                self.language = language
 
     async def handle_result_selections(self):
         """
@@ -223,19 +218,17 @@ class OneBoxBase(OneBoxSimple):
         If it is another type, a lookup call is sent.
         """
         async with ClientSession(raise_for_status=True, headers=self.headers) as session:
-            while True:
-                item: ResponseItem = await self.wait_for_selected_result()
-                if item is None:
-                    break
-                if not item:
-                    continue
+            while True:  # pragma: no cover
+                await self.handle_result_selection(session)
 
-                if item.data["resultType"] in ("categoryQuery", "chainQuery"):
-                    resp = await self._do_autosuggest_expansion(session, item)
-                    self.handle_result_list(resp)
-                else:
-                    resp = await self._do_lookup(session, item)
-                    self.handle_result_details(resp)
+    async def handle_result_selection(self, session):
+        item: ResponseItem = await self.wait_for_selected_result()
+        if item.data["resultType"] in ("categoryQuery", "chainQuery"):
+            resp = await self._do_autosuggest_expansion(session, item)
+            self.handle_result_list(resp)
+        else:
+            resp = await self._do_lookup(session, item)
+            self.handle_result_details(resp)
 
     async def _do_autosuggest_expansion(self, session, item, x_headers: dict = None) -> Response:
         # patch against OSQ-32323
@@ -247,7 +240,7 @@ class OneBoxBase(OneBoxSimple):
             )
         )
 
-    async def _do_lookup(self, session, item, x_headers: dict = None) -> Response:
+    async def _do_lookup(self, session, item, x_headers: dict = None, **kwargs) -> Response:
         """
         Perfooms a location id lookup
         :param session:
@@ -257,7 +250,11 @@ class OneBoxBase(OneBoxSimple):
         """
         if item.resp.req.endpoint == Endpoint.AUTOSUGGEST:
             return await asyncio.ensure_future(
-                self.api.lookup(item.data["id"], x_headers=x_headers, lang=self.language, session=session)
+                self.api.lookup(item.data["id"],
+                                x_headers=x_headers,
+                                lang=self.language,
+                                session=session,
+                                **kwargs)
             )
         else:
             return await asyncio.ensure_future(
@@ -266,17 +263,21 @@ class OneBoxBase(OneBoxSimple):
                     x_headers=None,
                     lang=self.language,
                     session=session,
-                    **self.get_extra_params(Endpoint.LOOKUP),
+                    **kwargs
                 )
             )
 
-    async def _do_revgeocode(self, session, latitude, longitude, x_headers: dict = None) -> Response:
-        extra_params = {}
+    async def _do_revgeocode(self, session, latitude, longitude, x_headers: dict = None, **kwargs) -> Response:
+        extra_params = kwargs or {}
         if self.language:
             extra_params["lang"] = self.language
         return await asyncio.ensure_future(
             self.api.reverse_geocode(
-                latitude, longitude, x_headers=x_headers, session=session, limit=self.results_limit, **extra_params
+                latitude, longitude,
+                x_headers=x_headers,
+                session=session,
+                limit=self.results_limit,
+                **kwargs
             )
         )
 

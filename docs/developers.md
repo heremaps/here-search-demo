@@ -39,9 +39,11 @@ It has only been tested on a Macos Monterey machine, but it should not be too di
 
 ### Upload a new package to artifactory
 
-    pip install twine wheel
-    python setup.py sdist bdist_wheel
-    twine upload --skip-existing --repository-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi dist/*
+   ```
+   pip install twine build
+   python -m build --wheel
+   twine upload --skip-existing --repository-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi dist/*
+   ```
 
 ### Generate a Notebook Docker image
 

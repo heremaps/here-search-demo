@@ -162,8 +162,8 @@ class OneBoxMap(OneBoxBase, VBox):
         self,
         handle_key_strokes: Callable = None,
         handle_text_submissions: Callable = None,
-        handle_result_selections: Callable = None,
         handle_taxonomy_selections: Callable = None,
+        handle_result_selections: Callable = None,
     ):
 
         nest_asyncio.apply()
@@ -171,8 +171,8 @@ class OneBoxMap(OneBoxBase, VBox):
             self,
             handle_key_strokes or self.handle_key_strokes,
             handle_text_submissions or self.handle_text_submissions,
-            handle_result_selections or self.handle_result_selections,
             handle_taxonomy_selections or self.handle_taxonomy_selections,
+            handle_result_selections or self.handle_result_selections,
         )
         return self
 
