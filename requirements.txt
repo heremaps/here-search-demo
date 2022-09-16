@@ -3,9 +3,6 @@ ipykernel
 ipywidgets
 aiohttp
 nest_asyncio
-ujson
 here-map-widget-for-jupyter
 
---extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple/
-
-jupyter-repo2docker
+# https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/jupyter-repo2docker/2022.2.0+62.g484b29b.dirty/jupyter_repo2docker-2022.2.0+62.g484b29b.dirty-py2.py3-none-any.whl
