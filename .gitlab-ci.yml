@@ -76,7 +76,7 @@ build:
     - adduser -h /home search -S -D -u 1999
     - /usr/bin/jupyter-repo2docker --no-run --image-name ${CONTAINER_NAME} --user-id 1999 --user-name search .
     # The following should be in a follow-up push stage
-    - SEARCH_DEMO_VERSION=$(cut -d\' -f2 src/here_search/__init__.py)
+    - SEARCH_DEMO_VERSION=$(cut -d\" -f2 src/here_search/__init__.py)
     - DEPLOYMENT_ID=${CI_PROJECT_NAME}-${SEARCH_DEMO_VERSION}-$CI_COMMIT_REF_NAME-${CI_COMMIT_SHORT_SHA}
     - echo $DEPLOYMENT_ID
     - echo docker tag ${CONTAINER_NAME} ${ARTIFACTORY_URL}/${CONTAINER_NAME}:$DEPLOYMENT_ID
