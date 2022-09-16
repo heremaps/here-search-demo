@@ -27,4 +27,6 @@ setup(name=project_name,
       package_dir={'': package_path},
       package_data={f'{package_name}.notebooks': ['*.ipynb']},
       python_requires=">=3.8",
+      install_requires=[p for p in Path(Path(__file__).parent, 'requirements.txt').open().readlines()
+                        if not p.startswith("--")],
       zip_safe=False)
