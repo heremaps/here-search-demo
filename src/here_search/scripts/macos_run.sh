@@ -4,9 +4,9 @@ for lib in hyperkit minikube docker docker-compose; do
   brew ls --versions $lib || brew install $lib
 done
 
+minikube start
 ip=$(minikube ip)
 if ! minikube ip > /dev/null; then
-  minikube start
   grep $ip /etc/hosts || echo "$ip docker.local" | sudo tee -a /etc/hosts > /dev/null
 fi
 
