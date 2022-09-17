@@ -31,9 +31,14 @@ It has only been tested on a Macos Monterey machine, but it should not be too di
 3. Jupyter config
 
    ```
+   python -m ipykernel install --user --name search_demo --display-name "search demo"
+   ```
+   
+To run the notebook on Jupyter Classic, you will need:
+
+   ```
    jupyter nbextension enable --py widgetsnbextension
    jupyter labextension install @jupyterlab/geojson-extension
-   python -m ipykernel install --user --name search_demo --display-name "search demo"
    ```
 
 ### Upload a new package to a pypa repository

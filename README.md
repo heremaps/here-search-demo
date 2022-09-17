@@ -8,13 +8,15 @@ Requirements: a [HERE API key][1] and a Python environment.
 
 ## Installation
 
+Run preferably in a virtual environment:
+
    ```
    pip -v install here-search-widget --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
    ```
 
+Link the virtual environment to a IPython kernel:
+
    ```
-   jupyter nbextension enable --py widgetsnbextension
-   jupyter labextension install @jupyterlab/geojson-extension
    python -m ipykernel install --user --name search_demo --display-name "search demo"
    ```
 
