@@ -11,13 +11,16 @@ Requirements: a [HERE API key][1] and a Python environment.
 Run preferably in a virtual environment:
 
    ```
-   pip -v install here-search-widget --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
+   pip -v install here-search-widget \
+     --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
    ```
 
 Link the virtual environment to a IPython kernel:
 
    ```
-   python -m ipykernel install --user --name search_demo --display-name "search demo"
+   python -m ipykernel install \
+     --prefix $(python -c "import sys; print(sys.prefix)") \
+     --name search_demo --display-name "search demo"
    ```
 
 ## Usage

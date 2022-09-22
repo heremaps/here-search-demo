@@ -1,9 +1,14 @@
 from IPython.display import display_html
 from here_map_widget import Map, Platform, ServiceNames, MapTileUrl, MapTile, TileLayer
 from ipywidgets import HBox, VBox, Text, Button, Layout, HTML
+from traitlets.utils.bunch import Bunch
+
 
 from here_search.entities import PlaceTaxonomyItem, PlaceTaxonomy
 from here_search.util import set_dict_values
+from here_search.entities import (Response, Endpoint, ResponseItem, PlaceTaxonomyItem, SearchContext, AutosuggestConfig,
+                       EndpointConfig, DiscoverConfig, BrowseConfig, LookupConfig)
+from here_search.api import PartialTextSearchEvent, SearchIntent, FormulatedIntent, NoIntent
 
 from typing import Awaitable, Tuple, Callable, Sequence
 from functools import reduce
@@ -50,19 +55,28 @@ class SubmittableTextBox(HBox):
     default_icon = "search"
     default_button_width = "32px"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, queue: asyncio.Queue, *args, **kwargs):
         self.lens_w = Button(
             icon=kwargs.pop("icon", SubmittableTextBox.default_icon),
             layout={"width": SubmittableTextBox.default_button_width},
         )
+        self.queue = queue
         self.text_w = SubmittableText(*args, layout=kwargs.pop("layout", Layout()), **kwargs)
+
+        def get_instant_value(change: Bunch):
+            value = change.new
+            event = SearchIntent(materialization=value) if value else NoIntent()
+            self.queue.put_nowait(event)
+        self.text_w.observe(get_instant_value, "value")
+
+        def get_value(_):
+            value = self.text_w.value
+            event = FormulatedIntent(materialization=value) if value else NoIntent()
+            self.queue.put_nowait(event)
+        self.on_submit(get_value)
+        self.on_click(get_value)
+
         super().__init__([self.text_w, self.lens_w], **kwargs)
-
-    def observe_text(self, *args):
-        self.text_w.observe(*args)
-
-    def unobserve_text(self, *args):
-        self.text_w.unobserve(*args)
 
     def on_submit(self, callback, remove=False):
         self.text_w.on_submit(callback, remove=remove)
@@ -77,40 +91,6 @@ class SubmittableTextBox(HBox):
     def emable(self):
         self.text_w.disabled = False
         self.lens_w.disabled = False
-
-    def get_text_change(self) -> Awaitable:
-        """
-        Returns an awaitable future set to the observed Text widget value
-        :return: asyncio.Future instance
-        """
-        # This method allows to control the call to the widget
-        # handler outside of the jupyter event loop
-        future = asyncio.Future()
-
-        def getvalue(change: dict):
-            value = change.new
-            future.set_result(value if not value.endswith("~") else None)
-            self.unobserve_text(getvalue, "value")
-
-        self.observe_text(getvalue, "value")
-        return future
-
-    def get_text_submission(self) -> Awaitable:
-        """
-        Returns an awaitable future set to the submitted Text widget value
-        :return: asyncio.Future instance
-        """
-        future = asyncio.Future()
-
-        def getvalue(_):
-            value = self.text_w.value
-            future.set_result(value if not value.endswith("~") else None)
-            self.on_submit(getvalue, remove=True)
-            self.on_click(getvalue, remove=True)
-
-        self.on_submit(getvalue)
-        self.on_click(getvalue)
-        return future
 
 
 class SearchTermsBox(VBox):
@@ -218,23 +198,19 @@ class PlaceTaxonomyButton(Button):
 class PlaceTaxonomyButtons(HBox):
     default_buttons = [PlaceTaxonomyButton(item=PlaceTaxonomyItem(name="_"), icon="")]
 
-    def __init__(self, taxonomy: PlaceTaxonomy, icons: Sequence[str]):
-        self.buttons = [
-            PlaceTaxonomyButton(item, icon) for item, icon in zip(taxonomy.items.values(), icons)
-        ] or PlaceTaxonomyButtons.default_buttons
+    def __init__(self, queue: asyncio.Queue, taxonomy: PlaceTaxonomy, icons: Sequence[str]):
+        self.buttons = []
+        self.queue = queue
+        for item, icon in zip(taxonomy.items.values(), icons):
+            button = PlaceTaxonomyButton(item, icon)
+            def get_value(button: Button):
+                intent = FormulatedIntent(materialization=button.item)
+                self.queue.put_nowait(intent)
+            button.on_click(get_value)
+            self.buttons.append(button)
+        self.buttons = self.buttons or PlaceTaxonomyButtons.default_buttons
+
         HBox.__init__(self, self.buttons)
-
-    def get_taxonomy_item(self) -> Awaitable:
-        future = asyncio.Future()
-        for button in self.buttons or PlaceTaxonomyButtons.default_buttons:
-
-            def getvalue(clicked_button):
-                future.set_result(clicked_button.item)
-                for other_button in self.buttons:
-                    other_button._click_handlers.callbacks.clear()
-
-            button.on_click(getvalue)
-        return future
 
 
 class PositionMap(Map):
