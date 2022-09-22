@@ -19,7 +19,9 @@ def setLevel(level: int):
     client_logger.setLevel(level)
 
 
-def set_dict_values(source: dict, target_keys: Sequence[Sequence[str]], target_values: list) -> dict:
+def set_dict_values(
+    source: dict, target_keys: Sequence[Sequence[str]], target_values: list
+) -> dict:
     """
     Return a modified version of a nested dict for which
     values have been changed according to a set of paths.

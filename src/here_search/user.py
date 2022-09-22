@@ -39,7 +39,8 @@ class Profile:
 
         self.preferred_languages = languages or {}
         self.has_country_preferences = not (
-            self.preferred_languages == {} or list(self.preferred_languages.keys()) == [Profile.default_name]
+            self.preferred_languages == {}
+            or list(self.preferred_languages.keys()) == [Profile.default_name]
         )
 
         self.language = None
@@ -60,28 +61,44 @@ class Profile:
     def set_position(self, latitude, longitude) -> "Profile":
         self.current_latitude = latitude
         self.current_longitude = longitude
-        self.current_country_code, self.language = asyncio.get_running_loop().run_until_complete(
+        (
+            self.current_country_code,
+            self.language,
+        ) = asyncio.get_running_loop().run_until_complete(
             self.get_preferred_locale(latitude, longitude)
         )
         return self
 
     def get_preferred_language(self, country_code: str):
         return self.preferred_languages.get(
-            country_code, self.preferred_languages.get(self.__class__.default_name, None)
+            country_code,
+            self.preferred_languages.get(self.__class__.default_name, None),
         )
 
-    async def get_preferred_locale(self, latitude: float, longitude: float) -> Tuple[str, str]:
+    async def get_preferred_locale(
+        self, latitude: float, longitude: float
+    ) -> Tuple[str, str]:
         country_code, language = None, None
         async with ClientSession(raise_for_status=True) as session:
             api = API()
             local_addresses = await asyncio.ensure_future(
-                api.reverse_geocode(latitude=latitude, longitude=longitude, session=session)
+                api.reverse_geocode(
+                    latitude=latitude, longitude=longitude, session=session
+                )
             )
 
-            if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
-                country_code = local_addresses.data["items"][0]["address"]["countryCode"]
+            if (
+                local_addresses
+                and "items" in local_addresses.data
+                and len(local_addresses.data["items"]) > 0
+            ):
+                country_code = local_addresses.data["items"][0]["address"][
+                    "countryCode"
+                ]
                 address_details = await asyncio.ensure_future(
-                    api.lookup(id=local_addresses.data["items"][0]["id"], session=session)
+                    api.lookup(
+                        id=local_addresses.data["items"][0]["id"], session=session
+                    )
                 )
                 language = address_details.data["language"]
 
@@ -94,7 +111,9 @@ class Profile:
             self.current_country_code = Profile.default_country_code
         else:
             async with ClientSession(raise_for_status=True) as session:
-                self.current_latitude, self.current_longitude = await get_lat_lon(session)
+                self.current_latitude, self.current_longitude = await get_lat_lon(
+                    session
+                )
             self.current_country_code, self.language = await self.get_preferred_locale(
                 self.current_latitude, self.current_longitude
             )

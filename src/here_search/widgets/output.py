@@ -1,15 +1,29 @@
-from IPython.display import display as Idisplay, display_html, Markdown, JSON as IJSON
-from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML, Layout
+from IPython.display import display as Idisplay, Markdown, JSON as IJSON
+from ipywidgets import (
+    Widget,
+    HBox,
+    VBox,
+    Button,
+    RadioButtons,
+    Output,
+    SelectMultiple,
+    Label,
+    HTML,
+    Layout,
+)
 
 from here_map_widget import GeoJSON
-
-from here_search.entities import Response, ResponseItem, Endpoint
-from .request import PositionMap
+from here_search.entities import Response, ResponseItem, Endpoint, FormulatedIntent
+from .input import PositionMap
 
 from typing import List
 import asyncio
 
-Idisplay(HTML("<style>.result-button div, .result-button button { font-size: 10px; }</style>"))
+Idisplay(
+    HTML(
+        "<style>.result-button div, .result-button button { font-size: 10px; }</style>"
+    )
+)
 
 
 class SearchResultList(HBox):
@@ -27,20 +41,24 @@ class SearchResultList(HBox):
         self,
         widget: Widget = None,
         max_results_number: int = None,
-        result_queue: asyncio.Queue = None,
+        queue: asyncio.Queue = None,
         layout: dict = None,
         **kwargs,
     ):
         self.widget = widget or Output()
-        self.max_results_number = max_results_number or type(self).default_max_results_count
-        self.result_queue = result_queue or asyncio.Queue()
+        self.max_results_number = (
+            max_results_number or type(self).default_max_results_count
+        )
+        self.queue = queue or asyncio.Queue()
         self.layout = layout or type(self).default_layout
         self.futures = []
         super().__init__([self.widget], **kwargs)
 
     @classmethod
     def get_primary_category(cls, place_item):
-        primary_category = [c for c in place_item.get("categories", []) if c.get("primary")][0]
+        primary_category = [
+            c for c in place_item.get("categories", []) if c.get("primary")
+        ][0]
         category_id = primary_category["id"]
         category_name = primary_category["name"]
         return category_id, category_name
@@ -70,12 +88,18 @@ class SearchResultList(HBox):
             if "contacts" in item:
                 category_id, category_name = self.get_primary_category(item)
                 www = self.get_www(item, category_id)
-                title = f"**[{item['title']}]({www})**" if www else f"**{item['title']}**"
+                title = (
+                    f"**[{item['title']}]({www})**" if www else f"**{item['title']}**"
+                )
             else:
                 title = f"**{item['title']}**"
-            text.append(f"| <font size='1px'>{i: <2}</font> | <font size='1px'>{title}</font> |")
+            text.append(
+                f"| <font size='1px'>{i: <2}</font> | <font size='1px'>{title}</font> |"
+            )
             if item["resultType"] in ("categoryQuery", "chainQuery"):
-                text.append(f"| | <font size='1px'><sup>{item['resultType']}</sup></font> |")
+                text.append(
+                    f"| | <font size='1px'><sup>{item['resultType']}</sup></font> |"
+                )
             elif item["resultType"] == "place":
                 address = item["address"]["label"].partition(", ")[-1]
                 text.append(f"| | <font size='1px'><sup>{address}</sup></font> |")
@@ -116,7 +140,9 @@ class SearchResultJson(SearchResultList):
 class SearchResultSelectMultiple(SearchResultList):
     def _display(self, resp: Response) -> Widget:
         return SelectMultiple(
-            options=[item["title"] for item in resp.data["items"]], rows=len(resp["items"]), disabled=False
+            options=[item["title"] for item in resp.data["items"]],
+            rows=len(resp["items"]),
+            disabled=False,
         )
 
 
@@ -137,7 +163,11 @@ class SearchResultButton(HBox):
             description="",
             icon="",
             layout=Layout(
-                display="flex", justify_content="flex-start", height="24px", min_height="24px", width="270px"
+                display="flex",
+                justify_content="flex-start",
+                height="24px",
+                min_height="24px",
+                width="270px",
             ),
         )
         self.button.value = item
@@ -155,7 +185,9 @@ class SearchResultButton(HBox):
         self.button.value = ResponseItem(data=data, rank=rank or 0, resp=resp)
         self.button.description = data["title"]
         self.label.value = f"{self.button.value.rank+1: <2}"
-        self.button.icon = "search" if "Query" in data["resultType"] else ""  # That's a hack...
+        self.button.icon = (
+            "search" if "Query" in data["resultType"] else ""
+        )  # That's a hack...
 
 
 class SearchResultButtons(SearchResultList):
@@ -172,22 +204,27 @@ class SearchResultButtons(SearchResultList):
         self,
         widget: Widget = None,
         max_results_number: int = None,
-        result_queue: asyncio.Queue = None,
+        queue: asyncio.Queue = None,
         layout: dict = None,
         **kwargs,
     ):
-        super().__init__(widget, max_results_number, result_queue, layout, **kwargs)
+        super().__init__(widget, max_results_number, queue, layout, **kwargs)
         for i in range(self.max_results_number):
             search_result = SearchResultButton(item=ResponseItem())
 
             def getvalue(button: Button):
-                self.result_queue.put_nowait(button.value)
+                intent = FormulatedIntent(materialization=button.value)
+                self.queue.put_nowait(intent)
 
             search_result.button.on_click(getvalue)
             self.buttons.append(search_result)
 
     def _display(self, resp: Response) -> Widget:
-        items = [resp.data] if resp.req.endpoint == Endpoint.LOOKUP else resp.data.get("items", [])
+        items = (
+            [resp.data]
+            if resp.req.endpoint == Endpoint.LOOKUP
+            else resp.data.get("items", [])
+        )
         for rank, item_data in enumerate(items):
             self.buttons[rank].set_result(item_data, rank, resp)
         out = self.buttons[: len(items)]
@@ -204,17 +241,19 @@ class SearchResultRadioButtons(SearchResultList):
         self,
         widget: Widget = None,
         max_results_number: int = None,
-        result_queue: asyncio.Queue = None,
+        queue: asyncio.Queue = None,
         layout: dict = None,
         **kwargs,
     ):
-        super().__init__(widget, max_results_number, result_queue, layout, **kwargs)
+        super().__init__(widget, max_results_number, queue, layout, **kwargs)
         if not SearchResultButtons.css_displayed:
             Idisplay(HTML("<style>.result-radio label { font-size: 10px; }</style>"))
             SearchResultButtons.css_displayed = True
 
     def _display(self, resp: Response) -> Widget:
-        buttons = RadioButtons(options=[item["title"] for item in resp.data["items"]], disabled=False)
+        buttons = RadioButtons(
+            options=[item["title"] for item in resp.data["items"]], disabled=False
+        )
         buttons.add_class("result-radio")
         # TODO: create a class derived from RadioButtons, able to host an item (A SearchResultRadioButton class)
         return buttons
@@ -222,7 +261,13 @@ class SearchResultRadioButtons(SearchResultList):
 
 class ResponseMap(PositionMap):
     minimum_zoom_level = 11
-    default_point_style = {"strokeColor": "white", "lineWidth": 1, "fillColor": "blue", "fillOpacity": 0.7, "radius": 7}
+    default_point_style = {
+        "strokeColor": "white",
+        "lineWidth": 1,
+        "fillColor": "blue",
+        "fillOpacity": 0.7,
+        "radius": 7,
+    }
 
     def __init__(self, **kwargs):
         self.collection = None
@@ -231,12 +276,23 @@ class ResponseMap(PositionMap):
     def display(self, resp: Response):
         if self.collection:
             self.remove_layer(self.collection)
-        self.collection = GeoJSON(data=resp.geojson(), show_bubble=True, point_style=ResponseMap.default_point_style)
-        self.add_layer(self.collection)
-        south, north, east, west = resp.bbox()
-        height = north - south
-        width = east - west
-        # https://github.com/heremaps/here-map-widget-for-jupyter/issues/37
-        self.bounds = south - height / 8, north + height / 8, east + width / 8, west - width / 8
-        if len(resp.data.get("items", [])) == 1:
-            self.zoom = ResponseMap.minimum_zoom_level
+        bbox = resp.bbox()
+        if bbox:
+            self.collection = GeoJSON(
+                data=resp.geojson(),
+                show_bubble=True,
+                point_style=ResponseMap.default_point_style,
+            )
+            self.add_layer(self.collection)
+            south, north, east, west = bbox
+            height = north - south
+            width = east - west
+            # https://github.com/heremaps/here-map-widget-for-jupyter/issues/37
+            self.bounds = (
+                south - height / 8,
+                north + height / 8,
+                east + width / 8,
+                west - width / 8,
+            )
+            if len(resp.data.get("items", [])) == 1:
+                self.zoom = ResponseMap.minimum_zoom_level

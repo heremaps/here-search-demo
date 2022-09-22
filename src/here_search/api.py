@@ -1,12 +1,28 @@
 from aiohttp import ClientSession
-from json import loads
 
-from .entities import Request, Response, Endpoint
+from .entities import (
+    Request,
+    Response,
+    Endpoint,
+    ResponseItem,
+    PlaceTaxonomyItem,
+    SearchContext,
+    AutosuggestConfig,
+    EndpointConfig,
+    DiscoverConfig,
+    BrowseConfig,
+    LookupConfig,
+)
 from .util import logger
 
 from typing import Dict, Sequence, Optional, Callable, Tuple
-import os
+from json import loads
 from getpass import getpass
+from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
+import asyncio
+import os
+
 
 base_url = {
     ep: f"https://{eps}.search.hereapi.com/v1/{eps}"
@@ -29,12 +45,21 @@ class API:
     api_key: str
     cache: Dict[str, Tuple[str, Response]]
 
-    def __init__(self, api_key: str = None, cache: dict = None, url_format_fn: Callable[[str], str] = None):
-        self.api_key = api_key or os.environ.get("API_KEY") or getpass(prompt="api key: ")
+    def __init__(
+        self,
+        api_key: str = None,
+        cache: dict = None,
+        url_format_fn: Callable[[str], str] = None,
+    ):
+        self.api_key = (
+            api_key or os.environ.get("API_KEY") or getpass(prompt="api key: ")
+        )
         self.cache = cache or {}
         self.format_url = url_format_fn or (lambda x: x)
 
-    async def uncache_or_get(self, request: Request, session: ClientSession) -> Response:
+    async def uncache_or_get(
+        self, request: Request, session: ClientSession
+    ) -> Response:
         """
         Returns from HERE Search backend the response for a specific Request, or from the cache if it has been cached.
         Cache the Response if returned by the HERE Search backend.
@@ -48,14 +73,21 @@ class API:
             return self.__uncache(cache_key)
 
         request.params["apiKey"] = self.api_key
-        params = {k: ",".join(v) if isinstance(v, list) else v for k, v in request.params.items()}
-        async with session.get(request.url, params=params, headers=request.x_headers or {}) as get_response:
+        params = {
+            k: ",".join(v) if isinstance(v, list) else v
+            for k, v in request.params.items()
+        }
+        async with session.get(
+            request.url, params=params, headers=request.x_headers or {}
+        ) as get_response:
             return await self.restrieve_response(get_response, request, cache_key)
 
     def __uncache(self, cache_key):
         actual_url, cached_response = self.cache[cache_key]
         data = cached_response.data.copy()
-        response = Response(data=data, x_headers=cached_response.x_headers, req=cached_response.req)
+        response = Response(
+            data=data, x_headers=cached_response.x_headers, req=cached_response.req
+        )
         formatted_msg = self.format_url(actual_url)
         logger.info(f"{formatted_msg} (cached)")
         return response
@@ -74,7 +106,13 @@ class API:
         return response
 
     async def autosuggest(
-        self, q: str, latitude: float, longitude: float, x_headers: dict = None, session: ClientSession = None, **kwargs
+        self,
+        q: str,
+        latitude: float,
+        longitude: float,
+        x_headers: dict = None,
+        session: ClientSession = None,
+        **kwargs,
     ) -> Response:
         """
         Calls HERE Search Autosuggest endpoint
@@ -86,10 +124,13 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q, "at": f"{latitude},{longitude}"}
+        params = {"q": q.strip(), "at": f"{latitude},{longitude}"}
         params.update(kwargs)
         request = Request(
-            endpoint=Endpoint.AUTOSUGGEST, url=base_url[Endpoint.AUTOSUGGEST], params=params, x_headers=x_headers
+            endpoint=Endpoint.AUTOSUGGEST,
+            url=base_url[Endpoint.AUTOSUGGEST],
+            params=params,
+            x_headers=x_headers,
         )
         return await self.get(request, session)
 
@@ -113,11 +154,22 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        request = Request(endpoint=Endpoint.AUTOSUGGEST_HREF, url=href, params=kwargs, x_headers=x_headers)
+        request = Request(
+            endpoint=Endpoint.AUTOSUGGEST_HREF,
+            url=href,
+            params=kwargs,
+            x_headers=x_headers,
+        )
         return await self.get(request, session)
 
     async def discover(
-        self, q: str, latitude: float, longitude: float, x_headers: dict = None, session: ClientSession = None, **kwargs
+        self,
+        q: str,
+        latitude: float,
+        longitude: float,
+        x_headers: dict = None,
+        session: ClientSession = None,
+        **kwargs,
     ) -> Response:
         """
         Calls HERE Search Discover endpoint
@@ -129,10 +181,13 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q, "at": f"{latitude},{longitude}"}
+        params = {"q": q.strip(), "at": f"{latitude},{longitude}"}
         params.update(kwargs)
         request = Request(
-            endpoint=Endpoint.DISCOVER, url=base_url[Endpoint.DISCOVER], params=params, x_headers=x_headers
+            endpoint=Endpoint.DISCOVER,
+            url=base_url[Endpoint.DISCOVER],
+            params=params,
+            x_headers=x_headers,
         )
         return await self.get(request, session)
 
@@ -167,10 +222,17 @@ class API:
         if chains:
             params["chains"] = ",".join(sorted(set(chains or [])))
         params.update(kwargs)
-        request = Request(endpoint=Endpoint.BROWSE, url=base_url[Endpoint.BROWSE], params=params, x_headers=x_headers)
+        request = Request(
+            endpoint=Endpoint.BROWSE,
+            url=base_url[Endpoint.BROWSE],
+            params=params,
+            x_headers=x_headers,
+        )
         return await self.get(request, session)
 
-    async def lookup(self, id: str, x_headers: dict = None, session: ClientSession = None, **kwargs) -> Response:
+    async def lookup(
+        self, id: str, x_headers: dict = None, session: ClientSession = None, **kwargs
+    ) -> Response:
         """
         Calls HERE Search Lookup for a specific id
 
@@ -181,11 +243,21 @@ class API:
         """
         params = {"id": id}
         params.update(kwargs)
-        request = Request(endpoint=Endpoint.LOOKUP, url=base_url[Endpoint.LOOKUP], params=params, x_headers=x_headers)
+        request = Request(
+            endpoint=Endpoint.LOOKUP,
+            url=base_url[Endpoint.LOOKUP],
+            params=params,
+            x_headers=x_headers,
+        )
         return await self.get(request, session)
 
     async def reverse_geocode(
-        self, latitude: float, longitude: float, x_headers: dict = None, session: ClientSession = None, **kwargs
+        self,
+        latitude: float,
+        longitude: float,
+        x_headers: dict = None,
+        session: ClientSession = None,
+        **kwargs,
     ) -> Response:
         """
         Calls HERE Reverese Geocode for a geo position
@@ -199,6 +271,149 @@ class API:
         params = {"at": f"{latitude},{longitude}"}
         params.update(kwargs)
         request = Request(
-            endpoint=Endpoint.REVGEOCODE, url=base_url[Endpoint.REVGEOCODE], params=params, x_headers=x_headers
+            endpoint=Endpoint.REVGEOCODE,
+            url=base_url[Endpoint.REVGEOCODE],
+            params=params,
+            x_headers=x_headers,
         )
         return await self.get(request, session)
+
+
+@dataclass
+class SearchEvent(metaclass=ABCMeta):
+    context: SearchContext
+
+    @abstractmethod
+    async def get_response(
+        self, api: API, config: EndpointConfig, session: ClientSession
+    ) -> Response:
+        raise NotImplementedError()
+
+
+@dataclass
+class PartialTextSearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey key strokes in the one box search Text form to an App waiting loop
+    """
+
+    query_text: str
+
+    async def get_response(
+        self, api: API, config: AutosuggestConfig, session: ClientSession
+    ) -> Response:
+        return await asyncio.ensure_future(
+            api.autosuggest(
+                self.query_text,
+                self.context.latitude,
+                self.context.longitude,
+                x_headers=None,
+                session=session,
+                lang=self.context.language,
+                limit=config.limit,
+                termsLimit=config.terms_limit,
+            )
+        )
+
+
+@dataclass
+class TextSearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey text submissions from the one box search Text form to an App waiting loop
+    """
+
+    query_text: str
+
+    async def get_response(
+        self, api: API, config: DiscoverConfig, session: ClientSession
+    ) -> Response:
+        return await asyncio.ensure_future(
+            api.discover(
+                self.query_text,
+                self.context.latitude,
+                self.context.longitude,
+                x_headers=None,
+                session=session,
+                lang=self.context.language,
+                limit=config.limit,
+            )
+        )
+
+
+@dataclass
+class TaxonomySearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey taxonomy selections to an App waiting loop
+    """
+
+    item: PlaceTaxonomyItem
+
+    async def get_response(
+        self, api: API, config: BrowseConfig, session: ClientSession
+    ) -> Response:
+        return await asyncio.ensure_future(
+            api.browse(
+                self.context.latitude,
+                self.context.longitude,
+                x_headers=None,
+                session=session,
+                lang=self.context.language,
+                limit=config.limit,
+                **self.item.mapping,
+            )
+        )
+
+
+@dataclass
+class DetailsSearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey location response items selections to an App waiting loop
+    """
+
+    item: ResponseItem
+
+    async def get_response(
+        self, api: API, config: LookupConfig, session: ClientSession
+    ) -> Response:
+        return await asyncio.ensure_future(
+            api.lookup(
+                self.item.data["id"],
+                x_headers=None,
+                lang=self.context.language,
+                session=session,
+            )
+        )
+
+
+@dataclass
+class FollowUpSearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey query response items selections to an App waiting loop
+    """
+
+    item: ResponseItem
+
+    async def get_response(
+        self, api: API, config: DiscoverConfig, session: ClientSession
+    ) -> Response:
+        return await asyncio.ensure_future(
+            api.autosuggest_href(
+                self.item.data["href"],
+                x_headers=None,
+                limit=config.limit,
+                session=session,
+            )
+        )
+
+
+@dataclass
+class EmptySearchEvent(SearchEvent):
+    context: Optional[None] = None
+
+    async def get_response(
+        self, api: API, config: LookupConfig, session: ClientSession
+    ) -> Response:
+        pass
+
+
+class UnsupportedSearchEvent(Exception):
+    pass

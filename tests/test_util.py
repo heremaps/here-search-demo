@@ -4,8 +4,9 @@ from here_search.util import set_dict_values
 
 
 def test_set_dict_values():
-    assert set_dict_values({"a": 1, "b": {"c": None, "d": {"e": True}}},
-                           [["a"], ["b", "d"]], [2, False]) == {"a": 2, "b": {"c": None, "d": False}}
+    assert set_dict_values(
+        {"a": 1, "b": {"c": None, "d": {"e": True}}}, [["a"], ["b", "d"]], [2, False]
+    ) == {"a": 2, "b": {"c": None, "d": False}}
 
 
 def test_set_dict_values1():
@@ -26,4 +27,6 @@ def test_set_dict_values4():
 
 
 def test_set_dict_values5():
-    assert set_dict_values({}, [["a"], ["a", "b"]], [{"c": None}, 2]) == {"a": {"c": None, "b": 2}}
+    assert set_dict_values({}, [["a"], ["a", "b"]], [{"c": None}, 2]) == {
+        "a": {"c": None, "b": 2}
+    }

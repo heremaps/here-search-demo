@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Sequence, Optional
+from typing import Tuple, Dict, Sequence, Optional, Union
 from dataclasses import dataclass
 from collections import namedtuple
 from enum import IntEnum, auto
@@ -45,14 +45,21 @@ class Response:
 
     @property
     def terms(self):
-        return list({term["term"]: None for term in self.data.get("queryTerms", [])}.keys())
+        return list(
+            {term["term"]: None for term in self.data.get("queryTerms", [])}.keys()
+        )
 
     def bbox(self) -> Optional[Tuple[float, float, float, float]]:
         """
         Returns response bounding rectangle (south latitude, north latitude, east longitude, west longitude)
         """
         latitudes, longitudes = [], []
-        for item in self.data.get("items", []):
+        items = (
+            [self.data]
+            if self.req.endpoint == Endpoint.LOOKUP
+            else self.data.get("items", [])
+        )
+        for item in items:
             if "position" not in item:
                 continue
             longitude, latitude = item["position"]["lng"], item["position"]["lat"]
@@ -70,12 +77,19 @@ class Response:
 
     def geojson(self) -> dict:
         collection = {"type": "FeatureCollection", "features": []}
-        for item in self.data["items"]:
+        items = (
+            [self.data]
+            if self.req.endpoint == Endpoint.LOOKUP
+            else self.data.get("items", [])
+        )
+        for item in items:
             if "position" not in item:
                 continue
             longitude, latitude = item["position"]["lng"], item["position"]["lat"]
             categories = (
-                [c["name"] for c in item["categories"] if c.get("primary")][0] if "categories" in item else None
+                [c["name"] for c in item["categories"] if c.get("primary")][0]
+                if "categories" in item
+                else None
             )
             collection["features"].append(
                 {
@@ -96,7 +110,13 @@ class Response:
                         "type": "Feature",
                         "geometry": {
                             "type": "Polygon",
-                            "coordinates": [[west, south], [east, south], [east, north], [west, north], [west, south]],
+                            "coordinates": [
+                                [west, south],
+                                [east, south],
+                                [east, north],
+                                [west, north],
+                                [west, south],
+                            ],
                         },
                     }
                 )
@@ -125,7 +145,11 @@ class PlaceTaxonomyItem:
 
     @property
     def mapping(self):
-        return {"categories": self.categories, "food_types": self.food_types, "chains": self.chains}
+        return {
+            "categories": self.categories,
+            "food_types": self.food_types,
+            "chains": self.chains,
+        }
 
     def __repr__(self):
         return f"{self.name}({self.categories}, {self.food_types}, {self.chains})"
@@ -144,6 +168,7 @@ class PlaceTaxonomy:
         return f"{self.name}({items})"
 
 
+# fmt: off
 class PlaceTaxonomyExample:
     items, icons = zip(
         *[
@@ -160,3 +185,96 @@ class PlaceTaxonomyExample:
         ]
     )
     taxonomy = PlaceTaxonomy("example", items)
+# fmt: on
+
+
+@dataclass
+class SearchIntent:
+    materialization: Union[None, str, PlaceTaxonomyItem, ResponseItem]
+
+
+@dataclass
+class FormulatedIntent(SearchIntent):
+    pass
+
+
+@dataclass
+class TransientIntent(SearchIntent):
+    pass
+
+
+@dataclass
+class NoIntent(SearchIntent):
+    materialization: Optional[None] = None
+
+
+class UnsupportedIntentMaterialization(Exception):
+    pass
+
+
+@dataclass
+class SearchContext:
+    latitude: float
+    longitude: float
+    language: Optional[str] = None
+
+
+@dataclass
+class EndpointConfig:
+    DEFAULT_LIMIT = 20
+    limit: Optional[int] = DEFAULT_LIMIT
+
+
+@dataclass
+class AutosuggestConfig(EndpointConfig):
+    DEFAULT_TERMS_LIMIT = 20
+    terms_limit: Optional[int] = DEFAULT_TERMS_LIMIT
+
+
+@dataclass
+class DiscoverConfig(EndpointConfig):
+    pass
+
+
+@dataclass
+class BrowseConfig(EndpointConfig):
+    pass
+
+
+@dataclass
+class LookupConfig:
+    pass
+
+
+@dataclass
+class NoConfig:
+    pass
+
+
+class MetaFactory:
+    klass = None
+    primitive = (int, float, str, bool, type)
+
+    def __new__(cls, name, bases, namespaces):
+        klass = namespaces["klass"]
+        if klass in MetaFactory.primitive:
+            return klass
+        namespaces["__new__"] = cls.__new
+        return type(name, bases, namespaces)
+
+    def __new(cls, *args, **kwargs):
+        obj = object.__new__(cls.klass)
+        obj.__init__(*args[1:], **kwargs)
+        return obj
+
+
+class AutosuggestConfigFactory(metaclass=MetaFactory):
+    klass = AutosuggestConfig
+
+
+class DiscoverConfigFactory(metaclass=MetaFactory):
+    klass = DiscoverConfig
+
+
+class BrowseConfigFactory(metaclass=MetaFactory):
+    klass = BrowseConfig
