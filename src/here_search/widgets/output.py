@@ -13,7 +13,8 @@ from ipywidgets import (
 )
 
 from here_map_widget import GeoJSON
-from here_search.entities import Response, ResponseItem, Endpoint, FormulatedIntent
+from here_search.entities import Response, ResponseItem, Endpoint
+from here_search.api import MoreDetailsIntent
 from .input import PositionMap
 
 from typing import List
@@ -213,7 +214,7 @@ class SearchResultButtons(SearchResultList):
             search_result = SearchResultButton(item=ResponseItem())
 
             def getvalue(button: Button):
-                intent = FormulatedIntent(materialization=button.value)
+                intent = MoreDetailsIntent(materialization=button.value)
                 self.queue.put_nowait(intent)
 
             search_result.button.on_click(getvalue)

@@ -4,10 +4,11 @@ from . import __version__
 from .user import Profile, Default
 from .api import (
     API,
+    SearchIntent,
     PartialTextSearchEvent,
     SearchEvent,
     TextSearchEvent,
-    TaxonomySearchEvent,
+    PlaceTaxonomySearchEvent,
     FollowUpSearchEvent,
     DetailsSearchEvent,
     EmptySearchEvent,
@@ -15,17 +16,12 @@ from .api import (
 )
 from .entities import (
     Response,
-    ResponseItem,
-    PlaceTaxonomyItem,
     SearchContext,
-    SearchIntent,
-    FormulatedIntent,
-    NoIntent,
-    UnsupportedIntentMaterialization,
     AutosuggestConfig,
     DiscoverConfig,
     BrowseConfig,
     LookupConfig,
+    NoConfig,
 )
 
 from typing import Tuple, Callable
@@ -34,7 +30,7 @@ import asyncio
 
 class OneBoxSimple:
     default_results_limit = 20
-    default_suggestions_limit = 5
+    default_suggestions_limit = 20
     default_terms_limit = 3
     default_search_center = 52.51604, 13.37691
     default_language = "en"
@@ -79,10 +75,12 @@ class OneBoxSimple:
             )
         elif isinstance(event, TextSearchEvent):
             config = DiscoverConfig(limit=self.results_limit)
-        elif isinstance(event, TaxonomySearchEvent):
+        elif isinstance(event, PlaceTaxonomySearchEvent):
             config = BrowseConfig(limit=self.results_limit)
         elif isinstance(event, DetailsSearchEvent):
             config = LookupConfig()
+        elif isinstance(event, FollowUpSearchEvent):
+            config = NoConfig()
         elif isinstance(event, EmptySearchEvent):
             config = None
         else:
@@ -97,7 +95,7 @@ class OneBoxSimple:
             self.handle_suggestion_list(resp, session)
         elif isinstance(event, TextSearchEvent):
             self.handle_result_list(resp, session)
-        elif isinstance(event, TaxonomySearchEvent):
+        elif isinstance(event, PlaceTaxonomySearchEvent):
             self.handle_result_list(resp, session)
         elif isinstance(event, DetailsSearchEvent):
             self.handle_result_details(resp, session)
@@ -115,29 +113,7 @@ class OneBoxSimple:
             language=self.language,
         )
         intent: SearchIntent = await self.queue.get()
-        if isinstance(intent.materialization, str):
-            if isinstance(intent, FormulatedIntent):
-                return TextSearchEvent(
-                    context=context, query_text=intent.materialization
-                )
-            else:
-                return PartialTextSearchEvent(
-                    context=context, query_text=intent.materialization
-                )
-        elif isinstance(intent.materialization, PlaceTaxonomyItem):
-            return TaxonomySearchEvent(context=context, item=intent.materialization)
-        elif isinstance(intent.materialization, ResponseItem):
-            if intent.materialization.data["resultType"] in (
-                "categoryQuery",
-                "chainQuery",
-            ):
-                return FollowUpSearchEvent(context=context, item=intent.materialization)
-            else:
-                return DetailsSearchEvent(context=context, item=intent.materialization)
-        elif isinstance(intent, NoIntent):
-            return EmptySearchEvent()
-        else:
-            raise UnsupportedIntentMaterialization()
+        return intent.build_event(context)
 
     def handle_suggestion_list(
         self, response: Response, session: ClientSession
@@ -208,7 +184,7 @@ class OneBoxBase(OneBoxSimple):
         self, event: SearchEvent, resp: Response, session: ClientSession
     ) -> None:
         await super().handle_search_response(event, resp, session)
-        if isinstance(event, TextSearchEvent) or isinstance(event, TaxonomySearchEvent):
+        if isinstance(event, TextSearchEvent) or isinstance(event, PlaceTaxonomySearchEvent):
             await self.adapt_language(resp)
 
     async def adapt_language(self, resp):

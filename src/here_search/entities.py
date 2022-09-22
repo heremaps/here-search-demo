@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from collections import namedtuple
 from enum import IntEnum, auto
 from urllib.parse import urlencode
+from abc import ABCMeta, abstractmethod
 
 
 class Endpoint(IntEnum):
@@ -124,10 +125,20 @@ class Response:
 
 
 @dataclass
-class ResponseItem:
+class ResponseItem(metaclass=ABCMeta):
     resp: Response = None
     data: dict = None
     rank: int = None
+
+
+@dataclass
+class LocationResponseItem(ResponseItem):
+    pass
+
+
+@dataclass
+class QueryResponseItem(ResponseItem):
+    pass
 
 
 class PlaceTaxonomyItem:
@@ -186,30 +197,6 @@ class PlaceTaxonomyExample:
     )
     taxonomy = PlaceTaxonomy("example", items)
 # fmt: on
-
-
-@dataclass
-class SearchIntent:
-    materialization: Union[None, str, PlaceTaxonomyItem, ResponseItem]
-
-
-@dataclass
-class FormulatedIntent(SearchIntent):
-    pass
-
-
-@dataclass
-class TransientIntent(SearchIntent):
-    pass
-
-
-@dataclass
-class NoIntent(SearchIntent):
-    materialization: Optional[None] = None
-
-
-class UnsupportedIntentMaterialization(Exception):
-    pass
 
 
 @dataclass

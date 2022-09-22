@@ -16,10 +16,6 @@ import logging
 
 
 class OneBoxMap(OneBoxBase, VBox):
-
-    default_results_limit = 20
-    default_suggestions_limit = 5
-    default_terms_limit = 3
     default_search_box_layout = {"width": "240px"}
     default_placeholder = "free text"
     default_output_format = "text"

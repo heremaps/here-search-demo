@@ -5,10 +5,11 @@ from traitlets.utils.bunch import Bunch
 
 from here_search.entities import PlaceTaxonomy
 from here_search.util import set_dict_values
-from here_search.entities import (
-    PlaceTaxonomyItem,
-    TransientIntent,
-    FormulatedIntent,
+from here_search.entities import PlaceTaxonomyItem
+from here_search.api import (
+    TransientTextIntent,
+    FormulatedTextIntent,
+    PlaceTaxonomyIntent,
     NoIntent,
 )
 
@@ -68,14 +69,14 @@ class SubmittableTextBox(HBox):
 
         def get_instant_value(change: Bunch):
             value = change.new
-            event = TransientIntent(materialization=value) if value else NoIntent()
+            event = TransientTextIntent(materialization=value) if value else NoIntent()
             self.queue.put_nowait(event)
 
         self.text_w.observe(get_instant_value, "value")
 
         def get_value(_):
             value = self.text_w.value
-            event = FormulatedIntent(materialization=value) if value else NoIntent()
+            event = FormulatedTextIntent(materialization=value) if value else NoIntent()
             self.queue.put_nowait(event)
 
         self.on_submit(get_value)
@@ -223,7 +224,7 @@ class PlaceTaxonomyButtons(HBox):
             button = PlaceTaxonomyButton(item, icon)
 
             def get_value(button: Button):
-                intent = FormulatedIntent(materialization=button.item)
+                intent = PlaceTaxonomyIntent(materialization=button.item)
                 self.queue.put_nowait(intent)
 
             button.on_click(get_value)

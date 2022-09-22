@@ -5,7 +5,7 @@ from here_search.api import (
     base_url,
     PartialTextSearchEvent,
     TextSearchEvent,
-    TaxonomySearchEvent,
+    PlaceTaxonomySearchEvent,
     DetailsSearchEvent,
     EmptySearchEvent,
 )
@@ -127,8 +127,8 @@ def text_search_event(query_text, context) -> TextSearchEvent:
 
 
 @pytest.fixture
-def taxonomy_search_event(place_taxonomy_item, context) -> TaxonomySearchEvent:
-    return TaxonomySearchEvent(item=place_taxonomy_item, context=context)
+def taxonomy_search_event(place_taxonomy_item, context) -> PlaceTaxonomySearchEvent:
+    return PlaceTaxonomySearchEvent(item=place_taxonomy_item, context=context)
 
 
 @pytest.fixture

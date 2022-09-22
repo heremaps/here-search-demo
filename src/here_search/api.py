@@ -15,7 +15,7 @@ from .entities import (
 )
 from .util import logger
 
-from typing import Dict, Sequence, Optional, Callable, Tuple
+from typing import Dict, Sequence, Optional, Callable, Tuple, Union
 from json import loads
 from getpass import getpass
 from abc import ABCMeta, abstractmethod
@@ -293,7 +293,7 @@ class SearchEvent(metaclass=ABCMeta):
 @dataclass
 class PartialTextSearchEvent(SearchEvent):
     """
-    This SearchEvent class is used to convey key strokes in the one box search Text form to an App waiting loop
+    This SearchEvent class is used to convey keystrokes in the one box search Text form to an App waiting loop
     """
 
     query_text: str
@@ -340,7 +340,7 @@ class TextSearchEvent(SearchEvent):
 
 
 @dataclass
-class TaxonomySearchEvent(SearchEvent):
+class PlaceTaxonomySearchEvent(SearchEvent):
     """
     This SearchEvent class is used to convey taxonomy selections to an App waiting loop
     """
@@ -399,7 +399,6 @@ class FollowUpSearchEvent(SearchEvent):
             api.autosuggest_href(
                 self.item.data["href"],
                 x_headers=None,
-                limit=config.limit,
                 session=session,
             )
         )
@@ -416,4 +415,51 @@ class EmptySearchEvent(SearchEvent):
 
 
 class UnsupportedSearchEvent(Exception):
+    pass
+
+@dataclass
+class SearchIntent(metaclass=ABCMeta):
+    materialization: Union[None, str, PlaceTaxonomyItem, ResponseItem]
+
+    @abstractmethod
+    def build_event(self, context: SearchContext):
+        raise NotImplementedError()
+
+
+@dataclass
+class FormulatedTextIntent(SearchIntent):
+    def build_event(self, context: SearchContext):
+        return TextSearchEvent(context=context, query_text=self.materialization)
+
+
+@dataclass
+class TransientTextIntent(SearchIntent):
+    def build_event(self, context: SearchContext):
+        return PartialTextSearchEvent(context=context, query_text=self.materialization)
+
+
+@dataclass
+class PlaceTaxonomyIntent(SearchIntent):
+    def build_event(self, context: SearchContext):
+        return PlaceTaxonomySearchEvent(context=context, item=self.materialization)
+
+
+@dataclass
+class MoreDetailsIntent(SearchIntent):
+    def build_event(self, context: SearchContext):
+        if self.materialization.data["resultType"] in ("categoryQuery", "chainQuery"):
+            return FollowUpSearchEvent(context=context, item=self.materialization)
+        else:
+            return DetailsSearchEvent(context=context, item=self.materialization)
+
+
+@dataclass
+class NoIntent(SearchIntent):
+    materialization: Optional[None] = None
+
+    def build_event(self, context: SearchContext):
+        return EmptySearchEvent()
+
+
+class UnsupportedIntentMaterialization(Exception):
     pass
