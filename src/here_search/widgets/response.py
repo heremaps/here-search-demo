@@ -1,9 +1,10 @@
-from IPython.display import display as Idisplay, display_html, Markdown, JSON as IJSON
+from IPython.display import display as Idisplay, Markdown, JSON as IJSON
 from ipywidgets import Widget, HBox, VBox, Button, RadioButtons, Output, SelectMultiple, Label, HTML, Layout
 
 from here_map_widget import GeoJSON
 
 from here_search.entities import Response, ResponseItem, Endpoint
+from here_search.api import SearchIntent
 from .request import PositionMap
 
 from typing import List
@@ -27,13 +28,13 @@ class SearchResultList(HBox):
         self,
         widget: Widget = None,
         max_results_number: int = None,
-        result_queue: asyncio.Queue = None,
+        queue: asyncio.Queue = None,
         layout: dict = None,
         **kwargs,
     ):
         self.widget = widget or Output()
         self.max_results_number = max_results_number or type(self).default_max_results_count
-        self.result_queue = result_queue or asyncio.Queue()
+        self.queue = queue or asyncio.Queue()
         self.layout = layout or type(self).default_layout
         self.futures = []
         super().__init__([self.widget], **kwargs)
@@ -172,16 +173,17 @@ class SearchResultButtons(SearchResultList):
         self,
         widget: Widget = None,
         max_results_number: int = None,
-        result_queue: asyncio.Queue = None,
+        queue: asyncio.Queue = None,
         layout: dict = None,
         **kwargs,
     ):
-        super().__init__(widget, max_results_number, result_queue, layout, **kwargs)
+        super().__init__(widget, max_results_number, queue, layout, **kwargs)
         for i in range(self.max_results_number):
             search_result = SearchResultButton(item=ResponseItem())
 
             def getvalue(button: Button):
-                self.result_queue.put_nowait(button.value)
+                intent = SearchIntent(materialization=button.value)
+                self.queue.put_nowait(intent)
 
             search_result.button.on_click(getvalue)
             self.buttons.append(search_result)
@@ -204,11 +206,11 @@ class SearchResultRadioButtons(SearchResultList):
         self,
         widget: Widget = None,
         max_results_number: int = None,
-        result_queue: asyncio.Queue = None,
+        queue: asyncio.Queue = None,
         layout: dict = None,
         **kwargs,
     ):
-        super().__init__(widget, max_results_number, result_queue, layout, **kwargs)
+        super().__init__(widget, max_results_number, queue, layout, **kwargs)
         if not SearchResultButtons.css_displayed:
             Idisplay(HTML("<style>.result-radio label { font-size: 10px; }</style>"))
             SearchResultButtons.css_displayed = True
@@ -231,12 +233,14 @@ class ResponseMap(PositionMap):
     def display(self, resp: Response):
         if self.collection:
             self.remove_layer(self.collection)
-        self.collection = GeoJSON(data=resp.geojson(), show_bubble=True, point_style=ResponseMap.default_point_style)
-        self.add_layer(self.collection)
-        south, north, east, west = resp.bbox()
-        height = north - south
-        width = east - west
-        # https://github.com/heremaps/here-map-widget-for-jupyter/issues/37
-        self.bounds = south - height / 8, north + height / 8, east + width / 8, west - width / 8
-        if len(resp.data.get("items", [])) == 1:
-            self.zoom = ResponseMap.minimum_zoom_level
+        bbox = resp.bbox()
+        if bbox:
+            self.collection = GeoJSON(data=resp.geojson(), show_bubble=True, point_style=ResponseMap.default_point_style)
+            self.add_layer(self.collection)
+            south, north, east, west = bbox
+            height = north - south
+            width = east - west
+            # https://github.com/heremaps/here-map-widget-for-jupyter/issues/37
+            self.bounds = south - height / 8, north + height / 8, east + width / 8, west - width / 8
+            if len(resp.data.get("items", [])) == 1:
+                self.zoom = ResponseMap.minimum_zoom_level

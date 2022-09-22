@@ -1,6 +1,6 @@
-from ipywidgets import Output, HBox, VBox
-import nest_asyncio
+from ipywidgets import HBox, VBox
 from here_map_widget import WidgetControl
+from aiohttp import ClientSession
 
 from here_search.api import API
 from here_search.base import OneBoxBase
@@ -11,7 +11,6 @@ from .util import TableLogWidgetHandler
 from .request import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons
 from .response import ResponseMap, SearchResultButtons, SearchResultJson
 
-from typing import Callable, Awaitable
 import asyncio
 import logging
 
@@ -52,20 +51,23 @@ class OneBoxMap(OneBoxBase, VBox):
         )
 
         self.query_box_w = SubmittableTextBox(
+            queue=self.queue,
             layout=kwargs.pop("layout", self.__class__.default_search_box_layout),
             placeholder=kwargs.pop("placeholder", self.__class__.default_placeholder),
             **kwargs
         )
         self.query_terms_w = TermsButtons(self.query_box_w, buttons_count=self.__class__.default_terms_limit)
         self.buttons_box_w = place_taxonomy_buttons or PlaceTaxonomyButtons(
+            queue=self.queue,
             taxonomy=OneBoxMap.default_taxonomy, icons=OneBoxMap.default_icons
         )
         self.result_buttons_w = SearchResultButtons(
-            max_results_number=max(self.results_limit, self.suggestions_limit), result_queue=self.result_queue
+            queue=self.queue,
+            max_results_number=max(self.results_limit, self.suggestions_limit)
         )
         self.result_json_w = SearchResultJson(
+            result_queue=self.queue,
             max_results_number=max(self.results_limit, self.suggestions_limit),
-            result_queue=self.result_queue,
             layout={"width": "400px", "max_height": "600px"},
         )
         self.result_json_w.display(Response(data={}))
@@ -85,16 +87,7 @@ class OneBoxMap(OneBoxBase, VBox):
         self.logger.setLevel(logging.INFO)
         VBox.__init__(self, [HBox([self.map_w, self.result_json_w]), self.log_handler.out])
 
-    def wait_for_text_extension(self) -> Awaitable:
-        return self.query_box_w.get_text_change()
-
-    def wait_for_text_submission(self) -> Awaitable:
-        return self.query_box_w.get_text_submission()
-
-    def wait_for_taxonomy_selection(self) -> Awaitable:
-        return self.buttons_box_w.get_taxonomy_item()
-
-    def handle_suggestion_list(self, autosuggest_resp: Response):
+    def handle_suggestion_list(self, autosuggest_resp: Response, session: ClientSession):
         """
         Typically called by OneBoxBase.handle_key_strokes()
         :param autosuggest_resp:
@@ -103,7 +96,7 @@ class OneBoxMap(OneBoxBase, VBox):
         self.display_suggestions(autosuggest_resp)
         self.display_terms(autosuggest_resp)
 
-    def handle_empty_text_submission(self) -> None:
+    def handle_empty_text_submission(self, session: ClientSession) -> None:
         """
         Typically called by OneBoxBase.handle_key_strokes()
         :param autosuggest_resp:
@@ -111,27 +104,25 @@ class OneBoxMap(OneBoxBase, VBox):
         """
         self.query_terms_w.set([])
 
-    def handle_result_list(self, discover_resp: Response):
+    def handle_result_list(self, resp: Response, session: ClientSession):
         """
         Displays a results list in various widgets
         Typically called by OneBoxBase.handle_text_submissions()
         :param autosuggest_resp:
         :return: None
         """
-        self.result_buttons_w.display(discover_resp)
-        self.result_json_w.display(discover_resp)
-        self.display_result_map(discover_resp)
+        self.result_buttons_w.display(resp)
+        self.result_json_w.display(resp)
+        self.display_result_map(resp)
         self.clear_query_text()
 
-    def handle_result_details(self, lookup_resp: Response):
+    def handle_result_details(self, lookup_resp: Response, session: ClientSession):
         """
         Typically called by OneBoxBase.handle_result_selections()
         :param autosuggest_resp:
         :return: None
         """
-        self.result_buttons_w.display(lookup_resp)
         self.result_json_w.display(lookup_resp)
-        lookup_resp.data = {"items": [lookup_resp.data]}
         self.display_result_map(lookup_resp)
 
     def display_terms(self, autosuggest_resp: Response):
@@ -158,23 +149,6 @@ class OneBoxMap(OneBoxBase, VBox):
         self.log_handler.clear_logs()
         self.log_handler.close()
 
-    def run(
-        self,
-        handle_key_strokes: Callable = None,
-        handle_text_submissions: Callable = None,
-        handle_taxonomy_selections: Callable = None,
-        handle_result_selections: Callable = None,
-    ):
-
-        nest_asyncio.apply()
-        OneBoxBase.run(
-            self,
-            handle_key_strokes or self.handle_key_strokes,
-            handle_text_submissions or self.handle_text_submissions,
-            handle_taxonomy_selections or self.handle_taxonomy_selections,
-            handle_result_selections or self.handle_result_selections,
-        )
-        return self
-
     def __del__(self):
         self.logger.removeHandler(self.log_handler)
+        super().__del__()

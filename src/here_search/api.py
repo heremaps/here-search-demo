@@ -1,12 +1,17 @@
 from aiohttp import ClientSession
 from json import loads
 
-from .entities import Request, Response, Endpoint
+from .entities import (Request, Response, Endpoint, ResponseItem, PlaceTaxonomyItem, SearchContext, AutosuggestConfig,
+                       EndpointConfig, DiscoverConfig, BrowseConfig, LookupConfig, NoConfig)
 from .util import logger
 
-from typing import Dict, Sequence, Optional, Callable, Tuple
+from typing import Dict, Sequence, Optional, Callable, Tuple, Union
 import os
 from getpass import getpass
+from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
+import asyncio
+
 
 base_url = {
     ep: f"https://{eps}.search.hereapi.com/v1/{eps}"
@@ -86,7 +91,7 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q, "at": f"{latitude},{longitude}"}
+        params = {"q": q.strip(), "at": f"{latitude},{longitude}"}
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST, url=base_url[Endpoint.AUTOSUGGEST], params=params, x_headers=x_headers
@@ -129,7 +134,7 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q, "at": f"{latitude},{longitude}"}
+        params = {"q": q.strip(), "at": f"{latitude},{longitude}"}
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.DISCOVER, url=base_url[Endpoint.DISCOVER], params=params, x_headers=x_headers
@@ -202,3 +207,142 @@ class API:
             endpoint=Endpoint.REVGEOCODE, url=base_url[Endpoint.REVGEOCODE], params=params, x_headers=x_headers
         )
         return await self.get(request, session)
+
+
+@dataclass
+class SearchIntent:
+    materialization: Union[None, str, PlaceTaxonomyItem, ResponseItem]
+
+
+@dataclass
+class FormulatedIntent(SearchIntent):
+    pass
+
+
+@dataclass
+class NoIntent(SearchIntent):
+    materialization: Optional[None] = None
+
+
+class UnsupportedIntentMaterialization(Exception):
+    pass
+
+@dataclass
+class SearchEvent(metaclass=ABCMeta):
+    context: SearchContext
+
+    @abstractmethod
+    async def get_response(self, api: API, config: EndpointConfig, session: ClientSession) -> Response:
+        raise NotImplementedError()
+
+
+@dataclass
+class PartialTextSearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey key strokes in the one box search Text form to an App waiting loop
+    """
+    query_text: str
+
+    async def get_response(self, api: API, config: AutosuggestConfig, session: ClientSession) -> Response:
+        return await asyncio.ensure_future(
+            api.autosuggest(
+                self.query_text,
+                self.context.latitude,
+                self.context.longitude,
+                x_headers=None,
+                session=session,
+                lang=self.context.language,
+                limit=config.limit,
+                termsLimit=config.terms_limit
+            )
+        )
+
+
+@dataclass
+class TextSearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey text submissions from the one box search Text form to an App waiting loop
+    """
+    query_text: str
+
+    async def get_response(self, api: API, config: DiscoverConfig, session: ClientSession) -> Response:
+        return await asyncio.ensure_future(
+            api.discover(
+                self.query_text,
+                self.context.latitude,
+                self.context.longitude,
+                x_headers=None,
+                session=session,
+                lang=self.context.language,
+                limit=config.limit
+            )
+        )
+
+
+@dataclass
+class TaxonomySearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey taxonomy selections to an App waiting loop
+    """
+    item: PlaceTaxonomyItem
+
+    async def get_response(self, api: API, config: BrowseConfig, session: ClientSession) -> Response:
+        return await asyncio.ensure_future(
+            api.browse(
+                self.context.latitude,
+                self.context.longitude,
+                x_headers=None,
+                session=session,
+                lang=self.context.language,
+                limit=config.limit,
+                **self.item.mapping
+            )
+        )
+
+
+@dataclass
+class DetailsSearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey location response items selections to an App waiting loop
+    """
+    item: ResponseItem
+
+    async def get_response(self, api: API, config: LookupConfig, session: ClientSession) -> Response:
+        return await asyncio.ensure_future(
+            api.lookup(
+                self.item.data["id"],
+                x_headers=None,
+                lang=self.context.language,
+                session=session
+            )
+        )
+
+
+@dataclass
+class FollowUpSearchEvent(SearchEvent):
+    """
+    This SearchEvent class is used to convey query response items selections to an App waiting loop
+    """
+    item: ResponseItem
+
+    async def get_response(self, api: API, config: DiscoverConfig, session: ClientSession) -> Response:
+        return await asyncio.ensure_future(
+            api.autosuggest_href(
+                self.item.data["href"],
+                x_headers=None,
+                limit=config.limit,
+                session=session
+            )
+        )
+
+
+@dataclass
+class EmptySearchEvent(SearchEvent):
+    context: Optional[None] = None
+
+    async def get_response(self, api: API, config: LookupConfig, session: ClientSession) -> Response:
+        pass
+
+
+class UnsupportedSearchEvent(Exception):
+    pass
