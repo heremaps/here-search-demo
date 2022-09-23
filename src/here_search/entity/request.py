@@ -1,18 +1,9 @@
-from typing import Tuple, Dict, Sequence, Optional, Union
+from .endpoint import Endpoint
+
+from typing import Tuple, Dict, Optional
 from dataclasses import dataclass
-from collections import namedtuple
-from enum import IntEnum, auto
 from urllib.parse import urlencode
-from abc import ABCMeta, abstractmethod
-
-
-class Endpoint(IntEnum):
-    AUTOSUGGEST = auto()
-    AUTOSUGGEST_HREF = auto()
-    DISCOVER = auto()
-    LOOKUP = auto()
-    BROWSE = auto()
-    REVGEOCODE = auto()
+from abc import ABCMeta
 
 
 @dataclass
@@ -141,127 +132,8 @@ class QueryResponseItem(ResponseItem):
     pass
 
 
-class PlaceTaxonomyItem:
-    def __init__(
-        self,
-        name: str,
-        categories: Optional[Sequence[str]] = None,
-        food_types: Optional[Sequence[str]] = None,
-        chains: Optional[Sequence[str]] = None,
-    ):
-        self.name = name
-        self.categories = categories
-        self.food_types = food_types
-        self.chains = chains
-
-    @property
-    def mapping(self):
-        return {
-            "categories": self.categories,
-            "food_types": self.food_types,
-            "chains": self.chains,
-        }
-
-    def __repr__(self):
-        return f"{self.name}({self.categories}, {self.food_types}, {self.chains})"
-
-
-class PlaceTaxonomy:
-    def __init__(self, name: str, items: Sequence[PlaceTaxonomyItem]):
-        self.name = name
-        self.items = {i.name: i for i in items or []}
-
-    def __getattr__(self, item_name: str):
-        return self.items[item_name]
-
-    def __repr__(self):
-        items = ", ".join(map(str, self.items.values()))
-        return f"{self.name}({items})"
-
-
-# fmt: off
-class PlaceTaxonomyExample:
-    items, icons = zip(
-        *[
-            #                --------------------------------------------------------------------
-            #                | item name | categories     | food types | chains  | icon         |
-            #                --------------------------------------------------------------------
-            (PlaceTaxonomyItem("gas", ["700-7600-0000", "700-7600-0116", "700-7600-0444"], None, None), "fa-gas-pump"),
-            (PlaceTaxonomyItem("eat", ["100"], None, None), "fa-utensils"),
-            (PlaceTaxonomyItem("sleep", ["500-5000"], None, None), "fa-bed"),
-            (PlaceTaxonomyItem("park", ["400-4300", "800-8500"], None, None), "fa-parking"),
-            (PlaceTaxonomyItem("ATM", ["700-7010-0108"], None, None), "fa-euro-sign"),
-            (PlaceTaxonomyItem("pizza", None, ["800-057"], None), "fa-pizza-slice"),
-            (PlaceTaxonomyItem("fastfood", None, None, ["1566", "1498"]), "fa-hamburger"),
-        ]
-    )
-    taxonomy = PlaceTaxonomy("example", items)
-# fmt: on
-
-
 @dataclass
-class SearchContext:
+class RequestContext:
     latitude: float
     longitude: float
     language: Optional[str] = None
-
-
-@dataclass
-class EndpointConfig:
-    DEFAULT_LIMIT = 20
-    limit: Optional[int] = DEFAULT_LIMIT
-
-
-@dataclass
-class AutosuggestConfig(EndpointConfig):
-    DEFAULT_TERMS_LIMIT = 20
-    terms_limit: Optional[int] = DEFAULT_TERMS_LIMIT
-
-
-@dataclass
-class DiscoverConfig(EndpointConfig):
-    pass
-
-
-@dataclass
-class BrowseConfig(EndpointConfig):
-    pass
-
-
-@dataclass
-class LookupConfig:
-    pass
-
-
-@dataclass
-class NoConfig:
-    pass
-
-
-class MetaFactory:
-    klass = None
-    primitive = (int, float, str, bool, type)
-
-    def __new__(cls, name, bases, namespaces):
-        klass = namespaces["klass"]
-        if klass in MetaFactory.primitive:
-            return klass
-        namespaces["__new__"] = cls.__new
-        return type(name, bases, namespaces)
-
-    def __new(cls, *args, **kwargs):
-        obj = object.__new__(cls.klass)
-        obj.__init__(*args[1:], **kwargs)
-        return obj
-
-
-class AutosuggestConfigFactory(metaclass=MetaFactory):
-    klass = AutosuggestConfig
-
-
-class DiscoverConfigFactory(metaclass=MetaFactory):
-    klass = DiscoverConfig
-
-
-class BrowseConfigFactory(metaclass=MetaFactory):
-    klass = BrowseConfig

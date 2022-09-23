@@ -1,7 +1,7 @@
 import pytest
 
-from here_search.entities import Request, Response, Endpoint
-from unittest.mock import Mock, patch
+from here_search.entity.request import Request, Response
+from here_search.entity.endpoint import Endpoint
 
 expected_response_data = {"a": "b"}
 expected_x_headers = {"X-Request-Id": "userid", "X-Correlation-ID": "correlationId"}

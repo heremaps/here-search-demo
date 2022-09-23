@@ -3,24 +3,22 @@ import pytest
 from here_search.api import (
     API,
     base_url,
+)
+from here_search.entity.event import (
     PartialTextSearchEvent,
     TextSearchEvent,
     PlaceTaxonomySearchEvent,
     DetailsSearchEvent,
     EmptySearchEvent,
 )
-from here_search.entities import (
+from here_search.entity.request import (
     Request,
-    Endpoint,
-    SearchContext,
+    RequestContext,
     Response,
     ResponseItem,
-    AutosuggestConfig,
-    DiscoverConfig,
-    BrowseConfig,
-    LookupConfig,
-    PlaceTaxonomyItem,
 )
+from here_search.entity.endpoint import Endpoint, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
+from here_search.entity.place import PlaceTaxonomyItem
 from here_search.base import OneBoxSimple
 
 from unittest.mock import Mock
@@ -66,7 +64,7 @@ def place_taxonomy_item() -> PlaceTaxonomyItem:
 @pytest.fixture
 def context():
     language, latitude, longitude = "language", 1.0, 2.0
-    return SearchContext(latitude=latitude, longitude=longitude, language=language)
+    return RequestContext(latitude=latitude, longitude=longitude, language=language)
 
 
 @pytest.fixture

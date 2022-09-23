@@ -2,9 +2,16 @@ from aiohttp import ClientSession
 
 from . import __version__
 from .user import Profile, Default
-from .api import (
-    API,
+from .api import API
+from .entity.intent import (
     SearchIntent,
+    FormulatedTextIntent,
+    TransientTextIntent,
+    PlaceTaxonomyIntent,
+    MoreDetailsIntent,
+    NoIntent,
+)
+from .entity.event import (
     PartialTextSearchEvent,
     SearchEvent,
     TextSearchEvent,
@@ -12,18 +19,9 @@ from .api import (
     FollowUpSearchEvent,
     DetailsSearchEvent,
     EmptySearchEvent,
-    UnsupportedSearchEvent,
 )
-from .entities import (
-    Response,
-    SearchContext,
-    EndpointConfig,
-    AutosuggestConfig,
-    DiscoverConfig,
-    BrowseConfig,
-    LookupConfig,
-    NoConfig,
-)
+from .entity.request import Response, RequestContext
+from .entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig, NoConfig
 
 from typing import Tuple, Callable, Mapping
 import asyncio
@@ -38,15 +36,15 @@ class OneBoxSimple:
     default_headers = {"User-Agent": f"here-search-notebook-{__version__}"}
 
     def __init__(
-        self,
-        api: API = None,
-        queue: asyncio.Queue = None,
-        search_center: Tuple[float, float] = None,
-        language: str = None,
-        results_limit: int = None,
-        suggestions_limit: int = None,
-        terms_limit: int = None,
-        **kwargs,
+            self,
+            api: API = None,
+            queue: asyncio.Queue = None,
+            search_center: Tuple[float, float] = None,
+            language: str = None,
+            results_limit: int = None,
+            suggestions_limit: int = None,
+            terms_limit: int = None,
+            **kwargs,
     ):
 
         self.api = api or API()
@@ -58,6 +56,16 @@ class OneBoxSimple:
         self.terms_limit = terms_limit or klass.default_terms_limit
         self.queue = queue or asyncio.Queue()
         self.headers = OneBoxSimple.default_headers
+        self.event_classes: Mapping[type(SearchIntent), Callable[[SearchIntent], type(SearchEvent)]] = {
+            TransientTextIntent: lambda intent: PartialTextSearchEvent,
+            FormulatedTextIntent: lambda intent: TextSearchEvent,
+            PlaceTaxonomyIntent: lambda intent: PlaceTaxonomySearchEvent,
+            MoreDetailsIntent: lambda intent: (FollowUpSearchEvent
+                                               if intent.materialization.data["resultType"] in ("categoryQuery",
+                                                                                                "chainQuery")
+                                               else DetailsSearchEvent),
+            NoIntent: lambda intent: EmptySearchEvent
+        }
         self.response_handlers: Mapping[
             type(SearchEvent), Tuple[Callable[[Response], None], EndpointConfig]] = {
             PartialTextSearchEvent: (self.handle_suggestion_list, AutosuggestConfig(
@@ -69,6 +77,7 @@ class OneBoxSimple:
             FollowUpSearchEvent: (self.handle_result_list, NoConfig()),
             EmptySearchEvent: (self.handle_empty_text_submission, None)
         }
+
         self.task = None
 
     async def handle_search_events(self):
@@ -91,13 +100,14 @@ class OneBoxSimple:
         handler(resp)
 
     async def wait_for_search_event(self) -> SearchEvent:
-        context = SearchContext(
+        context = RequestContext(
             latitude=self.search_center[0],
             longitude=self.search_center[1],
             language=self.language,
         )
         intent: SearchIntent = await self.queue.get()
-        return intent.build_event(context)
+        event_class: SearchEvent = self.event_classes[type(intent)](intent)
+        return event_class.from_intent(context=context, intent=intent)
 
     def run(self, handle_search_events: Callable = None) -> "OneBoxSimple":
         self.task = asyncio.ensure_future(
@@ -143,15 +153,15 @@ class OneBoxSimple:
 
 class OneBoxBase(OneBoxSimple):
     def __init__(
-        self,
-        user_profile: Profile = None,
-        api: API = None,
-        results_limit: int = None,
-        suggestions_limit: int = None,
-        terms_limit: int = None,
-        extra_api_params: dict = None,
-        initial_query: str = None,
-        **kwargs,
+            self,
+            user_profile: Profile = None,
+            api: API = None,
+            results_limit: int = None,
+            suggestions_limit: int = None,
+            terms_limit: int = None,
+            extra_api_params: dict = None,
+            initial_query: str = None,
+            **kwargs,
     ):
 
         self.user_profile = user_profile or Default()

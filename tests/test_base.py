@@ -1,6 +1,6 @@
 import pytest
 
-from here_search.api import (
+from here_search.entity.event import (
     SearchEvent,
     PartialTextSearchEvent,
     TextSearchEvent,
@@ -9,17 +9,15 @@ from here_search.api import (
     DetailsSearchEvent,
     EmptySearchEvent,
 )
-from here_search.api import (
+from here_search.entity.intent import (
     FormulatedTextIntent,
     TransientTextIntent,
     PlaceTaxonomyIntent,
     MoreDetailsIntent,
     NoIntent,
 )
-from here_search.entities import (
-    SearchContext,
-    PlaceTaxonomyExample,
-)
+from here_search.entity.request import RequestContext
+from here_search.entity.place import PlaceTaxonomyExample
 
 from unittest.mock import patch
 
@@ -30,7 +28,7 @@ async def test_wait_for_search_event_1(app, query_text, context):
     """
     Tests the reception of a formulated text
     """
-    with patch.object(SearchContext, "__call__", return_value=context):
+    with patch.object(RequestContext, "__call__", return_value=context):
         intent = TransientTextIntent(materialization=query_text)
         app.queue.put_nowait(intent)
         event: SearchEvent = await app.wait_for_search_event()
@@ -44,7 +42,7 @@ async def test_wait_for_search_event_2(app, context):
     """
     Tests the reception of a submitted text
     """
-    with patch.object(SearchContext, "__call__", return_value=context):
+    with patch.object(RequestContext, "__call__", return_value=context):
         intent = FormulatedTextIntent(materialization="restaurant")
         app.queue.put_nowait(intent)
         event: SearchEvent = await app.wait_for_search_event()
@@ -57,7 +55,7 @@ async def test_wait_for_search_event_3(app, item, context):
     """
     Tests the reception of a taxonomy item
     """
-    with patch.object(SearchContext, "__call__", return_value=context):
+    with patch.object(RequestContext, "__call__", return_value=context):
         intent = PlaceTaxonomyIntent(materialization=item)
         app.queue.put_nowait(intent)
         event: SearchEvent = await app.wait_for_search_event()
@@ -69,7 +67,7 @@ async def test_wait_for_search_event_4(app, location_response_item, context):
     """
     Tests the reception of a location response item text
     """
-    with patch.object(SearchContext, "__call__", return_value=context):
+    with patch.object(RequestContext, "__call__", return_value=context):
         intent = MoreDetailsIntent(materialization=location_response_item)
         app.queue.put_nowait(intent)
         event: SearchEvent = await app.wait_for_search_event()
@@ -84,7 +82,7 @@ async def test_wait_for_search_event_5(app, chain_query_response_item, context):
     """
     Tests the reception of a chain query response item
     """
-    with patch.object(SearchContext, "__call__", return_value=context):
+    with patch.object(RequestContext, "__call__", return_value=context):
         intent = MoreDetailsIntent(materialization=chain_query_response_item)
         app.queue.put_nowait(intent)
         event: SearchEvent = await app.wait_for_search_event()
@@ -99,7 +97,7 @@ async def test_wait_for_search_event_6(app, category_query_response_item, contex
     """
     Tests the reception of a category query response item
     """
-    with patch.object(SearchContext, "__call__", return_value=context):
+    with patch.object(RequestContext, "__call__", return_value=context):
         intent = MoreDetailsIntent(materialization=category_query_response_item)
         app.queue.put_nowait(intent)
         event: SearchEvent = await app.wait_for_search_event()
@@ -114,7 +112,7 @@ async def test_wait_for_search_event_7(app, context):
     """
     Tests the reception of an empty text
     """
-    with patch.object(SearchContext, "__call__", return_value=context):
+    with patch.object(RequestContext, "__call__", return_value=context):
         intent = NoIntent()
         app.queue.put_nowait(intent)
         event: SearchEvent = await app.wait_for_search_event()
@@ -126,10 +124,10 @@ async def test_wait_for_search_event_8(app):
     """
     Tests the reception of an unknown intent
     """
-    with patch.object(SearchContext, "__call__", return_value=None):
+    with patch.object(RequestContext, "__call__", return_value=None):
         intent = None
         app.queue.put_nowait(intent)
-        with pytest.raises(AttributeError):
+        with pytest.raises(KeyError):
             await app.wait_for_search_event()
 
 

@@ -1,11 +1,11 @@
 from ipywidgets import HBox, VBox
 from here_map_widget import WidgetControl
-from aiohttp import ClientSession
 
 from here_search.api import API
 from here_search.base import OneBoxBase
 from here_search.user import Profile
-from here_search.entities import Response, PlaceTaxonomyExample
+from here_search.entity.request import Response
+from ..entity.place import PlaceTaxonomyExample
 
 from .util import TableLogWidgetHandler
 from .input import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons
@@ -98,18 +98,15 @@ class OneBoxMap(OneBoxBase, VBox):
     def handle_suggestion_list(self, autosuggest_resp: Response):
         """
         Typically called by OneBoxBase.handle_key_strokes()
-        :param autosuggest_resp:
-        :return: None
         """
         self.display_suggestions(autosuggest_resp)
+        self.display_result_map(autosuggest_resp)
         self.display_terms(autosuggest_resp)
 
     def handle_result_list(self, resp: Response):
         """
         Displays a results list in various widgets
         Typically called by OneBoxBase.handle_text_submissions()
-        :param autosuggest_resp:
-        :return: None
         """
         self.result_buttons_w.display(resp)
         self.result_json_w.display(resp)
@@ -119,8 +116,6 @@ class OneBoxMap(OneBoxBase, VBox):
     def handle_result_details(self, lookup_resp: Response):
         """
         Typically called by OneBoxBase.handle_result_selections()
-        :param autosuggest_resp:
-        :return: None
         """
         self.result_json_w.display(lookup_resp)
         self.display_result_map(lookup_resp)
@@ -141,10 +136,6 @@ class OneBoxMap(OneBoxBase, VBox):
 
     def display_result_map(self, resp: Response):
         self.map_w.display(resp)
-
-    def show_logs(self, level: int = None) -> "OneBoxMap":
-        self.logger.addHandler(self.log_handler.handler)
-        self.logger.setLevel(level or logging.INFO)
 
     def clear_logs(self):
         self.logger.removeHandler(self.log_handler)

@@ -1,6 +1,6 @@
 # Search Widgets
 
-A set of jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/autosuggest`,  `/discover`, `/lookup`, `/revgeocode`,  and `/signals`.
+A set of jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
 
 ![searching for restaurants](docs/screenshot.png)
 

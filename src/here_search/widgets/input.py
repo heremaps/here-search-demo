@@ -3,15 +3,14 @@ from ipywidgets import HBox, VBox, Text, Button, Layout
 from IPython.display import display_html
 from traitlets.utils.bunch import Bunch
 
-from here_search.entities import PlaceTaxonomy
-from here_search.util import set_dict_values
-from here_search.entities import PlaceTaxonomyItem
-from here_search.api import (
+from here_search.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
+from here_search.entity.intent import (
     TransientTextIntent,
     FormulatedTextIntent,
     PlaceTaxonomyIntent,
     NoIntent,
 )
+from here_search.util import set_dict_values
 
 from typing import Tuple, Callable, Sequence
 import asyncio
@@ -70,18 +69,18 @@ class SubmittableTextBox(HBox):
         def get_instant_value(change: Bunch):
             value = change.new
             if value:
-                event = TransientTextIntent(materialization=value)
+                intent = TransientTextIntent(materialization=value)
             else:
-                event = NoIntent()
-            self.queue.put_nowait(event)
+                intent = NoIntent()
+            self.queue.put_nowait(intent)
 
         self.text_w.observe(get_instant_value, "value")
 
         def get_value(_):
             value = self.text_w.value
             if value.strip():
-                event = FormulatedTextIntent(materialization=value)
-                self.queue.put_nowait(event)
+                intent = FormulatedTextIntent(materialization=value)
+                self.queue.put_nowait(intent)
 
         self.on_submit(get_value)
         self.on_click(get_value)
@@ -151,30 +150,23 @@ class TermsButtons(HBox):
     def __get_click_handler(self) -> Callable:
         def handler(button):
             # replace the last token with the clicked button description and a whitespace
-            if False:  # target_text_box.text_w.value.endswith(' '):
-                self.target_text_box.text_w.value = (
-                    f"{self.target_text_box.text_w.value}{button.description.strip()} "
-                )
-            else:
-                tokens = self.target_text_box.text_w.value.strip().split(" ")
-                if tokens:
-                    if self.token_index is None:
-                        head, target, tail = [], [button.description.strip()], []
-                    elif self.token_index == -1:
-                        head, target, tail = (
-                            tokens[: self.token_index],
-                            [button.description.strip()],
-                            [""],
-                        )
-                    else:
-                        head, target, tail = (
-                            tokens[: self.token_index],
-                            [button.description.strip()],
-                            tokens[self.token_index + 1 :],
-                        )
-                    self.target_text_box.text_w.value = " ".join(head + target + tail)
-
-            # self.set(self.values)
+            tokens = self.target_text_box.text_w.value.strip().split(" ")
+            if tokens:
+                if self.token_index is None:
+                    head, target, tail = [], [button.description.strip()], []
+                elif self.token_index == -1:
+                    head, target, tail = (
+                        tokens[: self.token_index],
+                        [button.description.strip()],
+                        [""],
+                    )
+                else:
+                    head, target, tail = (
+                        tokens[: self.token_index],
+                        [button.description.strip()],
+                        tokens[self.token_index + 1:],
+                    )
+                self.target_text_box.text_w.value = " ".join(head + target + tail)
 
         return handler
 
