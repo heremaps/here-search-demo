@@ -95,9 +95,7 @@ class OneBoxMap(OneBoxBase, VBox):
             self, [HBox([self.map_w, self.result_json_w]), self.log_handler.out]
         )
 
-    def handle_suggestion_list(
-        self, autosuggest_resp: Response, session: ClientSession
-    ):
+    def handle_suggestion_list(self, autosuggest_resp: Response):
         """
         Typically called by OneBoxBase.handle_key_strokes()
         :param autosuggest_resp:
@@ -106,15 +104,7 @@ class OneBoxMap(OneBoxBase, VBox):
         self.display_suggestions(autosuggest_resp)
         self.display_terms(autosuggest_resp)
 
-    def handle_empty_text_submission(self, session: ClientSession) -> None:
-        """
-        Typically called by OneBoxBase.handle_key_strokes()
-        :param autosuggest_resp:
-        :return: None
-        """
-        self.query_terms_w.set([])
-
-    def handle_result_list(self, resp: Response, session: ClientSession):
+    def handle_result_list(self, resp: Response):
         """
         Displays a results list in various widgets
         Typically called by OneBoxBase.handle_text_submissions()
@@ -126,7 +116,7 @@ class OneBoxMap(OneBoxBase, VBox):
         self.display_result_map(resp)
         self.clear_query_text()
 
-    def handle_result_details(self, lookup_resp: Response, session: ClientSession):
+    def handle_result_details(self, lookup_resp: Response):
         """
         Typically called by OneBoxBase.handle_result_selections()
         :param autosuggest_resp:

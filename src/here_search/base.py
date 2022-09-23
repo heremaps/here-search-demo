@@ -17,6 +17,7 @@ from .api import (
 from .entities import (
     Response,
     SearchContext,
+    EndpointConfig,
     AutosuggestConfig,
     DiscoverConfig,
     BrowseConfig,
@@ -24,7 +25,7 @@ from .entities import (
     NoConfig,
 )
 
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Mapping
 import asyncio
 
 
@@ -57,6 +58,17 @@ class OneBoxSimple:
         self.terms_limit = terms_limit or klass.default_terms_limit
         self.queue = queue or asyncio.Queue()
         self.headers = OneBoxSimple.default_headers
+        self.response_handlers: Mapping[
+            type(SearchEvent), Tuple[Callable[[Response], None], EndpointConfig]] = {
+            PartialTextSearchEvent: (self.handle_suggestion_list, AutosuggestConfig(
+                limit=self.suggestions_limit, terms_limit=self.terms_limit
+            )),
+            TextSearchEvent: (self.handle_result_list, DiscoverConfig(limit=self.results_limit)),
+            PlaceTaxonomySearchEvent: (self.handle_result_list, BrowseConfig(limit=self.results_limit)),
+            DetailsSearchEvent: (self.handle_result_details, LookupConfig()),
+            FollowUpSearchEvent: (self.handle_result_list, NoConfig()),
+            EmptySearchEvent: (self.handle_empty_text_submission, None)
+        }
         self.task = None
 
     async def handle_search_events(self):
@@ -65,46 +77,18 @@ class OneBoxSimple:
         """
         async with ClientSession(raise_for_status=True) as session:
             while True:  # pragma: no cover
-                await self.handle_search_event(session)
+                event, resp = await self.handle_search_event(session)
 
-    async def handle_search_event(self, session: ClientSession) -> None:
+    async def handle_search_event(self, session: ClientSession) -> Tuple[SearchEvent, Response]:
         event: SearchEvent = await self.wait_for_search_event()
-        if isinstance(event, PartialTextSearchEvent):
-            config = AutosuggestConfig(
-                limit=self.suggestions_limit, terms_limit=self.terms_limit
-            )
-        elif isinstance(event, TextSearchEvent):
-            config = DiscoverConfig(limit=self.results_limit)
-        elif isinstance(event, PlaceTaxonomySearchEvent):
-            config = BrowseConfig(limit=self.results_limit)
-        elif isinstance(event, DetailsSearchEvent):
-            config = LookupConfig()
-        elif isinstance(event, FollowUpSearchEvent):
-            config = NoConfig()
-        elif isinstance(event, EmptySearchEvent):
-            config = None
-        else:
-            raise UnsupportedSearchEvent(type(event).__name__)
+        handler, config = self.response_handlers[type(event)]
         resp = await event.get_response(api=self.api, config=config, session=session)
-        await self.handle_search_response(event, resp, session)
+        self._handle_search_response(handler, resp)
+        return event, resp
 
-    async def handle_search_response(
-        self, event: SearchEvent, resp: Response, session: ClientSession
-    ) -> None:
-        if isinstance(event, PartialTextSearchEvent):
-            self.handle_suggestion_list(resp, session)
-        elif isinstance(event, TextSearchEvent):
-            self.handle_result_list(resp, session)
-        elif isinstance(event, PlaceTaxonomySearchEvent):
-            self.handle_result_list(resp, session)
-        elif isinstance(event, DetailsSearchEvent):
-            self.handle_result_details(resp, session)
-        elif isinstance(event, FollowUpSearchEvent):
-            self.handle_result_list(resp, session)
-        elif isinstance(event, EmptySearchEvent):
-            self.handle_empty_text_submission(session)
-        else:
-            raise UnsupportedSearchEvent(type(event).__name__)
+    @staticmethod
+    def _handle_search_response(handler: Callable[[Response], None], resp: Response) -> None:
+        handler(resp)
 
     async def wait_for_search_event(self) -> SearchEvent:
         context = SearchContext(
@@ -114,20 +98,6 @@ class OneBoxSimple:
         )
         intent: SearchIntent = await self.queue.get()
         return intent.build_event(context)
-
-    def handle_suggestion_list(
-        self, response: Response, session: ClientSession
-    ) -> None:
-        raise NotImplementedError()
-
-    def handle_result_list(self, response: Response, session: ClientSession) -> None:
-        raise NotImplementedError()
-
-    def handle_empty_text_submission(self, session: ClientSession) -> None:
-        raise NotImplementedError()
-
-    def handle_result_details(self, response: Response, session: ClientSession) -> None:
-        raise NotImplementedError()
 
     def run(self, handle_search_events: Callable = None) -> "OneBoxSimple":
         self.task = asyncio.ensure_future(
@@ -148,7 +118,27 @@ class OneBoxSimple:
             self.task.cancel()
 
     def __del__(self):
-        asyncio.run(self.stop())
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            loop.create_task(self.stop()).add_done_callback(lambda t: t.result())
+        else:
+            asyncio.run(self.stop())
+
+    def handle_suggestion_list(self, response: Response) -> None:
+        pass
+
+    def handle_result_list(self, response: Response) -> None:
+        pass
+
+    def handle_result_details(self, response: Response) -> None:
+        pass
+
+    def handle_empty_text_submission(self, *args, **kwargs) -> None:
+        pass
 
 
 class OneBoxBase(OneBoxSimple):
@@ -180,12 +170,11 @@ class OneBoxBase(OneBoxSimple):
         self.extra_api_params = extra_api_params or {}
         self.initial_query = initial_query
 
-    async def handle_search_response(
-        self, event: SearchEvent, resp: Response, session: ClientSession
-    ) -> None:
-        await super().handle_search_response(event, resp, session)
+    async def handle_search_event(self, session: ClientSession) -> Tuple[SearchEvent, Response]:
+        event, resp = await super().handle_search_event(session)
         if isinstance(event, TextSearchEvent) or isinstance(event, PlaceTaxonomySearchEvent):
             await self.adapt_language(resp)
+        return event, resp
 
     async def adapt_language(self, resp):
         country_codes = {item["address"]["countryCode"] for item in resp.data["items"]}

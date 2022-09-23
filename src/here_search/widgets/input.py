@@ -69,15 +69,19 @@ class SubmittableTextBox(HBox):
 
         def get_instant_value(change: Bunch):
             value = change.new
-            event = TransientTextIntent(materialization=value) if value else NoIntent()
+            if value:
+                event = TransientTextIntent(materialization=value)
+            else:
+                event = NoIntent()
             self.queue.put_nowait(event)
 
         self.text_w.observe(get_instant_value, "value")
 
         def get_value(_):
             value = self.text_w.value
-            event = FormulatedTextIntent(materialization=value) if value else NoIntent()
-            self.queue.put_nowait(event)
+            if value.strip():
+                event = FormulatedTextIntent(materialization=value)
+                self.queue.put_nowait(event)
 
         self.on_submit(get_value)
         self.on_click(get_value)

@@ -160,66 +160,20 @@ async def test_handle_search_event(app, event, config, response, session):
     """
     Test that
     - SearchEvent get_response() is called with the right config
-    - handle_search_response() is called with the SearchEvent, Response and Session instances
+    - _handle_search_response() is called with the SearchEvent, Response and Session instances
     """
+    response_handlers = {type(event): (lambda r: r, config)}
     with patch.object(
         app, "wait_for_search_event", return_value=event
     ) as wfse, patch.object(
-        app, "handle_search_response", return_value=None
+        app, "_handle_search_response", return_value=None
     ) as hsr, patch.object(
         event, "get_response", return_value=response
-    ) as gr:
+    ) as gr, patch.object (
+        app, "response_handlers", response_handlers
+    ):
         await app.handle_search_event(session)
         wfse.assert_called_once()
         gr.assert_called_once_with(api=app.api, config=config, session=session)
-        hsr.assert_called_once_with(event, response, session)
+        hsr.assert_called_once_with(response_handlers[type(event)][0], response)
 
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("query_text", ["r", "re", "res"])
-async def test_handle_search_response_1(app, query_text, context, response, session):
-    with patch.object(
-        app, "handle_suggestion_list", return_value=None
-    ) as hsl, patch.object(
-        app, "handle_result_list", return_value=None
-    ) as hrl, patch.object(
-        app, "handle_empty_text_submission", return_value=None
-    ) as hets:
-        event = PartialTextSearchEvent(query_text=query_text, context=context)
-        await app.handle_search_response(event, response, session)
-        hsl.assert_called_once_with(response, session)
-        hrl.assert_not_called()
-        hets.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_handle_search_response_2(app, context, response, session):
-    with patch.object(
-        app, "handle_suggestion_list", return_value=None
-    ) as hsl, patch.object(
-        app, "handle_result_list", return_value=None
-    ) as hrl, patch.object(
-        app, "handle_empty_text_submission", return_value=None
-    ) as hets:
-        event = TextSearchEvent(query_text="restaurant", context=context)
-        await app.handle_search_response(event, response, session)
-        hrl.assert_called_once_with(response, session)
-        hsl.assert_not_called()
-        hets.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("item", list(PlaceTaxonomyExample.taxonomy.items.values())[:1])
-async def test_handle_search_response_3(app, item, context, response, session):
-    with patch.object(
-        app, "handle_suggestion_list", return_value=None
-    ) as hsl, patch.object(
-        app, "handle_result_list", return_value=None
-    ) as hrl, patch.object(
-        app, "handle_empty_text_submission", return_value=None
-    ) as hets:
-        event = PlaceTaxonomySearchEvent(item=item, context=context)
-        await app.handle_search_response(event, response, session)
-        hrl.assert_called_once_with(response, session)
-        hsl.assert_not_called()
-        hets.assert_not_called()

@@ -124,7 +124,7 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q.strip(), "at": f"{latitude},{longitude}"}
+        params = {"q": q, "at": f"{latitude},{longitude}"}
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST,
@@ -181,7 +181,7 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q.strip(), "at": f"{latitude},{longitude}"}
+        params = {"q": q, "at": f"{latitude},{longitude}"}
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.DISCOVER,
@@ -416,6 +416,7 @@ class EmptySearchEvent(SearchEvent):
 
 class UnsupportedSearchEvent(Exception):
     pass
+
 
 @dataclass
 class SearchIntent(metaclass=ABCMeta):
