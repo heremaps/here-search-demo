@@ -1,4 +1,5 @@
-from aiohttp import ClientSession, ClientConnectorError
+from .http import HTTPSession, HTTPConnectionError
+from .entity.constants import berlin
 
 from importlib import reload
 import logging
@@ -7,7 +8,6 @@ reload(logging)
 from logging import getLogger, basicConfig, DEBUG, INFO
 from typing import Tuple, Sequence
 from functools import reduce
-from collections import defaultdict
 
 logger = getLogger("here_search")
 
@@ -36,12 +36,13 @@ def set_dict_values(
     return result
 
 
-async def get_lat_lon(session: ClientSession) -> Tuple[float, float]:
+async def get_lat_lon() -> Tuple[float, float]:
     geojs = "https://get.geojs.io/v1/ip/geo.json"
     try:
-        async with session.get(geojs) as response:
-            geo = await response.json()
-            return float(geo["latitude"]), float(geo["longitude"])
-    except ClientConnectorError as e:
+        async with HTTPSession() as session:
+            async with session.get(geojs) as response:
+                geo = await response.json()
+                return float(geo["latitude"]), float(geo["longitude"])
+    except HTTPConnectionError as e:
         logger.warning(f"Error connecting to {geojs}")
-        return 52.51604, 13.37691
+        return berlin

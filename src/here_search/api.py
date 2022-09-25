@@ -1,11 +1,9 @@
-from aiohttp import ClientSession
-
+from .http import HTTPSession
 from .entity.request import Request, Response
 from .entity.endpoint import Endpoint
 from .util import logger
 
-from typing import Dict, Sequence, Optional, Callable, Tuple
-from json import loads
+from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
 from getpass import getpass
 import os
 
@@ -43,9 +41,7 @@ class API:
         self.cache = cache or {}
         self.format_url = url_format_fn or (lambda x: x)
 
-    async def uncache_or_get(
-        self, request: Request, session: ClientSession
-    ) -> Response:
+    async def get(self, request: Request, session: HTTPSession) -> Response:
         """
         Returns from HERE Search backend the response for a specific Request, or from the cache if it has been cached.
         Cache the Response if returned by the HERE Search backend.
@@ -63,10 +59,32 @@ class API:
             k: ",".join(v) if isinstance(v, list) else v
             for k, v in request.params.items()
         }
+        human_url, payload, headers = await self.do_get(request.url, params, request.x_headers, session)
+
+        formatted_msg = self.format_url(human_url)
+        self.do_log(formatted_msg)
+
+        x_headers = {
+            "X-Request-Id": headers.get("X-Request-Id"),
+            "X-Correlation-ID": headers.get("X-Correlation-ID"),
+        }
+        response = Response(data=payload, req=request, x_headers=x_headers)
+
+        self.cache[cache_key] = human_url, response # Not a pure function...
+        return response
+
+    async def do_get(self, url: str, params: dict, headers: dict, session: HTTPSession) -> Tuple[str, dict, Mapping]:  # pragma: no cover
+        # I/O coupling isolation
         async with session.get(
-            request.url, params=params, headers=request.x_headers or {}
+                url, params=params, headers=headers or {}
         ) as get_response:
-            return await self.restrieve_response(get_response, request, cache_key)
+            payload = await get_response.json()
+            human_url = get_response.url.human_repr()
+            headers = get_response.headers
+        return human_url, payload, headers
+
+    def do_log(self, msg) -> None:
+        logger.info(msg)
 
     def __uncache(self, cache_key):
         actual_url, cached_response = self.cache[cache_key]
@@ -78,26 +96,13 @@ class API:
         logger.info(f"{formatted_msg} (cached)")
         return response
 
-    async def restrieve_response(self, get_response, request, cache_key):
-        human_url = get_response.url.human_repr()
-        formatted_msg = self.format_url(human_url)
-        logger.info(formatted_msg)
-        x_headers = {
-            "X-Request-Id": get_response.headers["X-Request-Id"],
-            "X-Correlation-ID": get_response.headers["X-Correlation-ID"],
-        }
-        payload = await get_response.json(loads=loads)
-        response = Response(data=payload, req=request, x_headers=x_headers)
-        self.cache[cache_key] = human_url, response
-        return response
-
     async def autosuggest(
         self,
         q: str,
         latitude: float,
         longitude: float,
         x_headers: dict = None,
-        session: ClientSession = None,
+        session: HTTPSession = None,
         **kwargs,
     ) -> Response:
         """
@@ -120,16 +125,8 @@ class API:
         )
         return await self.get(request, session)
 
-    async def get(self, request, session: ClientSession = None):
-        if session:
-            response = await self.uncache_or_get(request, session)
-        else:
-            async with ClientSession(raise_for_status=True) as session:
-                response = await self.uncache_or_get(request, session)
-        return response
-
     async def autosuggest_href(
-        self, href: str, x_headers: dict = None, session: ClientSession = None, **kwargs
+        self, href: str, session: HTTPSession, x_headers: dict = None, **kwargs
     ) -> Response:
         """
         Calls HERE Search Autosuggest href follow-up
@@ -153,8 +150,8 @@ class API:
         q: str,
         latitude: float,
         longitude: float,
+        session: HTTPSession,
         x_headers: dict = None,
-        session: ClientSession = None,
         **kwargs,
     ) -> Response:
         """
@@ -181,11 +178,11 @@ class API:
         self,
         latitude: float,
         longitude: float,
+        session: HTTPSession,
         categories: Optional[Sequence[str]] = None,
         food_types: Optional[Sequence[str]] = None,
         chains: Optional[Sequence[str]] = None,
         x_headers: dict = None,
-        session: ClientSession = None,
         **kwargs,
     ) -> Response:
         """
@@ -216,9 +213,7 @@ class API:
         )
         return await self.get(request, session)
 
-    async def lookup(
-        self, id: str, x_headers: dict = None, session: ClientSession = None, **kwargs
-    ) -> Response:
+    async def lookup(self, id: str, session: HTTPSession, x_headers: dict = None, **kwargs) -> Response:
         """
         Calls HERE Search Lookup for a specific id
 
@@ -238,12 +233,7 @@ class API:
         return await self.get(request, session)
 
     async def reverse_geocode(
-        self,
-        latitude: float,
-        longitude: float,
-        x_headers: dict = None,
-        session: ClientSession = None,
-        **kwargs,
+        self, latitude: float, longitude: float, session: HTTPSession, x_headers: dict = None, **kwargs
     ) -> Response:
         """
         Calls HERE Reverese Geocode for a geo position

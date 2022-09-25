@@ -1,3 +1,4 @@
+from ipyleaflet import GeoJSON, wait_for_change
 from IPython.display import display as Idisplay, JSON as IJSON
 from ipywidgets import (
     Widget,
@@ -10,13 +11,12 @@ from ipywidgets import (
     Layout,
 )
 
-from here_map_widget import GeoJSON
 from here_search.entity.request import Response, ResponseItem
-from ..entity.endpoint import Endpoint
+from here_search.entity.endpoint import Endpoint
 from here_search.entity.intent import MoreDetailsIntent
 from .input import PositionMap
 
-from typing import List
+from typing import List, Tuple
 import asyncio
 
 Idisplay(
@@ -172,7 +172,7 @@ class SearchResultButtons(SearchResultList):
 
 
 class ResponseMap(PositionMap):
-    minimum_zoom_level = 11
+    maximum_zoom_level = 18
     default_point_style = {
         "strokeColor": "white",
         "lineWidth": 1,
@@ -185,9 +185,33 @@ class ResponseMap(PositionMap):
         self.collection = None
         super().__init__(**kwargs)
 
+    def fit_bounds(self, bounds: Tuple[Tuple[float, float], Tuple[float, float]]) -> asyncio.Task:
+        """
+        Sets a map view that contains the given geographical bounds
+        with the maximum zoom level possible.
+        :param bounds: Pair of Pair of floats ((south_lat, west_lon), (north_lat, east_lon))
+        :return: asyncio Task
+        """
+        return asyncio.ensure_future(self._fit_bounds(bounds))
+
+    async def _fit_bounds(self, bounds: Tuple[Tuple[float, float], Tuple[float, float]]):
+        (b_south, b_west), (b_north, b_east) = bounds
+        fit = False
+        while not fit:
+            if self.zoom == ResponseMap.maximum_zoom_level:
+                break
+            (south, west), (north, east) = self.bounds
+            if south-b_south < 0 and north-b_north > 0 and west-b_west < 0 and east-b_east > 0:
+                self.zoom += 1
+            else:
+                self.zoom -= 1
+                fit = True
+            await wait_for_change(self, 'bounds')
+
     def display(self, resp: Response):
         if self.collection:
-            self.remove_layer(self.collection)
+            self.remove(self.collection)
+            self.collection = None
         bbox = resp.bbox()
         if bbox:
             self.collection = GeoJSON(
@@ -195,16 +219,12 @@ class ResponseMap(PositionMap):
                 show_bubble=True,
                 point_style=ResponseMap.default_point_style,
             )
-            self.add_layer(self.collection)
+            self.add(self.collection)
             south, north, east, west = bbox
             height = north - south
             width = east - west
-            # https://github.com/heremaps/here-map-widget-for-jupyter/issues/37
-            self.bounds = (
-                south - height / 8,
-                north + height / 8,
-                east + width / 8,
-                west - width / 8,
-            )
-            if len(resp.data.get("items", [])) == 1:
-                self.zoom = ResponseMap.minimum_zoom_level
+            self.center = (south+north)/2, (east+west)/2
+            self.zoom = 1
+            bounds = ((south - height / 8, east + width / 8), (north + height / 8, west - width / 8))
+            self.fit_bounds(bounds)
+

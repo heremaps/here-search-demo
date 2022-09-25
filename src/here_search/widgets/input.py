@@ -1,4 +1,4 @@
-from here_map_widget import Map, Platform, ServiceNames, MapTileUrl, MapTile, TileLayer
+from ipyleaflet import Map, ZoomControl, ScaleControl, FullScreenControl, basemap_to_tiles, basemaps
 from ipywidgets import HBox, VBox, Text, Button, Layout
 from IPython.display import display_html
 from traitlets.utils.bunch import Bunch
@@ -241,33 +241,19 @@ class PositionMap(Map):
         position_handler: Callable[[float, float], None] = None,
         **kvargs,
     ):
-
-        platform = Platform(
-            api_key=api_key,
-            services_config={
-                ServiceNames.maptile: {
-                    MapTileUrl.scheme: "https",
-                    MapTileUrl.host: "maps.ls.hereapi.com",
-                    MapTileUrl.path: "maptile/2.1",
-                }
-            },
-        )
-        map_tile = MapTile(
-            tile_type="maptile",
-            scheme="normal.day",
-            tile_size=256,
-            format="png",
-            platform=platform,
-        )
-        maptile_layer = TileLayer(provider=map_tile, style={"max": 22})
+        basemap = basemap_to_tiles(basemaps.HEREv3.normalDay(apiKey=api_key))
         Map.__init__(
             self,
             api_key=api_key,
             center=center,
             zoom=kvargs.pop("zoom", PositionMap.default_zoom_level),
-            basemap=maptile_layer,
+            basemap=basemap,
             layout=kvargs.pop("layout", PositionMap.default_layout),
+            zoom_control=False
         )
+        self.add(FullScreenControl(position='topright'))
+        self.add(ZoomControl(position='topright'))
+        self.add(ScaleControl(position='bottomleft'))
         if position_handler:
             self.set_position_handler(position_handler)
 

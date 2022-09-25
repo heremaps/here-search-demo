@@ -1,8 +1,7 @@
-from aiohttp import ClientSession
-
 from . import __version__
 from .user import Profile, Default
 from .api import API
+from .http import HTTPSession
 from .entity.intent import (
     SearchIntent,
     FormulatedTextIntent,
@@ -11,7 +10,7 @@ from .entity.intent import (
     MoreDetailsIntent,
     NoIntent,
 )
-from .entity.event import (
+from .event import (
     PartialTextSearchEvent,
     SearchEvent,
     TextSearchEvent,
@@ -84,11 +83,11 @@ class OneBoxSimple:
         """
         This method repeatedly waits for search events.
         """
-        async with ClientSession(raise_for_status=True) as session:
+        async with HTTPSession(raise_for_status=True) as session:
             while True:  # pragma: no cover
                 event, resp = await self.handle_search_event(session)
 
-    async def handle_search_event(self, session: ClientSession) -> Tuple[SearchEvent, Response]:
+    async def handle_search_event(self, session: HTTPSession) -> Tuple[SearchEvent, Response]:
         event: SearchEvent = await self.wait_for_search_event()
         handler, config = self.response_handlers[type(event)]
         resp = await event.get_response(api=self.api, config=config, session=session)
@@ -180,7 +179,7 @@ class OneBoxBase(OneBoxSimple):
         self.extra_api_params = extra_api_params or {}
         self.initial_query = initial_query
 
-    async def handle_search_event(self, session: ClientSession) -> Tuple[SearchEvent, Response]:
+    async def handle_search_event(self, session: HTTPSession) -> Tuple[SearchEvent, Response]:
         event, resp = await super().handle_search_event(session)
         if isinstance(event, TextSearchEvent) or isinstance(event, PlaceTaxonomySearchEvent):
             await self.adapt_language(resp)

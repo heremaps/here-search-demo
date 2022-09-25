@@ -1,5 +1,5 @@
 from ipywidgets import HBox, VBox
-from here_map_widget import WidgetControl
+from ipyleaflet import WidgetControl
 
 from here_search.api import API
 from here_search.base import OneBoxBase
@@ -86,8 +86,7 @@ class OneBoxMap(OneBoxBase, VBox):
         widget_control = WidgetControl(
             widget=search_box, alignment="TOP_LEFT", name="search", transparent_bg=False
         )
-        self.map_w.add_control(widget_control)
-        self.map_w.zoom_control_instance.alignment = "RIGHT_TOP"
+        self.map_w.add(widget_control)
         self.log_handler = TableLogWidgetHandler()
         self.logger.addHandler(self.log_handler)
         self.logger.setLevel(logging.INFO)

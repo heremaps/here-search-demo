@@ -4,7 +4,7 @@ from here_search.api import (
     API,
     base_url,
 )
-from here_search.entity.event import (
+from here_search.event import (
     PartialTextSearchEvent,
     TextSearchEvent,
     PlaceTaxonomySearchEvent,

@@ -1,6 +1,6 @@
 import pytest
 
-from here_search.entity.event import (
+from here_search.event import (
     SearchEvent,
     PartialTextSearchEvent,
     TextSearchEvent,

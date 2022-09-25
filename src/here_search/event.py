@@ -1,12 +1,10 @@
-from aiohttp import ClientSession
-
-from here_search.entity.request import (
+from .entity.request import (
     Response,
     ResponseItem,
     RequestContext,
 )
-from here_search.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
-from here_search.entity.intent import (
+from .entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
+from .entity.intent import (
     SearchIntent,
     TransientTextIntent,
     FormulatedTextIntent,
@@ -14,8 +12,9 @@ from here_search.entity.intent import (
     MoreDetailsIntent,
     NoIntent,
 )
-from here_search.entity.place import PlaceTaxonomyItem
-from here_search.api import API
+from .entity.place import PlaceTaxonomyItem
+from .api import API
+from .http import HTTPSession
 
 from typing import Optional
 from abc import ABCMeta, abstractmethod
@@ -29,7 +28,7 @@ class SearchEvent(metaclass=ABCMeta):
 
     @abstractmethod
     async def get_response(
-            self, api: API, config: EndpointConfig, session: ClientSession
+            self, api: API, config: EndpointConfig, session: HTTPSession
     ) -> Response:
         raise NotImplementedError()
 
@@ -48,7 +47,7 @@ class PartialTextSearchEvent(SearchEvent):
     query_text: str
 
     async def get_response(
-            self, api: API, config: AutosuggestConfig, session: ClientSession
+            self, api: API, config: AutosuggestConfig, session: HTTPSession
     ) -> Response:
         return await asyncio.ensure_future(
             api.autosuggest(
@@ -78,7 +77,7 @@ class TextSearchEvent(SearchEvent):
     query_text: str
 
     async def get_response(
-            self, api: API, config: DiscoverConfig, session: ClientSession
+            self, api: API, config: DiscoverConfig, session: HTTPSession
     ) -> Response:
         return await asyncio.ensure_future(
             api.discover(
@@ -106,7 +105,7 @@ class PlaceTaxonomySearchEvent(SearchEvent):
     item: PlaceTaxonomyItem
 
     async def get_response(
-            self, api: API, config: BrowseConfig, session: ClientSession
+            self, api: API, config: BrowseConfig, session: HTTPSession
     ) -> Response:
         return await asyncio.ensure_future(
             api.browse(
@@ -135,7 +134,7 @@ class DetailsSearchEvent(SearchEvent):
     item: ResponseItem
 
     async def get_response(
-            self, api: API, config: LookupConfig, session: ClientSession
+            self, api: API, config: LookupConfig, session: HTTPSession
     ) -> Response:
         return await asyncio.ensure_future(
             api.lookup(
@@ -162,7 +161,7 @@ class FollowUpSearchEvent(SearchEvent):
     item: ResponseItem
 
     async def get_response(
-            self, api: API, config: DiscoverConfig, session: ClientSession
+            self, api: API, config: DiscoverConfig, session: HTTPSession
     ) -> Response:
         return await asyncio.ensure_future(
             api.autosuggest_href(
@@ -184,7 +183,7 @@ class EmptySearchEvent(SearchEvent):
     context: Optional[None] = None
 
     async def get_response(
-            self, api: API, config: LookupConfig, session: ClientSession
+            self, api: API, config: LookupConfig, session: HTTPSession
     ) -> Response:
         pass
 

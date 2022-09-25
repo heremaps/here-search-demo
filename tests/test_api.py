@@ -6,35 +6,7 @@ from unittest.mock import patch, AsyncMock
 
 
 @pytest.mark.asyncio
-async def test_retrieve_response(api, a_request, session_response):
-
-    cache_key = "cache_key"
-    response = await api.restrieve_response(
-        session_response, a_request, cache_key=cache_key
-    )
-
-    assert response.data == await session_response.json()
-    assert response.x_headers == session_response.headers
-    assert response.req == a_request
-    assert api.cache[cache_key] == (session_response.url.human_repr(), response)
-
-
-@pytest.mark.asyncio
-@patch("here_search.api.ClientSession.get")
-async def test_get_without_session(mock_get, api, a_request, session_response):
-    mock_get.return_value = AsyncMock(
-        __aenter__=AsyncMock(return_value=session_response),
-        __aexit__=AsyncMock(return_value=None),
-    )
-    response = await api.get(a_request)
-
-    assert response.data == await session_response.json()
-    assert response.x_headers == session_response.headers
-    assert a_request == response.req
-
-
-@pytest.mark.asyncio
-async def test_get_with_session(api, a_request, session):
+async def test_get(api, a_request, session):
     response = await api.get(a_request, session)
 
     assert response.data == await (await session.get().__aenter__()).json()

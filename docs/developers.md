@@ -69,3 +69,17 @@ To run the notebook on Jupyter Classic, you will need:
    pip install -e .
    pip install -r requirements_dev.txt
    ```
+
+### JupyterLite
+
+[JupyterLite](https://jupyterlite.readthedocs.io/en/latest/) is a JupyterLab distribution that runs entirely in the browser.The Python kernels are backed by [`Pyodide`](https://pyodide.org/en/stable/) running in a Web Worker.
+
+Pyodide can not be used outside a browser. But for development purposes (type hints), it is advised to
+install its [`py`](https://github.com/pyodide/pyodide/tree/main/src/py) package into the venv used for `search-notebook-lite`
+
+   ```
+   git clone git@github.com:pyodide/pyodide.git
+   cd pyodide/src/py
+   pip install -e .
+   ```
+

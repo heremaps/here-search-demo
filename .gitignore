@@ -36,6 +36,9 @@ integration_results.html
 .pytest_cache/
 .ipynb_checkpoints
 __pycache__/
+_output/
+content/
+.jupyterlite.doit.db
 
 # distribution packages
 build/

@@ -13,6 +13,7 @@ Run preferably in a virtual environment:
    ```
    pip -v install here-search-widget \
      --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
+   jupyter labextension install @jupyterlab/geojson-extension
    ```
 
 Link the virtual environment to a IPython kernel:
