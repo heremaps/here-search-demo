@@ -48,8 +48,6 @@ pages:
     - source venv/bin/activate
     - mkdir content
     - pip install jupyterlab jupyterlab_widgets jupyterlite ipywidgets==7.7.2 ipyleaflet==0.17.1 wheel
-    - jupyter nbextension enable --py widgetsnbextension --sys-prefix
-    - jupyter labextension install @jupyterlab/geojson-extension
     - pip -v wheel ".[lite]" --wheel-dir content --no-deps --no-binary ":all:"
     - cp src/here_search/notebooks/*.ipynb content/
     - jupyter lite build --contents content --output-dir public --lite-dir public
