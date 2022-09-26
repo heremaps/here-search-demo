@@ -26,6 +26,7 @@ class OneBoxMap(OneBoxBase, VBox):
 
     def __init__(
         self,
+        api_key: str=None,
         user_profile: Profile = None,
         results_limit: int = None,
         suggestions_limit: int = None,
@@ -39,7 +40,7 @@ class OneBoxMap(OneBoxBase, VBox):
         self.result_queue: asyncio.Queue = asyncio.Queue()
         OneBoxBase.__init__(
             self,
-            api=API(url_format_fn=TableLogWidgetHandler.format_url),
+            api=API(api_key=api_key, url_format_fn=TableLogWidgetHandler.format_url),
             user_profile=user_profile,
             results_limit=results_limit or OneBoxMap.default_results_limit,
             suggestions_limit=suggestions_limit or OneBoxMap.default_suggestions_limit,

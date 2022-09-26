@@ -45,7 +45,7 @@ To run the notebook on Jupyter Classic, you will need:
 
    ```
    pip install twine wheel
-   pip wheel ".[lab]" --wheel-dir dist --no-deps --no-binary ":all:"
+   pip -v wheel ".[lab]" --wheel-dir dist --no-deps --no-binary ":all:"
    twine upload --skip-existing --repository-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi dist/*
    ```
 
