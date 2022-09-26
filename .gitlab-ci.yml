@@ -39,3 +39,20 @@ test310:
     - pip install -r requirements_dev.txt
     - pytest
   #when: manual
+
+pages:
+  stage: build
+  image: "hcr.data.here.com/public_mirror/python:3.10"
+  script:
+    - pip install wheel jupyterlite
+    - rm -rf content public _output build dist
+    - mkdir content
+    - pip wheel ".[lite]" --wheel-dir content --no-deps --no-binary ":all:"
+    - cp src/here_search/notebooks/*.ipynb content/
+    - jupyter lite build --contents content --output-dir public --lite-dir public
+  artifacts:
+    paths:
+      - public # mandatory, other folder won't work
+  only:
+    - master # the branch you want to publish
+  when: manual

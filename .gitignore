@@ -38,6 +38,7 @@ integration_results.html
 __pycache__/
 _output/
 content/
+public/
 .jupyterlite.doit.db
 
 # distribution packages
