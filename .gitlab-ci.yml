@@ -6,7 +6,7 @@ coverage:
   stage: test
   image: "hcr.data.here.com/public_mirror/python:3.8-slim"
   script:
-    - pip install -e .
+    - pip install -e ".[lab]"
     - pip install -r requirements_dev.txt
     - coverage run --source src -m pytest
     - coverage report -m
@@ -17,7 +17,7 @@ test38:
   stage: test
   image: "hcr.data.here.com/public_mirror/python:3.8-slim"
   script:
-    - pip install -e .
+    - pip install -e ".[lab]"
     - pip install -r requirements_dev.txt
     - pytest
   #when: manual
@@ -26,7 +26,7 @@ test39:
   stage: test
   image: "hcr.data.here.com/public_mirror/python:3.9-slim"
   script:
-    - pip install -e .
+    - pip install -e ".[lab]"
     - pip install -r requirements_dev.txt
     - pytest
   #when: manual
@@ -35,7 +35,7 @@ test310:
   stage: test
   image: "hcr.data.here.com/public_mirror/python:3.10"
   script:
-    - pip install -e .
+    - pip install -e ".[lab]"
     - pip install -r requirements_dev.txt
     - pytest
   #when: manual
