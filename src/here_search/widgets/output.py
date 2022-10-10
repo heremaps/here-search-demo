@@ -208,7 +208,7 @@ class ResponseMap(PositionMap):
                 fit = True
             await wait_for_change(self, 'bounds')
 
-    def display(self, resp: Response):
+    def display(self, resp: Response, fit: bool=False):
         if self.collection:
             self.remove(self.collection)
             self.collection = None
@@ -220,11 +220,12 @@ class ResponseMap(PositionMap):
                 point_style=ResponseMap.default_point_style,
             )
             self.add(self.collection)
-            south, north, east, west = bbox
-            height = north - south
-            width = east - west
-            self.center = (south+north)/2, (east+west)/2
-            self.zoom = 1
-            bounds = ((south - height / 8, east + width / 8), (north + height / 8, west - width / 8))
-            self.fit_bounds(bounds)
+            if fit:
+                south, north, east, west = bbox
+                height = north - south
+                width = east - west
+                self.center = (south+north)/2, (east+west)/2
+                self.zoom = 1
+                bounds = ((south - height / 8, east + width / 8), (north + height / 8, west - width / 8))
+                self.fit_bounds(bounds)
 

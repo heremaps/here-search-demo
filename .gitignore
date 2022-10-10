@@ -55,6 +55,7 @@ dist-pip/
 
 # virtual envs
 .python-version
+venv/
 
 # spygot project specific things
 *_*_*.gz

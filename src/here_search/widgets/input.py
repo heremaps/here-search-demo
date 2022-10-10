@@ -232,7 +232,7 @@ class PlaceTaxonomyButtons(HBox):
 
 class PositionMap(Map):
     default_zoom_level = 12
-    default_layout = {"height": "600px"}
+    default_layout = {"height": "680px"}
 
     def __init__(
         self,
@@ -249,11 +249,12 @@ class PositionMap(Map):
             zoom=kvargs.pop("zoom", PositionMap.default_zoom_level),
             basemap=basemap,
             layout=kvargs.pop("layout", PositionMap.default_layout),
-            zoom_control=False
+            zoom_control=False,
+            scroll_wheel_zoom=True
         )
-        self.add(FullScreenControl(position='topright'))
-        self.add(ZoomControl(position='topright'))
-        self.add(ScaleControl(position='bottomleft'))
+        self.add(ScaleControl(position="bottomright"))
+        self.add(FullScreenControl(position="bottomright"))
+        self.add(ZoomControl(position="bottomright"))
         if position_handler:
             self.set_position_handler(position_handler)
 
