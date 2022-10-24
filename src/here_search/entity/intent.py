@@ -1,5 +1,5 @@
-from .request import ResponseItem
-from .place import PlaceTaxonomyItem
+from here_search.entity.request import ResponseItem, LocationSuggestionItem, QuerySuggestionItem
+from here_search.entity.place import PlaceTaxonomyItem
 
 from typing import Optional, Union
 from abc import ABCMeta
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 @dataclass
 class SearchIntent(metaclass=ABCMeta):
-    materialization: Union[None, str, PlaceTaxonomyItem, ResponseItem]
+    materialization: Union[None, str, PlaceTaxonomyItem, ResponseItem, LocationSuggestionItem, QuerySuggestionItem]
 
 
 @dataclass

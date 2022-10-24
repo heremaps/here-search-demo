@@ -1,5 +1,5 @@
-from .http import HTTPSession, HTTPConnectionError
-from .entity.constants import berlin
+from here_search.http import HTTPSession, HTTPConnectionError
+from here_search.entity.constants import berlin
 
 from importlib import reload
 import logging

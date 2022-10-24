@@ -1,10 +1,12 @@
-from .entity.request import (
+from here_search.entity.request import (
     Response,
     ResponseItem,
+    LocationSuggestionItem,
+    QuerySuggestionItem,
     RequestContext,
 )
-from .entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
-from .entity.intent import (
+from here_search.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
+from here_search.entity.intent import (
     SearchIntent,
     TransientTextIntent,
     FormulatedTextIntent,
@@ -12,9 +14,9 @@ from .entity.intent import (
     MoreDetailsIntent,
     NoIntent,
 )
-from .entity.place import PlaceTaxonomyItem
-from .api import API
-from .http import HTTPSession
+from here_search.entity.place import PlaceTaxonomyItem
+from here_search.api import API
+from here_search.http import HTTPSession
 
 from typing import Optional
 from abc import ABCMeta, abstractmethod
@@ -54,7 +56,7 @@ class PartialTextSearchEvent(SearchEvent):
                 self.query_text,
                 self.context.latitude,
                 self.context.longitude,
-                x_headers=None,
+                x_headers=self.context.x_headers,
                 session=session,
                 lang=self.context.language,
                 limit=config.limit,
@@ -84,7 +86,7 @@ class TextSearchEvent(SearchEvent):
                 self.query_text,
                 self.context.latitude,
                 self.context.longitude,
-                x_headers=None,
+                x_headers=self.context.x_headers,
                 session=session,
                 lang=self.context.language,
                 limit=config.limit,
@@ -111,7 +113,7 @@ class PlaceTaxonomySearchEvent(SearchEvent):
             api.browse(
                 self.context.latitude,
                 self.context.longitude,
-                x_headers=None,
+                x_headers=self.context.x_headers,
                 session=session,
                 lang=self.context.language,
                 limit=config.limit,
@@ -139,7 +141,7 @@ class DetailsSearchEvent(SearchEvent):
         return await asyncio.ensure_future(
             api.lookup(
                 self.item.data["id"],
-                x_headers=None,
+                x_headers=self.context.x_headers,
                 lang=self.context.language,
                 session=session,
             )
@@ -150,6 +152,20 @@ class DetailsSearchEvent(SearchEvent):
         assert isinstance(intent, MoreDetailsIntent)
         assert intent.materialization.data["resultType"] not in ("categoryQuery", "chainQuery")
         return cls(context=context, item=intent.materialization)
+
+
+@dataclass
+class DetailsSuggestionEvent(DetailsSearchEvent):
+    """
+    This SearchEvent class is used to convey location suggestion items selections to an App waiting loop
+    """
+
+    item: LocationSuggestionItem
+
+    async def get_response(
+            self, api: API, config: LookupConfig, session: HTTPSession
+    ) -> Response:
+        return await super().get_response(api, config, session)
 
 
 @dataclass
@@ -166,7 +182,7 @@ class FollowUpSearchEvent(SearchEvent):
         return await asyncio.ensure_future(
             api.autosuggest_href(
                 self.item.data["href"],
-                x_headers=None,
+                x_headers=self.context.x_headers,
                 session=session,
             )
         )

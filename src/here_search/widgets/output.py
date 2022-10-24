@@ -11,7 +11,7 @@ from ipywidgets import (
     Layout,
 )
 
-from here_search.entity.request import Response, ResponseItem
+from here_search.entity.request import Response, ResponseItem, QuerySuggestionItem, LocationSuggestionItem
 from here_search.entity.endpoint import Endpoint
 from here_search.entity.intent import MoreDetailsIntent
 from .input import PositionMap
@@ -96,6 +96,7 @@ class SearchResultButton(HBox):
 
     def __init__(self, item: ResponseItem, **kvargs):
         self.label = Label(value="", layout={"width": "20px"})
+        # TODO: create a class derived from Both Button and ResponseItem
         self.button = Button(
             description="",
             icon="",
@@ -119,12 +120,17 @@ class SearchResultButton(HBox):
         self.add_class("result-button")
 
     def set_result(self, data: dict, rank: int, resp: Response):
-        self.button.value = ResponseItem(data=data, rank=rank or 0, resp=resp)
+        if resp.req.endpoint == Endpoint.AUTOSUGGEST:
+            if data["resultType"] in ("categoryQuery", "chainQuery"): # That's a hack...
+                self.button.value = QuerySuggestionItem(data=data, rank=rank or 0, resp=resp)
+                self.button.icon = "search"
+            else:
+                self.button.value = LocationSuggestionItem(data=data, rank=rank or 0, resp=resp)
+                self.button.icon = ""
+        else:
+            self.button.value = ResponseItem(data=data, rank=rank or 0, resp=resp)
         self.button.description = data["title"]
         self.label.value = f"{self.button.value.rank+1: <2}"
-        self.button.icon = (
-            "search" if "Query" in data["resultType"] else ""
-        )  # That's a hack...
 
 
 class SearchResultButtons(SearchResultList):
@@ -228,4 +234,3 @@ class ResponseMap(PositionMap):
                 self.zoom = 1
                 bounds = ((south - height / 8, east + width / 8), (north + height / 8, west - width / 8))
                 self.fit_bounds(bounds)
-

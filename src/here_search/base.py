@@ -1,8 +1,8 @@
-from . import __version__
-from .user import Profile, Default
-from .api import API
-from .http import HTTPSession
-from .entity.intent import (
+from here_search import __version__
+from here_search.user import UserProfile, DefaultUser
+from here_search.api import API
+from here_search.http import HTTPSession
+from here_search.entity.intent import (
     SearchIntent,
     FormulatedTextIntent,
     TransientTextIntent,
@@ -10,7 +10,7 @@ from .entity.intent import (
     MoreDetailsIntent,
     NoIntent,
 )
-from .event import (
+from here_search.event import (
     PartialTextSearchEvent,
     SearchEvent,
     TextSearchEvent,
@@ -18,9 +18,10 @@ from .event import (
     FollowUpSearchEvent,
     DetailsSearchEvent,
     EmptySearchEvent,
+    DetailsSuggestionEvent
 )
-from .entity.request import Response, RequestContext
-from .entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig, NoConfig
+from here_search.entity.request import Response, RequestContext, QuerySuggestionItem, LocationSuggestionItem
+from here_search.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig, NoConfig
 
 from typing import Tuple, Callable, Mapping
 import asyncio
@@ -46,23 +47,22 @@ class OneBoxSimple:
             **kwargs,
     ):
 
+        self.task = None
         self.api = api or API()
         klass = type(self)
         self.search_center = search_center or klass.default_search_center
-        self.language = language or klass.default_language
+        self.preferred_language = language or klass.default_language
         self.results_limit = results_limit or klass.default_results_limit
         self.suggestions_limit = suggestions_limit or klass.default_suggestions_limit
         self.terms_limit = terms_limit or klass.default_terms_limit
         self.queue = queue or asyncio.Queue()
-        self.headers = OneBoxSimple.default_headers
         self.event_classes: Mapping[type(SearchIntent), Callable[[SearchIntent], type(SearchEvent)]] = {
             TransientTextIntent: lambda intent: PartialTextSearchEvent,
             FormulatedTextIntent: lambda intent: TextSearchEvent,
             PlaceTaxonomyIntent: lambda intent: PlaceTaxonomySearchEvent,
-            MoreDetailsIntent: lambda intent: (FollowUpSearchEvent
-                                               if intent.materialization.data["resultType"] in ("categoryQuery",
-                                                                                                "chainQuery")
-                                               else DetailsSearchEvent),
+            MoreDetailsIntent: lambda intent: {QuerySuggestionItem: FollowUpSearchEvent,
+                                               LocationSuggestionItem: DetailsSuggestionEvent
+                                               }.get(type(intent.materialization), DetailsSearchEvent),
             NoIntent: lambda intent: EmptySearchEvent
         }
         self.response_handlers: Mapping[
@@ -77,15 +77,18 @@ class OneBoxSimple:
             EmptySearchEvent: (self.handle_empty_text_submission, None)
         }
 
-        self.task = None
+        self.headers = OneBoxSimple.default_headers
+        self.x_headers = None
 
     async def handle_search_events(self):
         """
         This method repeatedly waits for search events.
         """
         async with HTTPSession(raise_for_status=True) as session:
+            await self.search_events_preprocess(session)
             while True:  # pragma: no cover
                 event, resp = await self.handle_search_event(session)
+                await self.search_event_postprocess(event, resp, session)
 
     async def handle_search_event(self, session: HTTPSession) -> Tuple[SearchEvent, Response]:
         event: SearchEvent = await self.wait_for_search_event()
@@ -102,11 +105,18 @@ class OneBoxSimple:
         context = RequestContext(
             latitude=self.search_center[0],
             longitude=self.search_center[1],
-            language=self.language,
+            language=self.preferred_language,
+            x_headers=self.x_headers
         )
         intent: SearchIntent = await self.queue.get()
         event_class: SearchEvent = self.event_classes[type(intent)](intent)
         return event_class.from_intent(context=context, intent=intent)
+
+    async def search_events_preprocess(self, session: HTTPSession) -> None:
+        pass
+
+    async def search_event_postprocess(self, event: SearchEvent, resp: Response, session: HTTPSession) -> None:
+        pass
 
     def run(self, handle_search_events: Callable = None) -> "OneBoxSimple":
         self.task = asyncio.ensure_future(
@@ -138,22 +148,50 @@ class OneBoxSimple:
             asyncio.run(self.stop())
 
     def handle_suggestion_list(self, response: Response) -> None:
+        """
+        Typically
+          - called in OneBoxSimple.handle_search_event()
+          - associated with OneBoxSimple.PartialTextSearchEvent in self.response_handlers
+        :param response: Response instance
+        :return: None
+        """
         pass
 
     def handle_result_list(self, response: Response) -> None:
+        """
+        Typically
+          - called in OneBoxSimple.handle_search_event()
+          - associated with OneBoxSimple.TextSearchEvent in self.response_handlers
+        :param response: Response instance
+        :return: None
+        """
         pass
 
     def handle_result_details(self, response: Response) -> None:
+        """
+        Typically
+          - called in OneBoxSimple.handle_search_event()
+          - associated with OneBoxSimple.DetailsSearchEvent in self.response_handlers
+        :param response: Response instance
+        :return: None
+        """
         pass
 
-    def handle_empty_text_submission(self, *args, **kwargs) -> None:
+    def handle_empty_text_submission(self, response: Response) -> None:
+        """
+        Typically
+          - called in OneBoxSimple.handle_search_event()
+          - associated with OneBoxSimple.EmptySearchEvent in self.response_handlers
+        :param response: Response instance
+        :return: None
+        """
         pass
 
 
 class OneBoxBase(OneBoxSimple):
     def __init__(
             self,
-            user_profile: Profile = None,
+            user_profile: UserProfile = None,
             api: API = None,
             results_limit: int = None,
             suggestions_limit: int = None,
@@ -163,14 +201,14 @@ class OneBoxBase(OneBoxSimple):
             **kwargs,
     ):
 
-        self.user_profile = user_profile or Default()
+        self.user_profile = user_profile or DefaultUser()
         super().__init__(
             api=api,
             search_center=(
                 self.user_profile.current_latitude,
                 self.user_profile.current_longitude,
             ),
-            language=self.user_profile.language,
+            language=self.user_profile.preferred_language,
             results_limit=results_limit,
             suggestions_limit=suggestions_limit,
             terms_limit=terms_limit,
@@ -185,16 +223,22 @@ class OneBoxBase(OneBoxSimple):
             await self.adapt_language(resp)
         return event, resp
 
+    def get_preferred_language(self, country_code: str=None):
+        if country_code:
+            return self.user_profile.get_preferred_country_language(country_code)
+        else:
+            return self.user_profile.get_current_language()
+
     async def adapt_language(self, resp):
         country_codes = {item["address"]["countryCode"] for item in resp.data["items"]}
         preferred_languages = {
-            self.user_profile.get_preferred_language(country_code)
+            self.get_preferred_language(country_code)
             for country_code in country_codes
         }
         if len(preferred_languages) == 1 and preferred_languages != {None}:
             language = preferred_languages.pop()
-            if language != self.language:
-                self.language = language
+            if language != self.preferred_language:
+                self.preferred_language = language
 
     def set_search_center(self, latitude: float, longitude: float):
         self.search_center = latitude, longitude

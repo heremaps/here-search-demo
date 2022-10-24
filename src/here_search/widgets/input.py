@@ -190,9 +190,11 @@ class PlaceTaxonomyButton(Button):
 
     def __init__(self, item: PlaceTaxonomyItem, icon: str, **kwargs):
         """
-        Creates a Button for an taxonomy instance with a specific Font-Awesome icon.
-        See: https://fontawesome.com/v5/search?m=free&s=regular
-        And: https://use.fontawesome.com/releases/v5.12.0/fontawesome-free-5.12.0-web.zip
+        Creates a Button for a taxonomy instance with a specific Font-Awesome icon.
+        See:
+          - https://fontawesome.com/v5/search?m=free&s=regular
+          - https://fontawesome.com/v5/cheatsheet/
+          - https://use.fontawesome.com/releases/v5.12.0/fontawesome-free-5.12.0-web.zip
 
         :param icon: fontawesome-free v5.12.0 icon name (with fa- prefix) or text
         :param taxonomy: taxonomy instance

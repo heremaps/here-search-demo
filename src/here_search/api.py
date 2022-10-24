@@ -1,12 +1,12 @@
-from .http import HTTPSession
-from .entity.request import Request, Response
-from .entity.endpoint import Endpoint
-from .util import logger
+from here_search.http import HTTPSession
+from here_search.entity.request import Request, Response
+from here_search.entity.endpoint import Endpoint
+from here_search.util import logger
+from here_search.api_options import APIOptions
 
 from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
 from getpass import getpass
 import os
-
 
 base_url = {
     ep: f"https://{eps}.search.hereapi.com/v1/{eps}"
@@ -25,21 +25,23 @@ class API:
     """
     https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
     """
-
     api_key: str
-    cache: Dict[str, Tuple[str, Response]]
+    cache: Dict[str, Response]
+    options: APIOptions
 
     def __init__(
-        self,
-        api_key: str = None,
-        cache: dict = None,
-        url_format_fn: Callable[[str], str] = None,
+            self,
+            api_key: str = None,
+            cache: dict = None,
+            url_format_fn: Callable[[str], str] = None,
+            options: APIOptions = None
     ):
         self.api_key = (
-            api_key or os.environ.get("API_KEY") or getpass(prompt="api key: ")
+                api_key or os.environ.get("API_KEY") or getpass(prompt="api key: ")
         )
         self.cache = cache or {}
         self.format_url = url_format_fn or (lambda x: x)
+        self.options = options or {}
 
     async def get(self, request: Request, session: HTTPSession) -> Response:
         """
@@ -70,10 +72,11 @@ class API:
         }
         response = Response(data=payload, req=request, x_headers=x_headers)
 
-        self.cache[cache_key] = human_url, response # Not a pure function...
+        self.cache[cache_key] = human_url, response  # Not a pure function...
         return response
 
-    async def do_get(self, url: str, params: dict, headers: dict, session: HTTPSession) -> Tuple[str, dict, Mapping]:  # pragma: no cover
+    async def do_get(self, url: str, params: dict, headers: dict, session: HTTPSession) -> Tuple[
+        str, dict, Mapping]:  # pragma: no cover
         # I/O coupling isolation
         async with session.get(
                 url, params=params, headers=headers or {}
@@ -97,13 +100,13 @@ class API:
         return response
 
     async def autosuggest(
-        self,
-        q: str,
-        latitude: float,
-        longitude: float,
-        x_headers: dict = None,
-        session: HTTPSession = None,
-        **kwargs,
+            self,
+            q: str,
+            latitude: float,
+            longitude: float,
+            session: HTTPSession,
+            x_headers: dict = None,
+            **kwargs,
     ) -> Response:
         """
         Calls HERE Search Autosuggest endpoint
@@ -115,7 +118,8 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q, "at": f"{latitude},{longitude}"}
+        params = self.options.get(Endpoint.AUTOSUGGEST, {}).copy()
+        params.update(q=q, at=f'{latitude},{longitude}')
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST,
@@ -126,13 +130,17 @@ class API:
         return await self.get(request, session)
 
     async def autosuggest_href(
-        self, href: str, session: HTTPSession, x_headers: dict = None, **kwargs
+            self,
+            href: str,
+            session: HTTPSession,
+            x_headers: dict = None,
+            **kwargs
     ) -> Response:
         """
         Calls HERE Search Autosuggest href follow-up
 
         Blindly calls Autosuggest href
-        :param session: instance of ClientSession
+        :param session: instance of HTTPSession
         :param href: href value returned in Autosuggest categoryQyery/chainQuery results
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
@@ -146,25 +154,26 @@ class API:
         return await self.get(request, session)
 
     async def discover(
-        self,
-        q: str,
-        latitude: float,
-        longitude: float,
-        session: HTTPSession,
-        x_headers: dict = None,
-        **kwargs,
+            self,
+            q: str,
+            latitude: float,
+            longitude: float,
+            session: HTTPSession,
+            x_headers: dict = None,
+            **kwargs,
     ) -> Response:
         """
         Calls HERE Search Discover endpoint
 
-        :param session: instance of ClientSession
+        :param session: instance of HTTPSession
         :param q: query text
         :param latitude: search center latitude
         :param longitude: search center longitude
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"q": q, "at": f"{latitude},{longitude}"}
+        params = self.options.get(Endpoint.DISCOVER, {}).copy()
+        params.update(q=q, at=f'{latitude},{longitude}')
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.DISCOVER,
@@ -175,20 +184,20 @@ class API:
         return await self.get(request, session)
 
     async def browse(
-        self,
-        latitude: float,
-        longitude: float,
-        session: HTTPSession,
-        categories: Optional[Sequence[str]] = None,
-        food_types: Optional[Sequence[str]] = None,
-        chains: Optional[Sequence[str]] = None,
-        x_headers: dict = None,
-        **kwargs,
+            self,
+            latitude: float,
+            longitude: float,
+            session: HTTPSession,
+            categories: Optional[Sequence[str]] = None,
+            food_types: Optional[Sequence[str]] = None,
+            chains: Optional[Sequence[str]] = None,
+            x_headers: dict = None,
+            **kwargs,
     ) -> Response:
         """
         Calls HERE Search Browse endpoint
 
-        :param session: instance of ClientSession
+        :param session: instance of HTTPSession
         :param latitude: search center latitude
         :param longitude: search center longitude
         :param categories: Places category ids for filtering
@@ -197,13 +206,15 @@ class API:
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"at": f"{latitude},{longitude}"}
+        params = self.options.get(Endpoint.BROWSE, {}).copy()
+        _params = {"at": f"{latitude},{longitude}"}
         if categories:
-            params["categories"] = ",".join(sorted(set(categories or [])))
+            _params["categories"] = ",".join(sorted(set(categories or [])))
         if food_types:
-            params["foodTypes"] = ",".join(sorted(set(food_types or [])))
+            _params["foodTypes"] = ",".join(sorted(set(food_types or [])))
         if chains:
-            params["chains"] = ",".join(sorted(set(chains or [])))
+            _params["chains"] = ",".join(sorted(set(chains or [])))
+        params.update(_params)
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.BROWSE,
@@ -213,16 +224,22 @@ class API:
         )
         return await self.get(request, session)
 
-    async def lookup(self, id: str, session: HTTPSession, x_headers: dict = None, **kwargs) -> Response:
+    async def lookup(
+            self,
+            id: str,
+            session: HTTPSession,
+            x_headers: dict = None,
+            **kwargs) -> Response:
         """
         Calls HERE Search Lookup for a specific id
 
-        :param session: instance of ClientSession
+        :param session: instance of HTTPSession
         :param id: location record ID
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"id": id}
+        params = self.options.get(Endpoint.LOOKUP, {}).copy()
+        params.update(id=id)
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.LOOKUP,
@@ -233,18 +250,24 @@ class API:
         return await self.get(request, session)
 
     async def reverse_geocode(
-        self, latitude: float, longitude: float, session: HTTPSession, x_headers: dict = None, **kwargs
+            self,
+            latitude: float,
+            longitude: float,
+            session: HTTPSession,
+            x_headers: dict = None,
+            **kwargs
     ) -> Response:
         """
         Calls HERE Reverese Geocode for a geo position
 
-        :param session: instance of ClientSession
+        :param session: instance of HTTPSession
         :param latitude: input position latitude
         :param longitude: input position longitude
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
         :return: a Response object
         """
-        params = {"at": f"{latitude},{longitude}"}
+        params = self.options.get(Endpoint.REVGEOCODE, {}).copy()
+        params.update(at=f'{latitude},{longitude}')
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.REVGEOCODE,
@@ -253,4 +276,3 @@ class API:
             x_headers=x_headers,
         )
         return await self.get(request, session)
-

@@ -3,7 +3,7 @@ from ipyleaflet import WidgetControl
 
 from here_search.api import API
 from here_search.base import OneBoxBase
-from here_search.user import Profile
+from here_search.user import UserProfile
 from here_search.entity.request import Response
 from here_search.entity.place import PlaceTaxonomyExample
 
@@ -27,7 +27,7 @@ class OneBoxMap(OneBoxBase, VBox):
     def __init__(
             self,
             api_key: str = None,
-            user_profile: Profile = None,
+            user_profile: UserProfile = None,
             results_limit: int = None,
             suggestions_limit: int = None,
             terms_limit: int = None,
@@ -115,27 +115,17 @@ class OneBoxMap(OneBoxBase, VBox):
             )
 
     def handle_suggestion_list(self, autosuggest_resp: Response):
-        """
-        Typically called by OneBoxBase.handle_key_strokes()
-        """
         self.display_suggestions(autosuggest_resp)
         self.display_result_map(autosuggest_resp, fit=False)
         self.display_terms(autosuggest_resp)
 
     def handle_result_list(self, resp: Response):
-        """
-        Displays a results list in various widgets
-        Typically called by OneBoxBase.handle_text_submissions()
-        """
         self.result_buttons_w.display(resp)
         self.result_json_w.display(resp)
         self.display_result_map(resp, fit=True)
         self.clear_query_text()
 
     def handle_result_details(self, lookup_resp: Response):
-        """
-        Typically called by OneBoxBase.handle_result_selections()
-        """
         self.result_json_w.display(lookup_resp)
         self.display_result_map(lookup_resp, fit=True)
 
@@ -148,6 +138,7 @@ class OneBoxMap(OneBoxBase, VBox):
     def display_suggestions(self, autosuggest_resp: Response) -> None:
         self.result_buttons_w.display(autosuggest_resp)
         self.result_json_w.display(autosuggest_resp)
+        #self.display_result_map(autosuggest_resp, update_search_center=False)
 
     def clear_query_text(self):
         self.query_box_w.text_w.value = ""

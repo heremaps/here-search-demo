@@ -1,4 +1,4 @@
-from .endpoint import Endpoint
+from here_search.entity.endpoint import Endpoint
 
 from typing import Tuple, Dict, Optional
 from dataclasses import dataclass
@@ -128,7 +128,17 @@ class LocationResponseItem(ResponseItem):
 
 
 @dataclass
-class QueryResponseItem(ResponseItem):
+class SuggestionItem(ResponseItem, metaclass=ABCMeta):
+    pass
+
+
+@dataclass
+class LocationSuggestionItem(ResponseItem):
+    pass
+
+
+@dataclass
+class QuerySuggestionItem(ResponseItem):
     pass
 
 
@@ -137,3 +147,4 @@ class RequestContext:
     latitude: float
     longitude: float
     language: Optional[str] = None
+    x_headers: Optional[dict] = None

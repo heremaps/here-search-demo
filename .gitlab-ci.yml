@@ -7,7 +7,7 @@ coverage:
   image: "hcr.data.here.com/public_mirror/python:3.8-slim"
   script:
     - pip install -e ".[lab]"
-    - pip install -r requirements_dev.txt
+    - pip install -r requirements/dev.txt
     - coverage run --source src -m pytest
     - coverage report -m
   coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
@@ -18,7 +18,7 @@ test38:
   image: "hcr.data.here.com/public_mirror/python:3.8-slim"
   script:
     - pip install -e ".[lab]"
-    - pip install -r requirements_dev.txt
+    - pip install -r requirements/dev.txt
     - pytest
   #when: manual
 
@@ -27,7 +27,7 @@ test39:
   image: "hcr.data.here.com/public_mirror/python:3.9-slim"
   script:
     - pip install -e ".[lab]"
-    - pip install -r requirements_dev.txt
+    - pip install -r requirements/dev.txt
     - pytest
   #when: manual
 
@@ -36,7 +36,7 @@ test310:
   image: "hcr.data.here.com/public_mirror/python:3.10"
   script:
     - pip install -e ".[lab]"
-    - pip install -r requirements_dev.txt
+    - pip install -r requirements/dev.txt
     - pytest
   #when: manual
 
