@@ -1,8 +1,8 @@
-from here_search.http import HTTPSession
-from here_search.entity.request import Request, Response
-from here_search.entity.endpoint import Endpoint
-from here_search.util import logger
-from here_search.api_options import APIOptions
+from here_search.demo.http import HTTPSession
+from here_search.demo.entity.request import Request, Response
+from here_search.demo.entity.endpoint import Endpoint
+from here_search.demo.util import logger
+from here_search.demo.api_options import APIOptions
 
 from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
 from getpass import getpass

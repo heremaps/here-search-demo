@@ -1,11 +1,11 @@
-from here_search.http import HTTPSession, HTTPConnectionError
-from here_search.entity.constants import berlin
+from here_search.demo.http import HTTPSession, HTTPConnectionError
+from here_search.demo.entity.constants import berlin
 
 from importlib import reload
 import logging
 
 reload(logging)
-from logging import getLogger, basicConfig, DEBUG, INFO
+from logging import getLogger, basicConfig
 from typing import Tuple, Sequence
 from functools import reduce
 

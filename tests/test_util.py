@@ -1,6 +1,6 @@
 import pytest
 
-from here_search.util import set_dict_values
+from here_search.demo.util import set_dict_values
 
 
 def test_set_dict_values():

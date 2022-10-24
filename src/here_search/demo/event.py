@@ -1,12 +1,11 @@
-from here_search.entity.request import (
+from here_search.demo.entity.request import (
     Response,
     ResponseItem,
     LocationSuggestionItem,
-    QuerySuggestionItem,
     RequestContext,
 )
-from here_search.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
-from here_search.entity.intent import (
+from here_search.demo.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
+from here_search.demo.entity.intent import (
     SearchIntent,
     TransientTextIntent,
     FormulatedTextIntent,
@@ -14,9 +13,9 @@ from here_search.entity.intent import (
     MoreDetailsIntent,
     NoIntent,
 )
-from here_search.entity.place import PlaceTaxonomyItem
-from here_search.api import API
-from here_search.http import HTTPSession
+from here_search.demo.entity.place import PlaceTaxonomyItem
+from here_search.demo.api import API
+from here_search.demo.http import HTTPSession
 
 from typing import Optional
 from abc import ABCMeta, abstractmethod

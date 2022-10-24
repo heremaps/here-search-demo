@@ -1,6 +1,6 @@
-from here_search.http import HTTPSession
-from here_search.api import API
-from here_search.api_options import APIOptions
+from here_search.demo.http import HTTPSession
+from here_search.demo.api import API
+from here_search.demo.api_options import APIOptions
 
 from typing import Tuple
 import uuid

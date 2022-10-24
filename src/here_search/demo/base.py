@@ -1,8 +1,8 @@
-from here_search import __version__
-from here_search.user import UserProfile, DefaultUser
-from here_search.api import API
-from here_search.http import HTTPSession
-from here_search.entity.intent import (
+from here_search.demo import __version__
+from here_search.demo.user import UserProfile, DefaultUser
+from here_search.demo.api import API
+from here_search.demo.http import HTTPSession
+from here_search.demo.entity.intent import (
     SearchIntent,
     FormulatedTextIntent,
     TransientTextIntent,
@@ -10,7 +10,7 @@ from here_search.entity.intent import (
     MoreDetailsIntent,
     NoIntent,
 )
-from here_search.event import (
+from here_search.demo.event import (
     PartialTextSearchEvent,
     SearchEvent,
     TextSearchEvent,
@@ -20,8 +20,8 @@ from here_search.event import (
     EmptySearchEvent,
     DetailsSuggestionEvent
 )
-from here_search.entity.request import Response, RequestContext, QuerySuggestionItem, LocationSuggestionItem
-from here_search.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig, NoConfig
+from here_search.demo.entity.request import Response, RequestContext, QuerySuggestionItem, LocationSuggestionItem
+from here_search.demo.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig, NoConfig
 
 from typing import Tuple, Callable, Mapping
 import asyncio

@@ -1,4 +1,4 @@
-from here_search.entity.endpoint import Endpoint
+from here_search.demo.entity.endpoint import Endpoint
 
 from dataclasses import dataclass
 from typing import Sequence

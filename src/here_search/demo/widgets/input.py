@@ -3,14 +3,14 @@ from ipywidgets import HBox, VBox, Text, Button, Layout
 from IPython.display import display_html
 from traitlets.utils.bunch import Bunch
 
-from here_search.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
-from here_search.entity.intent import (
+from here_search.demo.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
+from here_search.demo.entity.intent import (
     TransientTextIntent,
     FormulatedTextIntent,
     PlaceTaxonomyIntent,
     NoIntent,
 )
-from here_search.util import set_dict_values
+from here_search.demo.util import set_dict_values
 
 from typing import Tuple, Callable, Sequence
 import asyncio

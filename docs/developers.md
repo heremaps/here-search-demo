@@ -17,7 +17,7 @@ It has only been tested on a Macos Monterey machine, but it should not be too di
    For users:
 
    ```
-   pip -v install here-search-widget --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
+   pip -v install here-search-demo --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
    ```
 
    For contributors/developers:

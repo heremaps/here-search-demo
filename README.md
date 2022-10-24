@@ -11,7 +11,7 @@ Requirements: a [HERE API key][1] and a Python environment.
 Run preferably in a virtual environment:
 
    ```
-   pip -v install 'here-search-widget[lab]' \
+   pip -v install 'here-search-demo[lab]' \
      --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
    ```
 

@@ -11,9 +11,9 @@ from ipywidgets import (
     Layout,
 )
 
-from here_search.entity.request import Response, ResponseItem, QuerySuggestionItem, LocationSuggestionItem
-from here_search.entity.endpoint import Endpoint
-from here_search.entity.intent import MoreDetailsIntent
+from here_search.demo.entity.request import Response, ResponseItem, QuerySuggestionItem, LocationSuggestionItem
+from here_search.demo.entity.endpoint import Endpoint
+from here_search.demo.entity.intent import MoreDetailsIntent
 from .input import PositionMap
 
 from typing import List, Tuple

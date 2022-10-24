@@ -1,26 +1,26 @@
 import pytest
 
-from here_search.api import (
+from here_search.demo.api import (
     API,
     base_url,
 )
-from here_search.event import (
+from here_search.demo.event import (
     PartialTextSearchEvent,
     TextSearchEvent,
     PlaceTaxonomySearchEvent,
     DetailsSearchEvent,
     EmptySearchEvent,
 )
-from here_search.entity.request import (
+from here_search.demo.entity.request import (
     Request,
     RequestContext,
     Response,
     ResponseItem,
     QuerySuggestionItem,
 )
-from here_search.entity.endpoint import Endpoint, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
-from here_search.entity.place import PlaceTaxonomyItem
-from here_search.base import OneBoxSimple
+from here_search.demo.entity.endpoint import Endpoint, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
+from here_search.demo.entity.place import PlaceTaxonomyItem
+from here_search.demo.base import OneBoxSimple
 
 from unittest.mock import Mock
 from unittest.mock import AsyncMock

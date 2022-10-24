@@ -1,6 +1,6 @@
 import pytest
 
-from here_search.event import (
+from here_search.demo.event import (
     SearchEvent,
     PartialTextSearchEvent,
     TextSearchEvent,
@@ -9,15 +9,15 @@ from here_search.event import (
     DetailsSearchEvent,
     EmptySearchEvent,
 )
-from here_search.entity.intent import (
+from here_search.demo.entity.intent import (
     FormulatedTextIntent,
     TransientTextIntent,
     PlaceTaxonomyIntent,
     MoreDetailsIntent,
     NoIntent,
 )
-from here_search.entity.request import RequestContext
-from here_search.entity.place import PlaceTaxonomyExample
+from here_search.demo.entity.request import RequestContext
+from here_search.demo.entity.place import PlaceTaxonomyExample
 
 from unittest.mock import patch
 

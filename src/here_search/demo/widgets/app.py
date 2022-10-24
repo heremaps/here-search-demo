@@ -1,11 +1,11 @@
 from ipywidgets import HBox, VBox
 from ipyleaflet import WidgetControl
 
-from here_search.api import API
-from here_search.base import OneBoxBase
-from here_search.user import UserProfile
-from here_search.entity.request import Response
-from here_search.entity.place import PlaceTaxonomyExample
+from here_search.demo.api import API
+from here_search.demo.base import OneBoxBase
+from here_search.demo.user import UserProfile
+from here_search.demo.entity.request import Response
+from here_search.demo.entity.place import PlaceTaxonomyExample
 
 from .util import TableLogWidgetHandler
 from .input import SubmittableTextBox, TermsButtons, PlaceTaxonomyButtons
