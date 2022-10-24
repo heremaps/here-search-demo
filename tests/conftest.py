@@ -16,6 +16,7 @@ from here_search.entity.request import (
     RequestContext,
     Response,
     ResponseItem,
+    QuerySuggestionItem,
 )
 from here_search.entity.endpoint import Endpoint, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
 from here_search.entity.place import PlaceTaxonomyItem
@@ -103,7 +104,7 @@ def chain_query_response_item(response):
     rank = 1
     data = response.data["items"][rank]
     assert data["resultType"] == "chainQuery"
-    return ResponseItem(resp=response, data=data, rank=rank)
+    return QuerySuggestionItem(resp=response, data=data, rank=rank)
 
 
 @pytest.fixture
@@ -111,7 +112,7 @@ def category_query_response_item(response):
     rank = 2
     data = response.data["items"][rank]
     assert data["resultType"] == "categoryQuery"
-    return ResponseItem(resp=response, data=data, rank=rank)
+    return QuerySuggestionItem(resp=response, data=data, rank=rank)
 
 
 @pytest.fixture
