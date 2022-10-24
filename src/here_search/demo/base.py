@@ -217,6 +217,8 @@ class OneBoxBase(OneBoxSimple):
         self.extra_api_params = extra_api_params or {}
         self.initial_query = initial_query
 
+        self.preferred_language = self.get_preferred_language()
+
     async def handle_search_event(self, session: HTTPSession) -> Tuple[SearchEvent, Response]:
         event, resp = await super().handle_search_event(session)
         if isinstance(event, TextSearchEvent) or isinstance(event, PlaceTaxonomySearchEvent):
