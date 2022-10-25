@@ -120,13 +120,13 @@ class SearchResultButton(HBox):
         self.add_class("result-button")
 
     def set_result(self, data: dict, rank: int, resp: Response):
+        self.button.icon = ""
         if resp.req.endpoint == Endpoint.AUTOSUGGEST:
-            if data["resultType"] in ("categoryQuery", "chainQuery"): # That's a hack...
+            if data["resultType"] in ("categoryQuery", "chainQuery"):  # That's a hack...
                 self.button.value = QuerySuggestionItem(data=data, rank=rank or 0, resp=resp)
                 self.button.icon = "search"
             else:
                 self.button.value = LocationSuggestionItem(data=data, rank=rank or 0, resp=resp)
-                self.button.icon = ""
         else:
             self.button.value = ResponseItem(data=data, rank=rank or 0, resp=resp)
         self.button.description = data["title"]

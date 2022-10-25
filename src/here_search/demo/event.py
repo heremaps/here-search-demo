@@ -20,7 +20,6 @@ from here_search.demo.http import HTTPSession
 from typing import Optional
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
-import asyncio
 
 
 @dataclass
@@ -50,17 +49,15 @@ class PartialTextSearchEvent(SearchEvent):
     async def get_response(
             self, api: API, config: AutosuggestConfig, session: HTTPSession
     ) -> Response:
-        return await asyncio.ensure_future(
-            api.autosuggest(
-                self.query_text,
-                self.context.latitude,
-                self.context.longitude,
-                x_headers=self.context.x_headers,
-                session=session,
-                lang=self.context.language,
-                limit=config.limit,
-                termsLimit=config.terms_limit,
-            )
+        return await api.autosuggest(
+            self.query_text,
+            self.context.latitude,
+            self.context.longitude,
+            x_headers=self.context.x_headers,
+            session=session,
+            lang=self.context.language,
+            limit=config.limit,
+            termsLimit=config.terms_limit,
         )
 
     @classmethod
@@ -80,16 +77,14 @@ class TextSearchEvent(SearchEvent):
     async def get_response(
             self, api: API, config: DiscoverConfig, session: HTTPSession
     ) -> Response:
-        return await asyncio.ensure_future(
-            api.discover(
-                self.query_text,
-                self.context.latitude,
-                self.context.longitude,
-                x_headers=self.context.x_headers,
-                session=session,
-                lang=self.context.language,
-                limit=config.limit,
-            )
+        return await api.discover(
+            self.query_text,
+            self.context.latitude,
+            self.context.longitude,
+            x_headers=self.context.x_headers,
+            session=session,
+            lang=self.context.language,
+            limit=config.limit,
         )
 
     @classmethod
@@ -108,16 +103,14 @@ class PlaceTaxonomySearchEvent(SearchEvent):
     async def get_response(
             self, api: API, config: BrowseConfig, session: HTTPSession
     ) -> Response:
-        return await asyncio.ensure_future(
-            api.browse(
-                self.context.latitude,
-                self.context.longitude,
-                x_headers=self.context.x_headers,
-                session=session,
-                lang=self.context.language,
-                limit=config.limit,
-                **self.item.mapping,
-            )
+        return await api.browse(
+            self.context.latitude,
+            self.context.longitude,
+            x_headers=self.context.x_headers,
+            session=session,
+            lang=self.context.language,
+            limit=config.limit,
+            **self.item.mapping,
         )
 
     @classmethod
@@ -137,13 +130,11 @@ class DetailsSearchEvent(SearchEvent):
     async def get_response(
             self, api: API, config: LookupConfig, session: HTTPSession
     ) -> Response:
-        return await asyncio.ensure_future(
-            api.lookup(
-                self.item.data["id"],
-                x_headers=self.context.x_headers,
-                lang=self.context.language,
-                session=session,
-            )
+        return await api.lookup(
+            self.item.data["id"],
+            x_headers=self.context.x_headers,
+            lang=self.context.language,
+            session=session,
         )
 
     @classmethod
@@ -178,12 +169,10 @@ class FollowUpSearchEvent(SearchEvent):
     async def get_response(
             self, api: API, config: DiscoverConfig, session: HTTPSession
     ) -> Response:
-        return await asyncio.ensure_future(
-            api.autosuggest_href(
-                self.item.data["href"],
-                x_headers=self.context.x_headers,
-                session=session,
-            )
+        return await api.autosuggest_href(
+            self.item.data["href"],
+            x_headers=self.context.x_headers,
+            session=session,
         )
 
     @classmethod
