@@ -234,7 +234,7 @@ class PlaceTaxonomyButtons(HBox):
 
 class PositionMap(Map):
     default_zoom_level = 12
-    default_layout = {"height": "680px"}
+    default_layout = {"height": "600px"}
 
     def __init__(
         self,

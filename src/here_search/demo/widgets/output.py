@@ -77,7 +77,10 @@ class SearchResultList(HBox):
 class SearchResultJson(SearchResultList):
     def _display(self, resp: Response) -> Widget:
         out: Output = self._clear()
-        out.append_display_data(IJSON(resp.data, expanded=True))
+        data = resp.data
+        if resp.x_headers:
+            data["_x_headers"] = resp.x_headers
+        out.append_display_data(IJSON(data, expanded=True))
         return out
 
     def _clear(self) -> Output:
