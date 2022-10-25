@@ -206,7 +206,7 @@ class ResponseMap(PositionMap):
     async def _fit_bounds(self, bounds: Tuple[Tuple[float, float], Tuple[float, float]]):
         (b_south, b_west), (b_north, b_east) = bounds
         fit = False
-        while not fit:
+        while not fit or self.zoom <= 0.0:
             if self.zoom == ResponseMap.maximum_zoom_level:
                 break
             (south, west), (north, east) = self.bounds

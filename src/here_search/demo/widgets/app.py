@@ -157,5 +157,5 @@ class OneBoxMap(OneBoxBase, VBox):
         self.log_handler.close()
 
     def __del__(self):
-        self.logger.removeHandler(self.log_handler)
         super().__del__()
+
