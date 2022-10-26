@@ -25,6 +25,7 @@ from here_search.demo.entity.endpoint import EndpointConfig, AutosuggestConfig, 
 
 from typing import Tuple, Callable, Mapping
 import asyncio
+import traceback
 
 
 class OneBoxSimple:
@@ -128,6 +129,8 @@ class OneBoxSimple:
                 task.result()
             except asyncio.CancelledError:
                 pass
+            except:
+                traceback.print_exc()
 
         self.task.add_done_callback(_done_handler)
         return self
