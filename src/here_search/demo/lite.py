@@ -1,8 +1,10 @@
 from pyodide.http import pyfetch, FetchResponse, JsProxy
+from pyodide.ffi import to_js
+from js import Object
+
 from urllib.parse import urlencode
-
-from typing import Any, Coroutine, Generator
-
+from typing import Any, Coroutine, Generator, Tuple
+import json
 
 class HTTPConnectionError(Exception):
     pass
@@ -86,16 +88,38 @@ class HTTPSession(_ContextManagerMixing):
 
     >>> async with HTTPSession(raise_for_status=True) as session:
     >>>     async with session.get(url, params=params, headers={}) as get_response:
-    >>>        resp =  await get_response.json()
+    >>>         resp =  await get_response.json()
+
+    >>> async with HTTPSession(raise_for_status=True) as session:
+    >>>     async with session.post(url, params=params, data=data, headers={}) as post_response:
+    >>>         resp = await post_response.json()
     """
 
     async def _aget(self, url: str, **kwargs) -> ClientResponse:
+        encoded_url, data, headers, kwargs = await self.prepare(url, kwargs)
+        return ClientResponse(encoded_url, (await pyfetch(encoded_url, **kwargs)).js_response)
+
+    async def _apost(self, url: str, **kwargs) -> ClientResponse:
+        encoded_url, data, headers, kwargs = await self.prepare(url, kwargs)
+        return ClientResponse(encoded_url,
+                              (await pyfetch(encoded_url,
+                                             method="POST",
+                                             body=json.dumps(data),
+                                             credentials="same-origin",
+                                             headers=Object.fromEntries(to_js(headers)),
+                                             )).js_response)
+
+    def get(self, url: str, *args, **kwargs: Any) -> FetchResponseCM:
+        return FetchResponseCM(self._aget(url, **kwargs))
+
+    def post(self, url: str, *args, **kwargs: Any) -> FetchResponseCM:
+        return FetchResponseCM(self._apost(url, **kwargs))
+
+    async def prepare(self, url, kwargs) -> Tuple[str, dict, dict, dict]:
         params = kwargs.pop("params", {})
+        data = kwargs.pop("data", {})
         headers = kwargs.pop("headers", None)
         if headers:
             kwargs.setdefault("options", {}).setdefault("headers", {}).update(headers)
         encoded_url = f"{url}?{urlencode(params or {}, doseq=False)}"
-        return ClientResponse(encoded_url, (await pyfetch(encoded_url, **kwargs)).js_response)
-
-    def get(self, url: str, *args, **kwargs: Any) -> FetchResponseCM:
-        return FetchResponseCM(self._aget(url, **kwargs))
+        return encoded_url, data, headers, kwargs
