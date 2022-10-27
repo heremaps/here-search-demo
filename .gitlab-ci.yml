@@ -1,0 +1,59 @@
+stages:
+  - test
+  - build
+
+coverage:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
+  script:
+    - pip install -e ".[lab]"
+    - pip install -r requirements/dev.txt
+    - coverage run --source src -m pytest
+    - coverage report -m
+  coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
+  #when: manual
+
+test38:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
+  script:
+    - pip install -e ".[lab]"
+    - pip install -r requirements/dev.txt
+    - pytest
+  #when: manual
+
+test39:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.9-slim"
+  script:
+    - pip install -e ".[lab]"
+    - pip install -r requirements/dev.txt
+    - pytest
+  #when: manual
+
+test310:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.10"
+  script:
+    - pip install -e ".[lab]"
+    - pip install -r requirements/dev.txt
+    - pytest
+  #when: manual
+
+pages:
+  stage: build
+  image: "hcr.data.here.com/public_mirror/python:3.10"
+  script:
+    - python -m venv venv
+    - source venv/bin/activate
+    - mkdir content
+    - pip install jupyterlab jupyterlab_widgets jupyterlab-filesystem-access jupyterlite ipywidgets==7.7.2 ipyleaflet==0.17.1 wheel
+    - pip -v wheel ".[lite]" --wheel-dir content --no-deps --no-binary ":all:"
+    - cp src/here_search/demo/notebooks/*.ipynb content/
+    - jupyter lite build --contents content --output-dir public --lite-dir public
+  artifacts:
+    paths:
+      - public # mandatory, other folder won't work
+  only:
+    - master # the branch you want to publish
+  when: manual
