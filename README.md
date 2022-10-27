@@ -1,6 +1,6 @@
-# Search Widgets
+# HERE Search notebooks
 
-A set of jupyter notebook demonstrating the use of HERE Geocoding & Search endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
+A set of jupyter notebooks demonstrating the use of HERE Geocoding & Search endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
 
 ![searching for restaurants](docs/screenshot.png)
 
@@ -13,8 +13,7 @@ Try the latest build [in your browser](https://main.gitlab.in.here.com/olp/onese
 Run preferably in a virtual environment:
 
    ```
-   pip -v install 'here-search-demo[lab]' \
-     --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
+   pip install '.[lab]'
    ```
 
 Link the virtual environment to a IPython kernel:
