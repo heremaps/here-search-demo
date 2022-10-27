@@ -5,6 +5,7 @@ from here_search.demo.util import logger
 from here_search.demo.api_options import APIOptions
 
 from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
+from urllib.parse import urlparse, parse_qsl
 from getpass import getpass
 import os
 
@@ -116,6 +117,7 @@ class API:
         :param latitude: search center latitude
         :param longitude: search center longitude
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
+        :param: kwargs: additional request URL parameters
         :return: a Response object
         """
         params = self.options.get(Endpoint.AUTOSUGGEST, {}).copy()
@@ -143,12 +145,18 @@ class API:
         :param session: instance of HTTPSession
         :param href: href value returned in Autosuggest categoryQyery/chainQuery results
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
+        :param: kwargs: additional request URL parameters
         :return: a Response object
         """
+
+        href_details = fup = urlparse(href)
+        params = parse_qsl(href_details.query)
+        params.append(("apiKey", self.api_key))
+
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST_HREF,
             url=href,
-            params=kwargs,
+            params=dict(params),
             x_headers=x_headers,
         )
         return await self.get(request, session)
@@ -170,6 +178,7 @@ class API:
         :param latitude: search center latitude
         :param longitude: search center longitude
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
+        :param: kwargs: additional request URL parameters
         :return: a Response object
         """
         params = self.options.get(Endpoint.DISCOVER, {}).copy()
@@ -204,6 +213,7 @@ class API:
         :param food_types: Places cuisine ids for filtering
         :param chains: Places chain ids for filtering
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
+        :param: kwargs: additional request URL parameters
         :return: a Response object
         """
         params = self.options.get(Endpoint.BROWSE, {}).copy()
@@ -236,6 +246,7 @@ class API:
         :param session: instance of HTTPSession
         :param id: location record ID
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
+        :param: kwargs: additional request URL parameters
         :return: a Response object
         """
         params = self.options.get(Endpoint.LOOKUP, {}).copy()
@@ -264,6 +275,7 @@ class API:
         :param latitude: input position latitude
         :param longitude: input position longitude
         :param x_headers: Optional X-* headers (X-Request-Id, X-AS-Session-ID, ...)
+        :param: kwargs: additional request URL parameters
         :return: a Response object
         """
         params = self.options.get(Endpoint.REVGEOCODE, {}).copy()
