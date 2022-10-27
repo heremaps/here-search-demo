@@ -51,3 +51,43 @@ jobs:
       run: |
         pytest
 
+  pages-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.8
+      - name: Install the dependencies
+        run: |
+          mkdir dist
+          pip install jupyterlab jupyterlab_widgets jupyterlab-filesystem-access jupyterlite ipywidgets==7.7.2 ipyleaflet==0.17.1 wheel
+          pip -v wheel ".[lite]" --wheel-dir dist --no-deps --no-binary ":all:"
+          cp src/here_search/demo/notebooks/*.ipynb dist/
+      - name: Build the JupyterLite site
+        run: |
+          cp README.md content
+          jupyter lite build --contents content --output-dir dist
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: ./dist
+          
+  deploy:
+    needs: pages-build
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
