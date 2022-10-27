@@ -27,7 +27,6 @@ jobs:
         pip install -r requirements/dev.txt
         coverage run --source src -m pytest
         coverage report -m
-        coverage run -m unittest
     - name: Upload Coverage to Codecov
       uses: codecov/codecov-action@v2
   test:
