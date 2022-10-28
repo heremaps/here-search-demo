@@ -4,9 +4,6 @@ coverage:
       default:
         target: auto
         threshold: 0%
-        base: auto
-        flags:
-          - unit
         branches:
           - main
 
@@ -16,6 +13,3 @@ comment:
   require_changes: false  # if true: only post the comment if coverage changes
   require_base: no        # [yes :: must have a base report to post]
   require_head: yes       # [yes :: must have a head report to post]
-
-codecov:
-  token: 4466fc84-f74b-4a75-9105-852872844e5d
