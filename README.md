@@ -9,8 +9,6 @@ A set of jupyter notebooks demonstrating the use of HERE Geocoding & Search endp
 
 Requirements: a [HERE API key][1] and a Python environment.
 
-Try the latest build [in your browser](https://main.gitlab.in.here.com/olp/onesearch/playground/decitre/search-notebook-ext/-/jobs/artifacts/master/browse?job=pages).
-
 ## Installation
 
 Run preferably in a virtual environment:
