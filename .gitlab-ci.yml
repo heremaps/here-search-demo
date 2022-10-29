@@ -7,16 +7,11 @@ include:
   - template: Dependency-Scanning.gitlab-ci.yml
   - template: License-Scanning.gitlab-ci.yml
 
-.gemnasium-python-shared-rule:
-  exists:
+gemnasium-python-dependency_scanning:
+  rules:
     - '{requirements/*}'
     - '{setup.py,*/setup.py,*/*/setup.py}'
     - '{setup.cfg,*/setup.cfg,*/*/setup.cfg}'
-
-gemnasium-python-dependency_scanning:
-  rules:
-    - !reference [.gemnasium-python-shared-rule, exists]
-
 
 coverage:
   stage: test
