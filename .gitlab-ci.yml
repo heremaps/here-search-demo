@@ -13,25 +13,10 @@ include:
     - '{setup.py,*/setup.py,*/*/setup.py}'
     - '{setup.cfg,*/setup.cfg,*/*/setup.cfg}'
 
-# Configure gemnasium dependency scans to run on MR builds or master instead of branch builds.
-# Overrides the Dependency-Scanning.gitlab-ci.yml template.
-# https://docs.gitlab.com/ee/user/application_security/dependency_scanning/
 gemnasium-python-dependency_scanning:
-  variables:
-    SECURE_LOG_LEVEL: debug
   rules:
-    - if: $DEPLOY_ONLY == "true"
-      when: never
-    - if: $DEPENDENCY_SCANNING_DISABLED
-      when: never
-    - if: $PERIODIC_BUILD_ENABLED == "true"
-      when: always
-    - if: $CI_COMMIT_TAG
-      when: never
-    - if: ('$CI_COMMIT_BRANCH == "master"' || '$CI_PIPELINE_SOURCE == "merge_request_event"') &&
-        $GITLAB_FEATURES =~ /\bdependency_scanning\b/ &&
-        $DS_DEFAULT_ANALYZERS =~ /gemnasium-python/
-      exists: !reference [.gemnasium-python-shared-rule, exists]
+    - !reference [.gemnasium-python-shared-rule, exists]
+
 
 coverage:
   stage: test
