@@ -8,7 +8,7 @@ include:
   - template: License-Scanning.gitlab-ci.yml
 
 gemnasium-python-dependency_scanning:
-  rules: ['{requirements/*}', 'setup.py', 'setup.cfg']
+  rules: ['requirements/dev.txt', 'requirements/install.txt', 'setup.py', 'setup.cfg']
 
 coverage:
   stage: test
