@@ -8,7 +8,9 @@ include:
   - template: License-Scanning.gitlab-ci.yml
 
 gemnasium-python-dependency_scanning:
-  rules: ['requirements/dev.txt', 'requirements/install.txt', 'setup.py', 'setup.cfg']
+  variables:
+    SECURE_LOG_LEVEL: debug
+    PIP_REQUIREMENTS_FILE: '{requirements/*}'
 
 coverage:
   stage: test
