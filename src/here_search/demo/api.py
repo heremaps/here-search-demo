@@ -5,7 +5,7 @@ from here_search.demo.util import logger
 from here_search.demo.api_options import APIOptions
 
 from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
-from urllib.parse import urlparse, parse_qsl
+from urllib.parse import urlparse, parse_qsl, urlunparse
 from getpass import getpass
 import os
 
@@ -149,13 +149,13 @@ class API:
         :return: a Response object
         """
 
-        href_details = fup = urlparse(href)
+        href_details = urlparse(href)
         params = parse_qsl(href_details.query)
         params.append(("apiKey", self.api_key))
 
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST_HREF,
-            url=href,
+            url=urlunparse(href_details._replace(query='')),
             params=dict(params),
             x_headers=x_headers,
         )
@@ -269,7 +269,7 @@ class API:
             **kwargs
     ) -> Response:
         """
-        Calls HERE Reverese Geocode for a geo position
+        Calls HERE Reverse Geocode for a geo position
 
         :param session: instance of HTTPSession
         :param latitude: input position latitude
