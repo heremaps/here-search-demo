@@ -6,7 +6,6 @@ from here_search.demo.api_options import APIOptions
 
 from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
 from urllib.parse import urlparse, parse_qsl, urlunparse
-from getpass import getpass
 import os
 
 base_url = {
@@ -37,9 +36,7 @@ class API:
             url_format_fn: Callable[[str], str] = None,
             options: APIOptions = None
     ):
-        self.api_key = (
-                api_key or os.environ.get("API_KEY") or getpass(prompt="api key: ")
-        )
+        self.api_key = api_key or os.environ.get("API_KEY")
         self.cache = cache or {}
         self.format_url = url_format_fn or (lambda x: x)
         self.options = options or {}
