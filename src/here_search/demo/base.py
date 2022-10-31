@@ -74,6 +74,7 @@ class OneBoxSimple:
             TextSearchEvent: (self.handle_result_list, DiscoverConfig(limit=self.results_limit)),
             PlaceTaxonomySearchEvent: (self.handle_result_list, BrowseConfig(limit=self.results_limit)),
             DetailsSearchEvent: (self.handle_result_details, LookupConfig()),
+            DetailsSuggestionEvent: (self.handle_result_details, LookupConfig()),
             FollowUpSearchEvent: (self.handle_result_list, NoConfig()),
             EmptySearchEvent: (self.handle_empty_text_submission, None)
         }
