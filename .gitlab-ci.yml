@@ -1,16 +1,26 @@
-stages:
-  - test
-  - build
 
 include:
   - template: Security/SAST.gitlab-ci.yml
   - template: Dependency-Scanning.gitlab-ci.yml
   - template: License-Scanning.gitlab-ci.yml
+  - project: oss/oss-review-toolkit/ort-gitlab-ci
+    file: ort-gitlab-ci.yml
+
+variables:
+  ORT_REVIEW_ID: 1514345129
 
 gemnasium-python-dependency_scanning:
   variables:
     SECURE_LOG_LEVEL: debug
     PIP_REQUIREMENTS_FILE: '{requirements/*}'
+
+stages:
+  - test
+  - build
+  - ort-scan
+
+sast:
+  stage: test
 
 coverage:
   stage: test

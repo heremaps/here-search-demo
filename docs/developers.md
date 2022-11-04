@@ -24,8 +24,8 @@ It has only been tested on a Macos Monterey machine, but it should not be too di
 
    ```
    git clone ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook-ext.git
-   cd search-notebook
-   pip install -e .
+   cd search-notebook-ext
+   pip install -e ".[lab]"
    ```
 
 3. Jupyter config
