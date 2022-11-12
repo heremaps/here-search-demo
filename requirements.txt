@@ -1,0 +1,7 @@
+# Used for ort-scan
+
+jupyterlite
+jupyterlab
+ipyleaflet
+ipywidgets
+aiohttp

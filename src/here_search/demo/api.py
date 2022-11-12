@@ -76,6 +76,8 @@ class API:
     async def do_get(self, url: str, params: dict, headers: dict, session: HTTPSession) -> Tuple[
         str, dict, Mapping]:  # pragma: no cover
         # I/O coupling isolation
+        headers = headers or {}
+        headers.update({"Access-Control-Allow-Headers": "Accept"})
         async with session.get(
                 url, params=params, headers=headers or {}
         ) as get_response:
