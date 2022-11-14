@@ -1,4 +1,5 @@
 # Used for ort-scan
+xyzservices==2022.1.1
 ipywidgets
 ipyleaflet
 jupyterlab
