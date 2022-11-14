@@ -40,6 +40,6 @@ setup(name=project_name,
       install_requires=[p for p in Path(Path(__file__).parent, 'requirements.txt').open().readlines()
                         if not p.startswith("--")],
       dependency_links=[],
-      extras_require={"lab": ["xyzservices==2022.1.1", "ipyleaflet", "jupyterlab", "aiohttp"],
-                      "lite": ["xyzservices==2022.1.1", "ipywidgets", "ipyleaflet", "jupyterlab", "jupyterlite"]},
+      extras_require={"lab": ["xyzservices==2022.9.0", "ipyleaflet", "jupyterlab", "aiohttp"],
+                      "lite": ["xyzservices==2022.9.0", "ipywidgets", "ipyleaflet", "jupyterlab", "jupyterlite"]},
       zip_safe=False)
