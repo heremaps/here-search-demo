@@ -1,7 +1,6 @@
 # Used for ort-scan
-
-jupyterlite
-jupyterlab
-ipyleaflet
 ipywidgets
+ipyleaflet
+jupyterlab
+jupyterlite
 aiohttp
