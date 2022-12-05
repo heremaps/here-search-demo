@@ -26,20 +26,19 @@ setup(name=project_name,
       license='MIT',
       classifiers=[
           'Intended Audience :: Developers',
-          'Programming Language :: Python :: 3.7',
           'Programming Language :: Python :: 3.8',
           'Programming Language :: Python :: 3.9',
+          'Programming Language :: Python :: 3.10',
           'License :: OSI Approved :: MIT License'
       ],
       packages=find_namespace_packages(where=src_root),
-      scripts=[Path(src_root, Path(*package_path), "scripts", "here-search-notebooks").as_posix()],
+      scripts=[Path(src_root, Path(*package_path), "scripts", script).as_posix()
+               for script in ("here-search-notebooks", "lite_run.sh")],
       package_dir={'': src_root},
-      include_package_data=True,
-      package_data={f'{".".join(package_path)}.notebooks': ['*.ipynb']},
+      package_data={f'{".".join(package_path)}.notebooks': ['*.ipynb'],
+                    "": ["requirements/*.txt", "setup.py", "setup.cfg", "pyproject.toml"]},
       python_requires=">=3.8",
-      install_requires=[p for p in Path(Path(__file__).parent, 'requirements.txt').open().readlines()
+      install_requires=[p for p in Path(Path(__file__).parent, "requirements", 'build.txt').open().readlines()
                         if not p.startswith("--")],
       dependency_links=[],
-      extras_require={"lab": ["xyzservices==2022.9.0", "ipyleaflet", "jupyterlab", "aiohttp"],
-                      "lite": ["xyzservices==2022.9.0", "ipywidgets", "ipyleaflet", "jupyterlab", "jupyterlite"]},
       zip_safe=False)

@@ -1,7 +1,0 @@
-# Used for ort-scan
-xyzservices==2022.9.0
-ipywidgets
-ipyleaflet
-jupyterlab
-jupyterlite
-aiohttp

@@ -25,7 +25,7 @@ It has only been tested on a Macos Monterey machine, but it should not be too di
    ```
    git clone ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/search-notebook-ext.git
    cd search-notebook-ext
-   pip install -e ".[lab]"
+   pip install -e .
    ```
 
 3. Jupyter config
@@ -44,8 +44,8 @@ To run the notebook on Jupyter Classic, you will need:
 ### Upload a new package to a pypa repository
 
    ```
-   pip install twine wheel
-   pip -v wheel ".[lab]" --wheel-dir dist --no-deps --no-binary ":all:"
+   pip install -r requirements/util.txt
+   python -m build --sdist --wheel
    twine upload --skip-existing --repository-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi dist/*
    ```
 
@@ -93,6 +93,31 @@ For the Pyodide kernels to be able to use certain packages, those need to be ins
    except ImportError:
       pass
    ```
+
+#### From a local git clone
+
+To test the jupyterlite page locally, run from the local git repository:
+
+   ```
+   $(find . -name "lite_run.sh")
+   ```
+
+Option `-n` only builds the page and does not serve it. 
+
+A way to get the sources without git cloning the project is to use the source distribution:
+
+   ```
+   pip install --upgrade pip
+   pip download here-search-demo \
+      --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple \
+      --no-deps --no-binary ":all:"
+   
+   tar xpfz $(find . -name "*.tar.gz")
+   
+   $(find . -name "lite_run.sh")
+   ```
+
+
 
 ## Inject a lat/lon using geojs.io
 
