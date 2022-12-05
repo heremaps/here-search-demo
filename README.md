@@ -13,7 +13,7 @@ Try the latest build [in your browser](https://olp.pages.gitlab.in.here.com/ones
 Run preferably in a virtual environment:
 
    ```
-   pip -v install 'here-search-demo[lab]' \
+   pip -v install here-search-demo \
      --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple
    ```
 
