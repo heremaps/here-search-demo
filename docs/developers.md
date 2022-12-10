@@ -1,5 +1,53 @@
 ## Developer notes
 
+### Setup a Notebook Python environment
+
+It is recommended to use a Python virtual environment. The below recipe uses the python batteries `venv` module.
+It has only been tested on a Macos Monterey machine, but it should not be too difficult to use it on another Unix-like workstation.
+
+1. Virtual environment
+
+   ```
+   mkdir -p ~/virtualenv; (cd ~/virtualenv; python -m venv search-notebook)
+   source ~/virtualenv/search-notebook/bin/activate
+   ```
+
+2. Download and install
+
+   For users:
+
+   ```
+   pip -v install here-search-demo
+   ```
+
+   For contributors/developers:
+
+   ```
+   git clone git@github.com:heremaps/here-search-demo.git
+   cd here-search-demo
+   pip install -e .
+   ```
+
+3. Jupyter config
+
+   ```
+   python -m ipykernel install --user --name search_demo --display-name "search demo"
+   ```
+   
+To run the notebook on Jupyter Classic, you will need:
+
+   ```
+   jupyter nbextension enable --py widgetsnbextension
+   jupyter labextension install @jupyterlab/geojson-extension
+   ```
+
+### Upload a new package to a pypa repository
+
+   ```
+   pip install twine wheel
+   pip -v wheel . --wheel-dir dist --no-deps --no-binary ":all:"
+   twine upload --skip-existing dist/*
+   ```
 
 ### Test on MacOS / python3.7
 

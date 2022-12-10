@@ -241,15 +241,29 @@ class PositionMap(Map):
         api_key: str,
         center: Tuple[float, float],
         position_handler: Callable[[float, float], None] = None,
+        preferred_language: str = None,
         **kvargs,
     ):
-        basemap = basemap_to_tiles(basemaps.HEREv3.normalDay(apiKey=api_key))
+        """
+        PositionMap instance initializer
+
+        https://github.com/geopandas/xyzservices/blob/main/provider_sources/leaflet-providers-parsed.json
+
+        :param api_key: apiKey expected by HEREv3 basemaps
+        :param center:
+        :param position_handler:
+        :param kvargs:
+        """
+        basemap = basemaps.HEREv3.normalDay()
+        basemap['apiKey'] = api_key
+        basemap['lg'] = preferred_language or "en"
+
         Map.__init__(
             self,
             api_key=api_key,
             center=center,
             zoom=kvargs.pop("zoom", PositionMap.default_zoom_level),
-            basemap=basemap,
+            basemap=basemap_to_tiles(basemap, apiKey=api_key),
             layout=kvargs.pop("layout", PositionMap.default_layout),
             zoom_control=False,
             scroll_wheel_zoom=True
