@@ -3,7 +3,6 @@
 
 # HERE Search notebooks
 
-
 A set of jupyter notebooks demonstrating the use of HERE Geocoding & Search endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
 
 ![searching for restaurants](docs/screenshot.png)
@@ -15,7 +14,7 @@ Requirements: a [HERE API key][1] and a Python environment.
 Run preferably in a virtual environment:
 
    ```
-   pip install '.[lab]'
+   pip -v install here-search-demo
    ```
 
 Link the virtual environment to a IPython kernel:
