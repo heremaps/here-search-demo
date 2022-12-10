@@ -40,7 +40,7 @@ class OneBoxMap(OneBoxBase, VBox):
 
         self.logger = logging.getLogger("here_search")
         self.result_queue: asyncio.Queue = asyncio.Queue()
-        if api_key:
+        if not api and api_key:
             api = API(api_key=api_key,
                       url_format_fn=TableLogWidgetHandler.format_url)
         OneBoxBase.__init__(

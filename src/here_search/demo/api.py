@@ -5,8 +5,7 @@ from here_search.demo.util import logger
 from here_search.demo.api_options import APIOptions
 
 from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
-from urllib.parse import urlparse, parse_qsl
-from getpass import getpass
+from urllib.parse import urlparse, parse_qsl, urlunparse
 import os
 
 base_url = {
@@ -37,9 +36,7 @@ class API:
             url_format_fn: Callable[[str], str] = None,
             options: APIOptions = None
     ):
-        self.api_key = (
-                api_key or os.environ.get("API_KEY") or getpass(prompt="api key: ")
-        )
+        self.api_key = api_key or os.environ.get("API_KEY")
         self.cache = cache or {}
         self.format_url = url_format_fn or (lambda x: x)
         self.options = options or {}
@@ -79,6 +76,8 @@ class API:
     async def do_get(self, url: str, params: dict, headers: dict, session: HTTPSession) -> Tuple[
         str, dict, Mapping]:  # pragma: no cover
         # I/O coupling isolation
+        headers = headers or {}
+        # headers.update({"Access-Control-Allow-Headers": "Accept"})
         async with session.get(
                 url, params=params, headers=headers or {}
         ) as get_response:
@@ -149,13 +148,13 @@ class API:
         :return: a Response object
         """
 
-        href_details = fup = urlparse(href)
+        href_details = urlparse(href)
         params = parse_qsl(href_details.query)
         params.append(("apiKey", self.api_key))
 
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST_HREF,
-            url=href,
+            url=urlunparse(href_details._replace(query='')),
             params=dict(params),
             x_headers=x_headers,
         )
@@ -269,7 +268,7 @@ class API:
             **kwargs
     ) -> Response:
         """
-        Calls HERE Reverese Geocode for a geo position
+        Calls HERE Reverse Geocode for a geo position
 
         :param session: instance of HTTPSession
         :param latitude: input position latitude

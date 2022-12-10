@@ -1,0 +1,66 @@
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - project: oss/oss-review-toolkit/ort-gitlab-ci
+    file: ort-gitlab-ci.yml
+
+variables:
+  ORT_REVIEW_ID: 1514345129
+
+
+stages:
+  - test
+  - ort-scan
+  - build
+
+sast:
+  stage: test
+
+coverage:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
+  script:
+    - pip install -e .
+    - pip install -r requirements/test.txt
+    - coverage run --source src -m pytest
+    - coverage report -m
+  coverage: '/TOTAL\s+\d+\s+\d+\s+(\d+%)/'
+  #when: manual
+
+test38:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.8-slim"
+  script:
+    - pip install -e .
+    - pip install -r requirements/test.txt
+    - pytest
+  #when: manual
+
+test39:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.9-slim"
+  script:
+    - pip install -e .
+    - pip install -r requirements/test.txt
+    - pytest
+  #when: manual
+
+test310:
+  stage: test
+  image: "hcr.data.here.com/public_mirror/python:3.10"
+  script:
+    - pip install -e .
+    - pip install -r requirements/test.txt
+    - pytest
+  #when: manual
+
+pages:
+  stage: build
+  image: "hcr.data.here.com/public_mirror/python:3.10"
+  script:
+    - src/here_search/demo/scripts/lite_run.sh -n
+  artifacts:
+    paths:
+      - public # mandatory, other folder won't work
+  only:
+    - master
+  when: manual

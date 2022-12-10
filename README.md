@@ -14,7 +14,7 @@ Requirements: a [HERE API key][1] and a Python environment.
 Run preferably in a virtual environment:
 
    ```
-   pip install '.[lab]'
+   pip -v install here-search-demo
    ```
 
 Link the virtual environment to a IPython kernel:
