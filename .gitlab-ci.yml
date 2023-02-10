@@ -1,13 +1,12 @@
 
 include:
   - template: Security/SAST.gitlab-ci.yml
-  - project: oss/oss-review-toolkit/ort-gitlab-ci
+#  - project: oss/oss-review-toolkit/ort-gitlab-ci
+  - project: olp/onesearch/playground/decitre/ort-gitlab-ci
     file: ort-gitlab-ci.yml
 
 variables:
   ORT_REVIEW_ID: 1514345129
-  ORT_CONFIG_REPO: "ssh://git@main.gitlab.in.here.com:3389/olp/onesearch/playground/decitre/ort-configuration.git"
-
 
 stages:
   - test
