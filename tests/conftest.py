@@ -1,9 +1,7 @@
 import pytest
 
-from here_search.demo.api import (
-    API,
-    base_url,
-)
+from here_search.demo.api import API
+
 from here_search.demo.event import (
     PartialTextSearchEvent,
     TextSearchEvent,
@@ -72,7 +70,7 @@ def context():
 def autosuggest_request(context, instant_query_text, x_headers):
     return Request(
         endpoint=Endpoint.AUTOSUGGEST,
-        url=base_url[Endpoint.AUTOSUGGEST],
+        url=API.BASE_URL[Endpoint.AUTOSUGGEST],
         params={
             "q": instant_query_text,
             "at": f"{context.latitude},{context.longitude}",
