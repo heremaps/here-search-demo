@@ -57,10 +57,10 @@ pages:
   image: "hcr.data.here.com/public_mirror/python:3.10"
   script:
     - src/here_search/demo/scripts/lite_run.sh -n || true
-    - ls -laR
+    - ls -laR workspace
   artifacts:
     paths:
-      - public # mandatory, other folder won't work
+      - workspace/public # mandatory, other folder won't work
   only:
     - master
   when: manual
