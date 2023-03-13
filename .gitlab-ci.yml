@@ -6,11 +6,9 @@ include:
 variables:
   ORT_REVIEW_ID: 1514345129
 
-
 stages:
   - test
   - ort-scan
-  - build
 
 sast:
   stage: test
@@ -54,10 +52,13 @@ test310:
   #when: manual
 
 pages:
-  stage: build
+  stage: test
   image: "hcr.data.here.com/public_mirror/python:3.10"
   script:
-    - src/here_search/demo/scripts/lite_run.sh -n
+    - src/here_search/demo/scripts/lite_run.sh -n || true
+    - ls -la
+    - ls -la workspace
+    - mv workspace/public .
   artifacts:
     paths:
       - public # mandatory, other folder won't work

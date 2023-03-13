@@ -25,6 +25,8 @@ Idisplay(
     )
 )
 
+BoundsType = Tuple[Tuple[float, float], Tuple[float, float]]
+
 
 class SearchResultList(HBox):
     default_layout = {
@@ -194,7 +196,7 @@ class ResponseMap(PositionMap):
         self.collection = None
         super().__init__(**kwargs)
 
-    def fit_bounds(self, bounds: Tuple[Tuple[float, float], Tuple[float, float]]) -> asyncio.Task:
+    def fit_bounds2(self, bounds: BoundsType) -> asyncio.Task:
         """
         Sets a map view that contains the given geographical bounds
         with the maximum zoom level possible.
@@ -203,14 +205,19 @@ class ResponseMap(PositionMap):
         """
         return asyncio.ensure_future(self._fit_bounds(bounds))
 
-    async def _fit_bounds(self, bounds: Tuple[Tuple[float, float], Tuple[float, float]]):
+    async def _fit_bounds2(self, bounds: BoundsType):
         (b_south, b_west), (b_north, b_east) = bounds
+
+        self.center = (b_south + b_north) / 2, (b_east + b_west) / 2
+        self.zoom = 1
+        await wait_for_change(self, 'bounds')
+
         fit = False
         while not fit or self.zoom <= 0.0:
             if self.zoom == ResponseMap.maximum_zoom_level:
                 break
-            (south, west), (north, east) = self.bounds
-            if south-b_south < 0 and north-b_north > 0 and west-b_west < 0 and east-b_east > 0:
+            (map_south, map_west), (map_north, map_east) = self.bounds
+            if map_south-b_south < 0 and map_north-b_north > 0 and map_west-b_west < 0 and map_east-b_east > 0:
                 self.zoom += 1
             else:
                 self.zoom -= 1
@@ -229,11 +236,11 @@ class ResponseMap(PositionMap):
                 point_style=ResponseMap.default_point_style,
             )
             self.add(self.collection)
-            if fit:
+            if fit and bbox[0] != bbox[1] and bbox[2] != bbox[3]:
                 south, north, east, west = bbox
                 height = north - south
                 width = east - west
-                self.center = (south+north)/2, (east+west)/2
-                self.zoom = 1
-                bounds = ((south - height / 8, east + width / 8), (north + height / 8, west - width / 8))
+                bounds = ((south - height / 8, west - width / 8), (north + height / 8, east + width / 8))
                 self.fit_bounds(bounds)
+
+

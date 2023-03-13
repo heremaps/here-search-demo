@@ -8,17 +8,22 @@ from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
 from urllib.parse import urlparse, parse_qsl, urlunparse
 import os
 
-base_url = {
-    ep: f"https://{eps}.search.hereapi.com/v1/{eps}"
-    for ep, eps in {
-        Endpoint.AUTOSUGGEST: "autosuggest",
-        Endpoint.AUTOSUGGEST_HREF: "discover",
-        Endpoint.DISCOVER: "discover",
-        Endpoint.LOOKUP: "lookup",
-        Endpoint.BROWSE: "browse",
-        Endpoint.REVGEOCODE: "revgeocode",
-    }.items()
-}
+
+def url_builder(ep_template: str):
+    return {
+        ep_enum: ep_template.format(endpoint=endpoint)
+        for ep_enum, endpoint in {
+            Endpoint.AUTOSUGGEST: "autosuggest",
+            Endpoint.AUTOSUGGEST_HREF: "discover",
+            Endpoint.DISCOVER: "discover",
+            Endpoint.LOOKUP: "lookup",
+            Endpoint.BROWSE: "browse",
+            Endpoint.REVGEOCODE: "revgeocode",
+        }.items()
+    }
+
+
+base_url = url_builder("https://{endpoint}.search.hereapi.com/v1/{endpoint}")
 
 
 class API:
@@ -28,6 +33,8 @@ class API:
     api_key: str
     cache: Dict[str, Response]
     options: APIOptions
+
+    BASE_URL = base_url
 
     def __init__(
             self,
@@ -124,7 +131,7 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST,
-            url=base_url[Endpoint.AUTOSUGGEST],
+            url=type(self).BASE_URL[Endpoint.AUTOSUGGEST],
             params=params,
             x_headers=x_headers,
         )
@@ -185,7 +192,7 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.DISCOVER,
-            url=base_url[Endpoint.DISCOVER],
+            url=type(self).BASE_URL[Endpoint.DISCOVER],
             params=params,
             x_headers=x_headers,
         )
@@ -227,7 +234,7 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.BROWSE,
-            url=base_url[Endpoint.BROWSE],
+            url=type(self).BASE_URL[Endpoint.BROWSE],
             params=params,
             x_headers=x_headers,
         )
@@ -253,7 +260,7 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.LOOKUP,
-            url=base_url[Endpoint.LOOKUP],
+            url=type(self).BASE_URL[Endpoint.LOOKUP],
             params=params,
             x_headers=x_headers,
         )
@@ -282,7 +289,7 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.REVGEOCODE,
-            url=base_url[Endpoint.REVGEOCODE],
+            url=type(self).BASE_URL[Endpoint.REVGEOCODE],
             params=params,
             x_headers=x_headers,
         )

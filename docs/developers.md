@@ -108,9 +108,7 @@ A way to get the sources without git cloning the project is to use the source di
 
    ```
    pip install --upgrade pip
-   pip download here-search-demo \
-      --extra-index-url https://artifactory.in.here.com/artifactory/api/pypi/onesearch-pypi/simple \
-      --no-deps --no-binary ":all:"
+   pip download here-search-demo --no-deps --no-binary ":all:"
    
    tar xpfz $(find . -name "*.tar.gz")
    
