@@ -55,7 +55,7 @@ pages:
   stage: test
   image: "hcr.data.here.com/public_mirror/python:3.10"
   script:
-    - src/here_search/demo/scripts/lite_run.sh -n || true
+    - src/here_search/demo/scripts/lite-run.sh -n || true
     - ls -la
     - ls -la workspace
     - mv workspace/public .

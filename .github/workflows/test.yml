@@ -57,7 +57,7 @@ jobs:
           python-version: 3.8
       - name: Install the dependencies
         run: |
-          src/here_search/demo/scripts/lite_run.sh -n || true
+          src/here_search/demo/scripts/lite-run.sh -n || true
           ls -la
           ls -la workspace
           mv workspace/public .
