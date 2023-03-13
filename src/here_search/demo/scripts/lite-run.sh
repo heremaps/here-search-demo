@@ -28,6 +28,7 @@ mkdir -p workspace/content
  sed -i.bak '/Requires/d' "$(find package -name METADATA)"
  wheel pack "$(dirname "$(find package -name "*.dist-info")")" -d content
  cp "$NOTEBOOKS_DIR"/*.ipynb content/
+ cp "$ROOT_DIR"/README.md content/
  jupyter lite build --contents content --output-dir public --lite-dir public
  [ $serve -eq 1 ] && jupyter lite serve --lite-dir public
 )

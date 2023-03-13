@@ -61,11 +61,10 @@ jobs:
           ls -la
           ls -la workspace
           mv workspace/public .
-          cp README.md public
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: ./dist
+          path: ./public
 
 #  deploy:
 #    needs: pages-build
