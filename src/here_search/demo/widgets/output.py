@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2023 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 from ipyleaflet import GeoJSON, wait_for_change
 from IPython.display import display as Idisplay, JSON as IJSON
 from ipywidgets import (

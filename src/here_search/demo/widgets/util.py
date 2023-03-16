@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2023 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 from IPython.display import display as Idisplay, Markdown
 from IPython.core.interactiveshell import InteractiveShell
 from ipywidgets import Output as OutputBase

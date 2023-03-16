@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2023 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 from here_search.demo.http import HTTPSession
 from here_search.demo.api import API
 from here_search.demo.api_options import APIOptions

@@ -35,3 +35,9 @@ Link the virtual environment to a IPython kernel:
 
 [1]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start-dhc.html#get-an-api-key
 [2]: docs/developers.md#setup-a-notebook-python-environment
+
+## License
+
+Copyright (C) 2022-2023 HERE Europe B.V.
+
+This project is licensed under the MIT license - see the [LICENSE](./LICENSE) file in the root of this project for license details.

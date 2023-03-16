@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2023 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 (cd $(cat << eof | python -
 import here_search.demo as hd, pathlib, os.path
 print(pathlib.Path(os.path.dirname(hd.__file__), 'notebooks'))

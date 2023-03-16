@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2023 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 from ipyleaflet import Map, ZoomControl, ScaleControl, FullScreenControl, basemap_to_tiles, basemaps
 from ipywidgets import HBox, VBox, Text, Button, Layout
 from IPython.display import display_html
