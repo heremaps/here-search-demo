@@ -1,5 +1,5 @@
 [![Python package](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml/badge.svg)](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml)
-[![Codecov](https://codecov.io/gh/heremaps/here-search-demo/branch/master/graph/badge.svg)](https://codecov.io/gh/heremaps/here-search-demo)
+[![codecov](https://codecov.io/gh/heremaps/here-search-demo/branch/main/graph/badge.svg?token=MVFCS4BUFN)](https://codecov.io/gh/heremaps/here-search-demo)
 
 # HERE Search notebooks
 
