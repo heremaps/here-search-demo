@@ -163,7 +163,9 @@ async def test_wait_for_search_event_8(app):
         (pytest.lazy_fixture("empty_search_event"), None),
     ],
 )
-async def test_handle_search_event(app, event, config, response, session):
+
+
+async def test_handle_search_event(app, event, config, autosuggest_response, session):
     """
     Test that
     - SearchEvent get_response() is called with the right config
@@ -175,12 +177,12 @@ async def test_handle_search_event(app, event, config, response, session):
     ) as wfse, patch.object(
         app, "_handle_search_response", return_value=None
     ) as hsr, patch.object(
-        event, "get_response", return_value=response
+        event, "get_response", return_value=autosuggest_response
     ) as gr, patch.object (
         app, "response_handlers", response_handlers
     ):
         await app.handle_search_event(session)
         wfse.assert_called_once()
         gr.assert_called_once_with(api=app.api, config=config, session=session)
-        hsr.assert_called_once_with(response_handlers[type(event)][0], response)
+        hsr.assert_called_once_with(response_handlers[type(event)][0], autosuggest_response)
 

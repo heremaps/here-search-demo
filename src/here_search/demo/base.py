@@ -34,7 +34,6 @@ from here_search.demo.entity.endpoint import EndpointConfig, AutosuggestConfig, 
 
 from typing import Tuple, Callable, Mapping
 import asyncio
-import traceback
 
 
 class OneBoxSimple:
@@ -110,7 +109,7 @@ class OneBoxSimple:
 
     @staticmethod
     def _handle_search_response(handler: Callable[[Response], None], resp: Response) -> None:
-        handler(resp)
+        handler(resp)  # pragma: no cover
 
     async def wait_for_search_event(self) -> SearchEvent:
         context = RequestContext(
@@ -124,10 +123,10 @@ class OneBoxSimple:
         return event_class.from_intent(context=context, intent=intent)
 
     async def search_events_preprocess(self, session: HTTPSession) -> None:
-        pass
+        pass  # pragma: no cover
 
     async def search_event_postprocess(self, event: SearchEvent, resp: Response, session: HTTPSession) -> None:
-        pass
+        pass  # pragma: no cover
 
     def run(self, handle_search_events: Callable = None) -> "OneBoxSimple":
         self.task = asyncio.ensure_future(
@@ -139,8 +138,6 @@ class OneBoxSimple:
                 task.result()
             except asyncio.CancelledError:
                 pass
-            except:
-                traceback.print_exc()
 
         self.task.add_done_callback(_done_handler)
         return self

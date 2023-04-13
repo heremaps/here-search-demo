@@ -70,11 +70,11 @@ class API:
         if cache_key in self.cache:
             return self.__uncache(cache_key)
 
-        request.params["apiKey"] = self.api_key
         params = {
             k: ",".join(v) if isinstance(v, list) else v
             for k, v in request.params.items()
         }
+        params["apiKey"] = self.api_key
         human_url, payload, headers = await self.do_get(request.url, params, request.x_headers, session)
 
         formatted_msg = self.format_url(human_url)
@@ -166,7 +166,6 @@ class API:
 
         href_details = urlparse(href)
         params = parse_qsl(href_details.query)
-        params.append(("apiKey", self.api_key))
 
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST_HREF,
