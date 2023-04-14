@@ -37,7 +37,7 @@ jobs:
           pytest -v --cov=src tests --cov-report=xml
 
       - name: Upload to Codecov
-        if: github.ref == 'refs/heads/master' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.9'
+        if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.9'
         uses: codecov/codecov-action@v3
         with:
           file: ./coverage.xml
