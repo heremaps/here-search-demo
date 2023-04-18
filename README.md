@@ -11,6 +11,9 @@ Requirements: a [HERE API key][1] and a Python environment.
 
 ## Installation
 
+This package is soon to be found in pypi.
+
+<!--
 Run preferably in a virtual environment:
 
    ```
@@ -24,6 +27,11 @@ Link the virtual environment to a IPython kernel:
      --prefix $(python -c "import sys; print(sys.prefix)") \
      --name search_demo --display-name "search demo"
    ```
+-->
+
+Currently, you need to `pip install` the git repository to get it running on you workstation. Refer to the 
+[`developer notes`](https://github.com/heremaps/here-search-demo/blob/main/docs/developers.md) for details.
+
 
 ## Usage
 
