@@ -9,12 +9,11 @@ A set of jupyter notebooks demonstrating the use of HERE Geocoding & Search endp
 
 Requirements: a [HERE API key][1] and a Python environment.
 
+The notebooks can be [used in your browser][3] without further installation.
+
 ## Installation
 
-This package is soon to be found in pypi.
-
-<!--
-Run preferably in a virtual environment:
+If you need to install the notebooks or the underlying library on your workstation, run preferably in a virtual environment:
 
    ```
    pip -v install here-search-demo
@@ -27,12 +26,9 @@ Link the virtual environment to a IPython kernel:
      --prefix $(python -c "import sys; print(sys.prefix)") \
      --name search_demo --display-name "search demo"
    ```
--->
 
-Currently, you need to `pip install` the git repository to get the package run on you workstation. Refer to the 
-[`developer notes`](docs/developers.md) for details.
 
-## Usage
+Use the `here-search-notebooks` script with your HERE API Key:
 
    ```
    API_KEY="your API key" here-search-notebooks
@@ -40,11 +36,12 @@ Currently, you need to `pip install` the git repository to get the package run o
    
 (More [details][2])
 
-[1]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start-dhc.html#get-an-api-key
-[2]: docs/developers.md#setup-a-notebook-python-environment
-
 ## License
 
 Copyright (C) 2022-2023 HERE Europe B.V.
 
 This project is licensed under the MIT license - see the [LICENSE](./LICENSE) file in the root of this project for license details.
+
+[1]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start-dhc.html#get-an-api-key
+[2]: docs/developers.md#setup-a-notebook-python-environment
+[3]: https://heremaps.github.io/here-search-demo/lab/?path=demo.ipynb
