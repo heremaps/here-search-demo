@@ -3,7 +3,6 @@
 ### Setup a Notebook Python environment
 
 It is recommended to use a Python virtual environment. The below recipe uses the python batteries `venv` module.
-It has only been tested on a Macos Monterey machine, but it should not be too difficult to use it on another Unix-like workstation.
 
 1. Virtual environment
 
@@ -41,14 +40,6 @@ To run the notebook on Jupyter Classic, you will need:
    jupyter labextension install @jupyterlab/geojson-extension
    ```
 
-### Upload a new package to a pypa repository
-
-   ```
-   pip install -r requirements/util.txt
-   python -m build --sdist --wheel
-   twine upload dist/*
-   ```
-
 ### Test on MacOS / python3.7
 
 1. Build Python 3.7.9 for `pyenv`
@@ -66,8 +57,6 @@ To run the notebook on Jupyter Classic, you will need:
    pyenv virtualenv 3.7.9 venv3.7
    pyenv activate venv3.7
    pyenv local venv3.7 && python -V
-   pip install -e .
-   pip install -r requirements_dev.txt
    ```
 
 ### JupyterLite
@@ -89,7 +78,7 @@ For the Pyodide kernels to be able to use certain packages, those need to be ins
    ```
    try:
       import piplite
-      await piplite.install(["ipywidgets==7.7.1", "ipyleaflet==0.17.1", "emfs:here_search_widget-0.6.1-py3-none-any.whl"], keep_going=True)
+      await piplite.install(["ipywidgets==7.7.1", "ipyleaflet==0.17.1", "emfs:here_search_widget-0.8.1-py3-none-any.whl"], keep_going=True)
    except ImportError:
       pass
    ```
