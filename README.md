@@ -43,6 +43,6 @@ Copyright (C) 2022-2023 HERE Europe B.V.
 This project is licensed under the MIT license - see the [LICENSE](./LICENSE) file in the root of this project for license details.
 
 [1]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start.html#get-an-api-key
-[2]: docs/developers.md#setup-a-notebook-python-environment
+[2]: https://github.com/heremaps/here-search-demo/blob/main/docs/developers.md
 [3]: https://heremaps.github.io/here-search-demo/lab/?path=demo.ipynb
 [4]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/index.html
