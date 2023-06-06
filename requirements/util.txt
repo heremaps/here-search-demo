@@ -1,3 +1,4 @@
 wheel
 build
+bumpver
 twine
