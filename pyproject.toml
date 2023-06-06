@@ -4,23 +4,3 @@ requires = [
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
-
-[tool.bumpver]
-current_version = "0.8.6"
-version_pattern = "MAJOR.MINOR.PATCH"
-commit_message = "bump version {old_version} -> {new_version}"
-commit = true
-tag = true
-push = true
-
-[tool.bumpver.file_patterns]
-"pyproject.toml" = [
-    'current_version = "{version}"',
-]
-"src/here_search/demo/__init__.py" = [
-    '^__version__ = "{version}"$'
-]
-"src/here_search/demo/notebooks/*.ipynb" = [
-    'here_search_demo-{version}-py3-none-any.whl'
-]
-

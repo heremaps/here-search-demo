@@ -7,7 +7,7 @@ A set of jupyter notebooks demonstrating the use of [HERE Geocoding & Search][4]
 
 ![searching for restaurants](https://github.com/heremaps/here-search-demo/raw/main/docs/screenshot.png)
 
-Requirements: a [HERE API key][1] and a Python environment. Note that HERE Base Plan [Pricing][5] allows you to get started for free.
+Requirements: a [HERE API key][1] and a Python environment.
 
 The notebooks can be [used in your browser][3] without further installation.
 
@@ -46,4 +46,3 @@ This project is licensed under the MIT license - see the [LICENSE](./LICENSE) fi
 [2]: https://github.com/heremaps/here-search-demo/blob/main/docs/developers.md
 [3]: https://heremaps.github.io/here-search-demo/lab/?path=demo.ipynb
 [4]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/index.html
-[5]: https://www.here.com/get-started/pricing
