@@ -7,7 +7,8 @@
 #
 ###############################################################################
 
-from pyodide.http import pyfetch, FetchResponse, JsProxy
+from pyodide.http import pyfetch, FetchResponse
+from pyodide.ffi import JsProxy
 
 from urllib.parse import urlencode
 from typing import Any, Coroutine, Generator, Tuple
