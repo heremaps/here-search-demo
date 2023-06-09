@@ -83,6 +83,8 @@ For the Pyodide kernels to be able to use certain packages, those need to be ins
       pass
    ```
 
+The version of `here_search_widget` in the `.ipynb` files is updated through `bumpver`.
+
 #### From a local git clone
 
 To test the jupyterlite page locally, run from the local git repository:
