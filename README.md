@@ -1,7 +1,7 @@
 [![Python package](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml/badge.svg)](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/heremaps/here-search-demo/branch/main/graph/badge.svg?token=MVFCS4BUFN)](https://codecov.io/gh/heremaps/here-search-demo)
 
-# HERE Search notebooks
+# HERE Search notebooks - updated
 
 A set of jupyter notebooks demonstrating the use of [HERE Geocoding & Search][4] endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
 
