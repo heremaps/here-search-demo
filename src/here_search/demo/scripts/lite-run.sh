@@ -30,8 +30,8 @@ mkdir -p workspace/content
  python -m venv venv
  source venv/bin/activate
  python -m pip -q install --upgrade pip
- pip install -r "$ROOT_DIR"/requirements/util.txt
- pip install -r "$ROOT_DIR"/requirements/lite_run.txt
+ pip install -r "$ROOT_DIR"/requirements/lite-run.txt
+ pip install wheel build
  #pip wheel -e .. --src .. --wheel-dir content --no-deps --no-binary ":all:"
  python -m build "$ROOT_DIR" --wheel --outdir content --skip-dependency-check
  wheel unpack "$(find content -name '*.whl')" -d package
