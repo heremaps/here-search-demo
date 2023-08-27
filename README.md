@@ -1,5 +1,7 @@
 [![Python package](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml/badge.svg)](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/heremaps/here-search-demo/branch/main/graph/badge.svg?token=MVFCS4BUFN)](https://codecov.io/gh/heremaps/here-search-demo)
+[![lite-badge](https://jupyterlite.rtfd.io/en/latest/_static/badge.svg)](https://decitre.github.io/here-search-demo-updated/lab/?path=demo.ipynb)
+
 
 # HERE Search notebooks
 
@@ -16,7 +18,7 @@ The notebooks can be [used in your browser][3] without further installation.
 If you need to install the notebooks or the underlying library on your workstation, run preferably in a virtual environment:
 
    ```
-   pip install here-search-demo
+   pip install 'here-search-demo[lab]'
    ```
 
 Link the virtual environment to a IPython kernel:

@@ -1,6 +1,6 @@
 jupyterlab>=3.5.2,<4
 jupyterlab_widgets>=1.1.1
-jupyterlab-filesystem-access>=0.5.2
+jupyterlab-filesystem-access>=0.5.3
 jupyterlite~=0.1.2
 ipywidgets>=8,<9
 ipyleaflet==0.17.3
