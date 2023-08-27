@@ -30,7 +30,7 @@ mkdir -p workspace/content
  python -m venv venv
  source venv/bin/activate
  python -m pip -q install --upgrade pip
- pip install -r "$ROOT_DIR"/requirements/lite-run.txt
+ pip install -r "$ROOT_DIR"/requirements/build.txt
  pip install wheel build
  #pip wheel -e .. --src .. --wheel-dir content --no-deps --no-binary ":all:"
  python -m build "$ROOT_DIR" --wheel --outdir content --skip-dependency-check
@@ -39,5 +39,6 @@ mkdir -p workspace/content
  wheel pack "$(dirname "$(find package -name "*.dist-info")")" -d content
  cp "$NOTEBOOKS_DIR"/*.ipynb content/
  jupyter lite build --contents content --output-dir public --lite-dir public
+ pip freeze | tee packages.txt
  [ $serve -eq 1 ] && jupyter lite serve --lite-dir public
 )

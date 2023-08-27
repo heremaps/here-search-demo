@@ -1,7 +1,7 @@
 [![Python package](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml/badge.svg)](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/heremaps/here-search-demo/branch/main/graph/badge.svg?token=MVFCS4BUFN)](https://codecov.io/gh/heremaps/here-search-demo)
 
-# HERE Search notebooks - updated
+# HERE Search notebooks
 
 A set of jupyter notebooks demonstrating the use of [HERE Geocoding & Search][4] endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
 
@@ -44,6 +44,6 @@ This project is licensed under the MIT license - see the [LICENSE](./LICENSE) fi
 
 [1]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start.html#get-an-api-key
 [2]: https://github.com/heremaps/here-search-demo/blob/main/docs/developers.md
-[3]: https://heremaps.github.io/here-search-demo/lab/?path=demo.ipynb
+[3]: https://decitre.github.io/here-search-demo-updated/lab/?path=demo.ipynb
 [4]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/index.html
 [5]: https://www.here.com/get-started/pricing
