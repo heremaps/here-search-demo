@@ -23,4 +23,6 @@ push = true
 "src/here_search/demo/notebooks/*.ipynb" = [
     'here_search_demo-{version}-py3-none-any.whl'
 ]
-
+"docs/developers.md" = [
+    'here_search_demo-{version}-py3-none-any.whl'
+]

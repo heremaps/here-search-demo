@@ -1,6 +1,6 @@
 [![Python package](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml/badge.svg)](https://github.com/heremaps/here-search-demo/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/heremaps/here-search-demo/branch/main/graph/badge.svg?token=MVFCS4BUFN)](https://codecov.io/gh/heremaps/here-search-demo)
-[![lite-badge](https://jupyterlite.rtfd.io/en/latest/_static/badge.svg)](https://decitre.github.io/here-search-demo-updated/lab/?path=demo.ipynb)
+[![lite-badge](https://jupyterlite.rtfd.io/en/latest/_static/badge.svg)][3]
 
 
 # HERE Search notebooks
@@ -36,7 +36,7 @@ Use the `here-search-notebooks` script with your HERE API Key:
    API_KEY="your API key" here-search-notebooks
    ```
    
-(More [details][2])
+(Additional [notes][2])
 
 ## License
 
@@ -46,6 +46,6 @@ This project is licensed under the MIT license - see the [LICENSE](./LICENSE) fi
 
 [1]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start.html#get-an-api-key
 [2]: https://github.com/heremaps/here-search-demo/blob/main/docs/developers.md
-[3]: https://decitre.github.io/here-search-demo-updated/lab/?path=demo.ipynb
+[3]: https://heremaps.github.io/here-search-demo/lab/?path=demo.ipynb
 [4]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/index.html
 [5]: https://www.here.com/get-started/pricing
