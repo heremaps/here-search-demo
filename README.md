@@ -21,6 +21,12 @@ If you need to install the notebooks or the underlying library on your workstati
    pip install 'here-search-demo[lab]'
    ```
 
+Or as a developer:
+
+   ```
+   pip install -r <(sort -u requirements/*) -e '.[lab]'
+   ```
+
 Link the virtual environment to a IPython kernel:
 
    ```
