@@ -145,32 +145,32 @@ async def test_wait_for_search_event_8(app):
     "event, config",
     [
         (
-            pytest.lazy_fixture("partial_text_search_event"),
-            pytest.lazy_fixture("autosuggest_config"),
+            "partial_text_search_event",
+            "autosuggest_config",
         ),
         (
-            pytest.lazy_fixture("text_search_event"),
-            pytest.lazy_fixture("discover_config"),
+            "text_search_event",
+            "discover_config",
         ),
         (
-            pytest.lazy_fixture("taxonomy_search_event"),
-            pytest.lazy_fixture("browse_config"),
+            "taxonomy_search_event",
+            "browse_config",
         ),
         (
-            pytest.lazy_fixture("details_search_event"),
-            pytest.lazy_fixture("lookup_config"),
+            "details_search_event",
+            "lookup_config",
         ),
-        (pytest.lazy_fixture("empty_search_event"), None),
+        ("empty_search_event", None),
     ],
 )
-
-
-async def test_handle_search_event(app, event, config, autosuggest_response, session):
+async def test_handle_search_event(app, event, config, autosuggest_response, session, request):
     """
     Test that
     - SearchEvent get_response() is called with the right config
     - _handle_search_response() is called with the SearchEvent, Response and Session instances
     """
+    event = request.getfixturevalue(event)
+    config = request.getfixturevalue(config) if config else config
     response_handlers = {type(event): (lambda r: r, config)}
     with patch.object(
         app, "wait_for_search_event", return_value=event
@@ -185,4 +185,3 @@ async def test_handle_search_event(app, event, config, autosuggest_response, ses
         wfse.assert_called_once()
         gr.assert_called_once_with(api=app.api, config=config, session=session)
         hsr.assert_called_once_with(response_handlers[type(event)][0], autosuggest_response)
-
