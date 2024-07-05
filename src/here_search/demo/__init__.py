@@ -7,4 +7,6 @@
 #
 ###############################################################################
 
-__version__ = "0.9.1"
+from importlib.metadata import version
+
+__version__ = version("here-search-demo")
