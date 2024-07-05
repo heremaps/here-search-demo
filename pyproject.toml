@@ -1,13 +1,11 @@
-# Copyright (C) 2019-2024 HERE Global B.V. and its affiliate(s).
-# All rights reserved.
+###############################################################################
 #
-# This software and other materials contain proprietary information
-# controlled by HERE and are protected by applicable copyright legislation.
-# Any use and utilization of this software and other materials and
-# disclosure to any third parties is conditional upon having a separate
-# agreement with HERE for the access, use, utilization or disclosure of this
-# software. In the absence of such agreement, the use of the software is not
-# allowed.
+# Copyright (c) 2023 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
 
 [build-system]
 requires = [
@@ -26,6 +24,7 @@ license = {text = "The MIT License"}
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 4 - Beta",
+    "Environment :: WebAssembly :: Emscripten",
     "Intended Audience :: Developers",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
@@ -36,7 +35,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: Pyodide",
 ]
 dynamic = ["dependencies"]
 
