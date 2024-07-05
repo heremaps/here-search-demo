@@ -36,7 +36,7 @@ Link the virtual environment to a IPython kernel:
    ```
 
 
-Use the `here-search-notebooks` script with your HERE API Key:
+Start Jupyter Lab with your HERE API Key:
 
    ```
    API_KEY="your API key" python -m jupyterlab src/here_search/demo/notebooks
@@ -50,8 +50,8 @@ Copyright (C) 2022-2023 HERE Europe B.V.
 
 This project is licensed under the MIT license - see the [LICENSE](./LICENSE) file in the root of this project for license details.
 
-[1]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/quick-start.html#get-an-api-key
+[1]: https://www.here.com/docs/bundle/geocoding-and-search-api-developer-guide/page/topics/quick-start.html#get-an-api-key
 [2]: https://github.com/heremaps/here-search-demo/blob/main/docs/developers.md
 [3]: https://heremaps.github.io/here-search-demo/lab/?path=demo.ipynb
-[4]: https://developer.here.com/documentation/geocoding-search-api/dev_guide/index.html
+[4]: https://www.here.com/docs/category/geocoding-search-v7
 [5]: https://www.here.com/get-started/pricing
