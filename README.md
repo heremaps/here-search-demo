@@ -39,7 +39,7 @@ Link the virtual environment to a IPython kernel:
 Use the `here-search-notebooks` script with your HERE API Key:
 
    ```
-   API_KEY="your API key" here-search-notebooks
+   API_KEY="your API key" python -m jupyterlab src/here_search/demo/notebooks
    ```
    
 (Additional [notes][2])

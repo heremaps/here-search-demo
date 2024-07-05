@@ -45,6 +45,12 @@ To update the package version, use `bumpver`. For instance:
    (...)
    ```
 
+Push your change through a branch PR. 
+Then on your local main branch, after a rebase from origin, do a `bumpver update --patch`.
+Finally, "Draft a new release" and choose the new tag you just created with `bumpver`. 
+The creation of a new release should trigger the release to pypi workflow.
+
+
 ### Test on MacOS / python3.7
 
 1. Build Python 3.7.9 for `pyenv`
@@ -109,7 +115,7 @@ To test the JupyterLite page locally, run in a virtualenv :
    
    tar xpfz $(find . -name "*.tar.gz")
    
-   $(find . -name "lite-run.sh")
+   $(find src -name "lite-run.sh")
    ```
 
 #### Clear your browser cache

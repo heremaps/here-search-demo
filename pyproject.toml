@@ -1,9 +1,66 @@
+# Copyright (C) 2019-2024 HERE Global B.V. and its affiliate(s).
+# All rights reserved.
+#
+# This software and other materials contain proprietary information
+# controlled by HERE and are protected by applicable copyright legislation.
+# Any use and utilization of this software and other materials and
+# disclosure to any third parties is conditional upon having a separate
+# agreement with HERE for the access, use, utilization or disclosure of this
+# software. In the absence of such agreement, the use of the software is not
+# allowed.
+
 [build-system]
 requires = [
     "setuptools>=42",
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "here-search-demo"
+version = "0.9.1"
+description = "HERE Geocoding and Search demo and widgets"
+readme = "README.md"
+authors = [ {name = "HERE Global B.V. and its affiliate(s)", email = "590094+decitre@users.noreply.github.com"} ]
+license = {text = "The MIT License"}
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements/build.txt"]}
+
+[project.urls]
+homepage = "https://here.com"
+repository = "ssh://git@github.com:heremaps/here-search-demo.git"
+
+[project.optional-dependencies]
+lab = [
+    "aiohttp",
+    "xyzservices"
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.bumpver]
 current_version = "0.9.1"
@@ -15,10 +72,8 @@ push = true
 
 [tool.bumpver.file_patterns]
 "pyproject.toml" = [
+    'version = "{version}"',
     'current_version = "{version}"',
-]
-"src/here_search/demo/__init__.py" = [
-    '^__version__ = "{version}"$'
 ]
 "src/here_search/demo/notebooks/*.ipynb" = [
     'here_search_demo-{version}-py3-none-any.whl'
