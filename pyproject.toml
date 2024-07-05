@@ -43,7 +43,7 @@ dependencies = {file = ["requirements/build.txt"]}
 
 [project.urls]
 homepage = "https://here.com"
-repository = "ssh://git@github.com:heremaps/here-search-demo.git"
+repository = "https://github.com/heremaps/here-search-demo"
 
 [project.optional-dependencies]
 lab = [
