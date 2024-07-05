@@ -37,8 +37,8 @@ To update the package version, use `bumpver`. For instance:
        ```
        try:
           import piplite
-   -      await piplite.install(["ipywidgets==8.1.0", "ipyleaflet==0.17.3", "emfs:here_search_demo-0.9.1-py3-none-any.whl"], keep_going=True)
-   +      await piplite.install(["ipywidgets==8.1.0", "ipyleaflet==0.17.3", "emfs:here_search_demo-0.9.1-py3-none-any.whl"], keep_going=True)
+   -      await piplite.install(["ipywidgets==8.1.0", "ipyleaflet==0.17.3", "emfs:here_search_demo-0.9.2-py3-none-any.whl"], keep_going=True)
+   +      await piplite.install(["ipywidgets==8.1.0", "ipyleaflet==0.17.3", "emfs:here_search_demo-0.9.2-py3-none-any.whl"], keep_going=True)
        except ImportError:
           pass
        ```
@@ -89,7 +89,7 @@ For the Pyodide kernels to be able to use certain packages, those need to be ins
    ```
    try:
       import piplite
-      await piplite.install(["ipywidgets==8.1.0", "ipyleaflet==0.17.3", "emfs:here_search_demo-0.9.1-py3-none-any.whl"], keep_going=True)
+      await piplite.install(["ipywidgets==8.1.0", "ipyleaflet==0.17.3", "emfs:here_search_demo-0.9.2-py3-none-any.whl"], keep_going=True)
    except ImportError:
       pass
    ```
