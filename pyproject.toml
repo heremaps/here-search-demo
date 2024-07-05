@@ -18,7 +18,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "here-search-demo"
-version = "{attr:bumpver.version}"
+version = "0.9.1"
 description = "HERE Geocoding and Search demo and widgets"
 readme = "README.md"
 authors = [ {name = "HERE Global B.V. and its affiliate(s)", email = "590094+decitre@users.noreply.github.com"} ]
@@ -72,7 +72,8 @@ push = true
 
 [bumpver.file_patterns]
 "pyproject.toml" = [
-    'version = "{version}"'
+    '^version = "{version}"',
+    '^current_version = "{version}"',
 ]
 "src/here_search/demo/notebooks/*.ipynb" = [
     'here_search_demo-{version}-py3-none-any.whl'
