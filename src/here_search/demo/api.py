@@ -8,7 +8,8 @@
 ###############################################################################
 
 from here_search.demo.http import HTTPSession
-from here_search.demo.entity.request import Request, Response
+from here_search.demo.entity.request import Request
+from here_search.demo.entity.response import Response
 from here_search.demo.entity.endpoint import Endpoint
 from here_search.demo.util import logger
 from here_search.demo.api_options import APIOptions

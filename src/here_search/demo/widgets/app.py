@@ -13,7 +13,7 @@ from ipyleaflet import WidgetControl
 from here_search.demo.api import API
 from here_search.demo.base import OneBoxBase
 from here_search.demo.user import UserProfile
-from here_search.demo.entity.request import Response
+from here_search.demo.entity.response import Response
 from here_search.demo.entity.place import PlaceTaxonomyExample
 
 from .util import TableLogWidgetHandler
@@ -68,6 +68,7 @@ class OneBoxMap(OneBoxBase, VBox):
             api_key=self.api.api_key,
             center=self.search_center,
             position_handler=self.set_search_center,
+            queue=self.queue
         )
 
         # The JSON output

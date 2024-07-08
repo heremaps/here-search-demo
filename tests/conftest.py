@@ -18,13 +18,8 @@ from here_search.demo.event import (
     DetailsSearchEvent,
     EmptySearchEvent,
 )
-from here_search.demo.entity.request import (
-    Request,
-    RequestContext,
-    Response,
-    ResponseItem,
-    QuerySuggestionItem,
-)
+from here_search.demo.entity.request import Request, RequestContext
+from here_search.demo.entity.response import Response, ResponseItem, QuerySuggestionItem
 from here_search.demo.entity.endpoint import Endpoint, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
 from here_search.demo.entity.place import PlaceTaxonomyItem
 from here_search.demo.base import OneBoxSimple

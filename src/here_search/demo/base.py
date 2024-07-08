@@ -29,7 +29,8 @@ from here_search.demo.event import (
     EmptySearchEvent,
     DetailsSuggestionEvent
 )
-from here_search.demo.entity.request import Response, RequestContext, QuerySuggestionItem, LocationSuggestionItem
+from here_search.demo.entity.response import Response, LocationSuggestionItem, QuerySuggestionItem
+from here_search.demo.entity.request import RequestContext
 from here_search.demo.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig, NoConfig
 
 from typing import Tuple, Callable, Mapping
@@ -77,7 +78,8 @@ class OneBoxSimple:
         self.response_handlers: Mapping[
             type(SearchEvent), Tuple[Callable[[Response], None], EndpointConfig]] = {
             PartialTextSearchEvent: (self.handle_suggestion_list, AutosuggestConfig(
-                limit=self.suggestions_limit, terms_limit=self.terms_limit
+                limit=self.suggestions_limit,
+                terms_limit=self.terms_limit
             )),
             TextSearchEvent: (self.handle_result_list, DiscoverConfig(limit=self.results_limit)),
             PlaceTaxonomySearchEvent: (self.handle_result_list, BrowseConfig(limit=self.results_limit)),

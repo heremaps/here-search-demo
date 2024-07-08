@@ -7,13 +7,15 @@
 #
 ###############################################################################
 
-from here_search.demo.entity.request import (
-    Response,
-    ResponseItem,
-    LocationSuggestionItem,
-    RequestContext,
+from here_search.demo.entity.request import RequestContext
+from here_search.demo.entity.response import Response, ResponseItem, LocationSuggestionItem
+from here_search.demo.entity.endpoint import (
+    EndpointConfig,
+    AutosuggestConfig,
+    DiscoverConfig,
+    BrowseConfig,
+    LookupConfig,
 )
-from here_search.demo.entity.endpoint import EndpointConfig, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
 from here_search.demo.entity.intent import (
     SearchIntent,
     TransientTextIntent,
@@ -33,6 +35,10 @@ from dataclasses import dataclass
 
 @dataclass
 class SearchEvent(metaclass=ABCMeta):
+    """
+    A search event realizes the fulfilment of a search intent in a certain context:
+    It associates a search intent with the action of getting a response for a defined context.
+    """
     context: RequestContext
 
     @abstractmethod

@@ -6,8 +6,9 @@
 # License-Filename: LICENSE
 #
 ###############################################################################
+import traceback
 
-from ipyleaflet import GeoJSON, wait_for_change
+from ipyleaflet import GeoJSON, wait_for_change, Popup
 from IPython.display import display as Idisplay, JSON as IJSON
 from ipywidgets import (
     Widget,
@@ -20,7 +21,7 @@ from ipywidgets import (
     Layout,
 )
 
-from here_search.demo.entity.request import Response, ResponseItem, QuerySuggestionItem, LocationSuggestionItem
+from here_search.demo.entity.response import Response, ResponseItem, LocationSuggestionItem, QuerySuggestionItem
 from here_search.demo.entity.endpoint import Endpoint
 from here_search.demo.entity.intent import MoreDetailsIntent
 from .input import PositionMap
@@ -30,7 +31,10 @@ import asyncio
 
 Idisplay(
     HTML(
-        "<style>.result-button div, .result-button button { font-size: 10px; }</style>"
+        """<style>
+               .result-button div, .result-button button { font-size: 10px; }
+           </style>
+        """
     )
 )
 
@@ -201,8 +205,11 @@ class ResponseMap(PositionMap):
         "radius": 7,
     }
 
-    def __init__(self, **kwargs):
-        self.collection = None
+    def __init__(self,
+                 queue: asyncio.Queue = None,
+                 **kwargs):
+        self.queue = queue
+        self.collection = self.popup = None
         super().__init__(**kwargs)
 
     def fit_bounds2(self, bounds: BoundsType) -> asyncio.Task:
@@ -235,8 +242,9 @@ class ResponseMap(PositionMap):
 
     def display(self, resp: Response, fit: bool=False):
         if self.collection:
+            self.remove(self.popup)
             self.remove(self.collection)
-            self.collection = None
+            self.collection = self.popup = None
         bbox = resp.bbox()
         if bbox:
             self.collection = GeoJSON(
@@ -251,5 +259,42 @@ class ResponseMap(PositionMap):
                 width = east - west
                 bounds = ((south - height / 8, west - width / 8), (north + height / 8, east + width / 8))
                 self.fit_bounds(bounds)
+
+            def show_feature_popup(event, feature, **kwargs):
+                if not self.popup:
+                    self.popup = Popup(auto_pan=False)
+                    self.add(self.popup)
+                item = feature["properties"]
+                if item["resultType"] == "place":
+                    address = ", ".join(item["address"]["label"].split(", ")[1:])
+                    category_name = "(no category)"
+                    for category in item["categories"]:
+                        category_name = category["name"]
+                        if category.get("primary"):
+                            break
+                    self.popup.child = HTML(value=f"""
+                        <div>{item["_rank"]}: {item["title"]}</div>
+                        <div>{category_name}</div>
+                        <div>{address}</div>
+                    """)
+
+                else:
+                    self.popup.child = HTML(value=f"""
+                        <div>{item["_rank"]}: {item["title"]}</div>""")
+                self.popup.open_popup(location=feature["geometry"]["coordinates"][::-1])
+
+            def hide_feature_popup(event, feature, **kwargs):
+                self.popup.close_popup()
+
+            def get_more_details(event, feature, **kwargs):
+                intent = MoreDetailsIntent(materialization=ResponseItem(
+                    data=feature["properties"],
+                    rank=feature["properties"]["_rank"],
+                    resp=resp))
+                self.queue.put_nowait(intent)
+
+            self.collection.on_click(get_more_details)
+            self.collection.on_hover(show_feature_popup)
+            self.collection.on_mouseout(hide_feature_popup)
 
 

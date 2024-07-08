@@ -9,7 +9,8 @@
 
 import pytest
 
-from here_search.demo.entity.request import Request, Response
+from here_search.demo.entity.request import Request
+from here_search.demo.entity.response import Response
 from here_search.demo.entity.endpoint import Endpoint
 
 expected_response_data = {"a": "b"}
