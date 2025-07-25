@@ -37,7 +37,8 @@ python -m venv venv
 source venv/bin/activate
 python -m pip -q install --upgrade pip
 
-printf "${YELLOW}Install packages${NC}\n"
+printf "${YELLOW}Install packages:${NC}\n"
+cat "$ROOT_DIR"/requirements/lite.txt
 pip install -r "$ROOT_DIR"/requirements/build.txt
 pip install wheel build
 
@@ -47,6 +48,7 @@ python -m build "$ROOT_DIR" --wheel --outdir content --skip-dependency-check
 wheel unpack "$(find content -name '*.whl')" -d package
 sed -i.bak '/Requires/d' "$(find package -name METADATA)"
 wheel pack "$(dirname "$(find package -name "*.dist-info")")" -d content
+ls -l content
 
 printf "${YELLOW}Build Jupyter Lite static page${NC}\n"
 cp "$NOTEBOOKS_DIR"/*.ipynb content/

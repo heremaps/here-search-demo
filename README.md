@@ -46,7 +46,7 @@ Start Jupyter Lab with your HERE API Key:
 
 ## License
 
-Copyright (C) 2022-2023 HERE Europe B.V.
+Copyright (C) 2022-2025 HERE Europe B.V.
 
 This project is licensed under the MIT license - see the [LICENSE](./LICENSE) file in the root of this project for license details.
 

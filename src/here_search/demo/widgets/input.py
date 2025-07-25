@@ -11,6 +11,7 @@ from ipyleaflet import Map, ZoomControl, ScaleControl, FullScreenControl, basema
 from ipywidgets import HBox, VBox, Text, Button, Layout
 from IPython.display import display_html
 from traitlets.utils.bunch import Bunch
+import xyzservices.providers
 
 from here_search.demo.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
 from here_search.demo.entity.intent import (
@@ -263,9 +264,14 @@ class PositionMap(Map):
         :param position_handler:
         :param kvargs:
         """
-        basemap = basemaps.HEREv3.normalDay()
+        basemap = xyzservices.providers.HEREv3.normalDay()
+        basemap["url"] = (
+            "https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png"
+            f"?style=explore.day&ppi=400&size=512&apiKey={{apiKey}}&lg={{language}}"
+        )
+
         basemap['apiKey'] = api_key
-        basemap['lg'] = preferred_language or "en"
+        basemap['language'] = preferred_language or "en"
 
         Map.__init__(
             self,
