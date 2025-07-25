@@ -1,3 +1,5 @@
 build
 bumpver
 pur
+twine
+wheel
