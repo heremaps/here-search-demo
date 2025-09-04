@@ -129,7 +129,8 @@ class DetailsMixin:
     ev_categories = {"700-7600-0322", "700-7600-0323", "700-7600-0324"}
     ta_logo = """<div style='display: flex; align-items: center; margin: 0px;'>
                  <!-- See https://developer-tripadvisor.com/content-api/business-content/images -->
-                 <img src='https://www.tripadvisor.com/img/cdsi/img2/ratings/traveler/{rating}-MCID-5.svg' style='height: 18px;' />
+                 <img src='https://static.tacdn.com/img2/brand_refresh_2025/logos/logo.svg' style='height: 14px; margin-right: 4px;' />
+                 <img src='https://static.tacdn.com/img2/ratings/traveler/ss{rating}.svg' style='height: 14px;' />
                  <span style='font-size: 10px; color: #333;'>/ Reviews: {reviews}</span></div>"""
 
     def html(self, data: PlaceDataItemDict | LocationDataItemDict, image_variant: str | None = None) -> str:
@@ -262,7 +263,7 @@ class DetailsMixin:
                     html_parts.append(
                         '<a href="{deep_link}" target="_blank">{ta_logo}</a>'.format(
                             deep_link=deep_link,
-                            ta_logo=self.ta_logo.format(rating=rating, reviews=reviews),
+                            ta_logo=self.ta_logo.format(rating=round(rating * 2) / 2, reviews=reviews),
                         )
                     )
 
