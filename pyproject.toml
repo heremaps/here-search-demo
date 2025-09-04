@@ -16,7 +16,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "here-search-demo"
-version = "0.12.0"
+version = "0.17.0"
 description = "HERE Geocoding and Search demo and widgets"
 readme = "README.md"
 authors = [ {name = "HERE Global B.V. and its affiliate(s)", email = "590094+decitre@users.noreply.github.com"} ]
@@ -80,7 +80,7 @@ skip = [
 ]
 
 [bumpver]
-current_version = "0.12.0"
+current_version = "0.17.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
