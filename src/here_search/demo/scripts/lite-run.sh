@@ -35,12 +35,17 @@ printf "${YELLOW}Create venv${NC}\n"
 pushd workspace
 python -m venv venv
 source venv/bin/activate
-python -m pip -q install --upgrade pip
 
 printf "${YELLOW}Install packages:${NC}\n"
 cat "$ROOT_DIR"/requirements/lite.txt
-pip install -r "$ROOT_DIR"/requirements/build.txt
-pip install wheel build
+if command -v uv &> /dev/null; then
+  uv pip install -r "$ROOT_DIR"/requirements/build.txt
+  uv pip install wheel build
+else
+  python -m pip -q install --upgrade pip
+  pip install -r "$ROOT_DIR"/requirements/build.txt
+  pip install wheel build
+fi
 
 printf "${YELLOW}Build here-search-demo wheel${NC}\n"
 #pip wheel -e .. --src .. --wheel-dir content --no-deps --no-binary ":all:"
@@ -51,7 +56,13 @@ wheel pack "$(dirname "$(find package -name "*.dist-info")")" -d content
 ls -l content
 
 printf "${YELLOW}Build Jupyter Lite static page${NC}\n"
-cp "$NOTEBOOKS_DIR"/*.ipynb content/
+echo "{\"ContentsManager\": {\"allow_hidden\": true}}" > jupyter_lite_config.json
+cp "$NOTEBOOKS_DIR"/obm*.ipynb content/
+cp "$NOTEBOOKS_DIR"/_install.py content/
+
+cp "$NOTEBOOKS_DIR"/demo.ipynb content/
+cp "$ROOT_DIR"/demo-config-example.json content/demo-config.json
+
 jupyter lite build --contents content --output-dir public --lite-dir public
 
 if [ $serve -eq 1 ]; then

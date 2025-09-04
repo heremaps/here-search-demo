@@ -27,9 +27,7 @@ async def test_get(api, a_dummy_request, session):
 
 @pytest.mark.asyncio
 async def test_get_uncache(api, a_dummy_request, session):
-
     with patch.object(here_search.demo.api.API, "_API__uncache") as uncache:
-
         uncache.return_value = None
         response = await api.get(a_dummy_request, session)
 
@@ -52,7 +50,6 @@ async def test_uncache(api, a_dummy_request, session):
     response = await api.get(a_dummy_request, session)
     cached_response = api._API__uncache(a_dummy_request.key)
     assert response.data == cached_response.data
-
 
 
 @pytest.mark.asyncio
@@ -158,7 +155,6 @@ async def test_lookup(api, lookup_request, session):
             x_headers=lookup_request.x_headers,
         )
     get.assert_called_once_with(lookup_request, session)
-
 
 
 @pytest.mark.asyncio

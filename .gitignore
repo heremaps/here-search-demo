@@ -27,9 +27,6 @@ tests/unit/output
 reference/
 coverage_artifact/
 assets/
-integration-tests/test-results
-integration-tests/htmlcov
-integration_results.html
 
 # Python and Jupyter
 *.pyc
@@ -57,7 +54,9 @@ dist-pip/
 .python-version
 venv/
 
-# spygot project specific things
+# project specific things
 *_*_*.gz
 *-*_*_*.json
 *_errors.txt
+demo-config.json
+.demo-config.json

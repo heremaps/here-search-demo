@@ -7,15 +7,19 @@
 #
 ###############################################################################
 
-from pyodide.http import pyfetch, FetchResponse
-from pyodide.ffi import JsProxy
-
-from urllib.parse import urlencode
 from typing import Any, Coroutine, Generator, Tuple
-import json
+from urllib.parse import urlencode
+
+import orjson as json
+from pyodide.ffi import JsProxy
+from pyodide.http import FetchResponse, pyfetch
 
 
 class HTTPConnectionError(Exception):
+    pass
+
+
+class HTTPResponseError(Exception):
     pass
 
 
@@ -41,6 +45,7 @@ class _ContextManagerMixing:
     def __await__(self):
         async def closure():
             return self
+
         return closure().__await__()
 
     def __iter__(self) -> Generator:
@@ -71,11 +76,11 @@ class ClientResponse(FetchResponse, _ContextManagerMixing):
     https://developer.mozilla.org/en-US/docs/Web/API/fetch
     https://developer.mozilla.org/en-US/docs/Web/API/Response
     """
-    js_response: JsProxy
-    _raise_for_status: bool
 
-    def __init__(self, url: str, js_response: JsProxy, raise_for_status: bool = False):
-        self._raise_for_status = raise_for_status
+    js_response: JsProxy
+    status: int
+
+    def __init__(self, url: str, js_response: JsProxy, status: int):
         super().__init__(url, js_response)
 
     @property
@@ -86,16 +91,22 @@ class ClientResponse(FetchResponse, _ContextManagerMixing):
     def headers(self):
         return self.js_response.headers
 
+    @property
+    def status(self):
+        return self.js_response.status
+
+    async def read(self) -> str:
+        return await self.js_response.bytes()
+
     async def text(self) -> str:
-        if self._raise_for_status:
-            self.raise_for_status()
         return await self.js_response.text()
 
     async def json(self, **kwargs: Any) -> Any:
         return json.loads(await self.text(), **kwargs)
 
     def raise_for_status(self):
-        self._raise_if_failed()
+        if 400 <= self.status < 600:
+            raise HTTPResponseError(f"HTTP error: {self.status}")
 
 
 class HTTPSession(_ContextManagerMixing):
@@ -105,37 +116,45 @@ class HTTPSession(_ContextManagerMixing):
     https://pyodide.org/en/stable/usage/api/python-api/http.html
     https://github.com/pyodide/pyodide/tree/main/src/py/pyodide
 
-    >>> session = await HTTPSession(raise_for_status=True)
+    >>> session = await HTTPSession()
     >>> get_response = await session.get(url, params=params, headers={})
+    >>> resp.raise_for_status()
     >>> resp = await get_response.json()
 
-    >>> async with HTTPSession(raise_for_status=True) as session:
+    >>> async with HTTPSession() as session:
     >>>     async with session.get(url, params=params, headers={}) as get_response:
-    >>>         resp =  await get_response.json()
+    >>>         resp.raise_for_status()
+    >>>         resp = await get_response.json()
 
-    >>> async with HTTPSession(raise_for_status=True) as session:
+    >>> async with HTTPSession() as session:
+    >>>     async with session.get(image_url) as get_response:
+    >>>         image_data = await get_response.read()
+
+    >>> async with HTTPSession() as session:
     >>>     async with session.post(url, params=params, data=data, headers={}) as post_response:
+    >>>         resp.raise_for_status()
     >>>         resp = await post_response.text()
     """
 
     def __init__(self, *args, **kwargs):
-        self.raise_for_status = kwargs.get("raise_for_status", False)
         super().__init__(*args, **kwargs)
 
     async def _aget(self, url: str, **kwargs) -> ClientResponse:
         encoded_url, data, headers, kwargs = HTTPSession.prepare(url, kwargs)
-        return ClientResponse(encoded_url, (await pyfetch(encoded_url, **kwargs)).js_response)
+        res = await pyfetch(encoded_url, **kwargs)
+        return ClientResponse(encoded_url, res.js_response, res.status)
 
     async def _apost(self, url: str, **kwargs) -> ClientResponse:
         # https://pyodide.org/en/stable/usage/faq.html
         encoded_url, data, headers, kwargs = HTTPSession.prepare(url, kwargs)
-        ret = await pyfetch(encoded_url,
-                            method="POST",
-                            body=data,
-                            credentials="same-origin",
-                            **kwargs,
-                            )
-        return ClientResponse(encoded_url, ret.js_response)
+        res = await pyfetch(
+            encoded_url,
+            method="POST",
+            body=data,
+            credentials="same-origin",
+            **kwargs,
+        )
+        return ClientResponse(encoded_url, res.js_response, res.status)
 
     def get(self, url: str, *args, **kwargs: Any) -> FetchResponseCM:
         return FetchResponseCM(self._aget(url, **kwargs))

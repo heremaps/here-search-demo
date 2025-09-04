@@ -7,10 +7,10 @@
 #
 ###############################################################################
 
-from here_search.demo.entity.endpoint import Endpoint
-
 from dataclasses import dataclass
 from typing import Sequence
+
+from here_search.demo.entity.endpoint import Endpoint
 
 
 @dataclass
@@ -18,6 +18,7 @@ class APIOption:
     key: str
     values: Sequence[str]
     endpoints = []
+    for_more_details = False
 
 
 class At(APIOption):
@@ -36,15 +37,64 @@ class Route(APIOption):
         self.values = [f"{polyline};w={width}"]
 
 
-class APIOptions(dict):
+class TripadvisorDetails(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
+    for_more_details = True
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["tripadvisor", "tripadvisorImageVariants"]
+
+
+class Triggers400(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["foobar"]
+
+
+class Details(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST,)
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["details"]
+
+
+class EVDetails(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
+    for_more_details = True
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["ev"]
+
+
+@dataclass
+class APIOptions:
+    endpoint: dict[str, dict[str, str]]
+    lookup_has_more_details: bool
+
     def __init__(self, options: dict):
+        self.endpoint = {}
+        self.lookup_has_more_details = False
         _options = {}
         for endpoint, ep_options in options.items():
             for option in ep_options:
-                assert not option.endpoints or endpoint in option.endpoints, f"Option {option.__class__.__name__} illegal for endpoint {endpoint}"
+                assert not option.endpoints or endpoint in option.endpoints, (
+                    f"Option {option.__class__.__name__} illegal for endpoint {endpoint}"
+                )
                 _options.setdefault(endpoint, {}).setdefault(option.key, set()).update(option.values)
+                if option.for_more_details:
+                    self.lookup_has_more_details = True
         for endpoint, ep_options in _options.items():
             for key in ep_options.keys():
                 ep_options[key] = ",".join(sorted(ep_options[key]))
+        self.endpoint = _options
 
-        super().__init__(_options)
+
+details = Details()
+tripadvisorDetails = TripadvisorDetails()
+evDetails = EVDetails()
+triggers400 = Triggers400()  # Can be used for tests

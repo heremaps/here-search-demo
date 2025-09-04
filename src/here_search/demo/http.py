@@ -8,6 +8,10 @@
 ###############################################################################
 
 try:
-    from .lite import HTTPSession, HTTPConnectionError
+    from .lite import HTTPConnectionError, HTTPResponseError, HTTPSession
 except ImportError:
-    from aiohttp import ClientSession as HTTPSession, ClientConnectorError as HTTPConnectionError
+    from aiohttp import ClientConnectorError as HTTPConnectionError
+    from aiohttp import ClientResponseError as HTTPResponseError
+    from aiohttp import ClientSession as HTTPSession
+
+__all__ = [HTTPSession, HTTPConnectionError, HTTPResponseError]

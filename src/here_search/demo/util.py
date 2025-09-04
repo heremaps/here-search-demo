@@ -7,18 +7,27 @@
 #
 ###############################################################################
 
-from here_search.demo.http import HTTPSession, HTTPConnectionError
-from here_search.demo.entity.constants import berlin
 
+from functools import reduce
+from typing import Sequence, Tuple
+
+try:
+    from IPython import get_ipython
+except ImportError:
+    get_ipython = None
+
+from here_search.demo.entity.constants import berlin
+from here_search.demo.http import HTTPConnectionError, HTTPSession
+
+# isort: off
 from importlib import reload
 import logging
 
 reload(logging)
-from logging import getLogger, basicConfig
-from typing import Tuple, Sequence
-from functools import reduce
+from logging import basicConfig, getLogger  # noqa: E402
 
 logger = getLogger("here_search")
+# isort: on
 
 
 def setLevel(level: int):
@@ -28,9 +37,7 @@ def setLevel(level: int):
     client_logger.setLevel(level)
 
 
-def set_dict_values(
-    source: dict, target_keys: Sequence[Sequence[str]], target_values: list
-) -> dict:
+def set_dict_values(source: dict, target_keys: Sequence[Sequence[str]], target_values: list) -> dict:
     """
     Return a modified version of a nested dict for which
     values have been changed according to a set of paths.
@@ -52,6 +59,9 @@ async def get_lat_lon() -> Tuple[float, float]:
             async with session.get(geojs) as response:
                 geo = await response.json()
                 return float(geo["latitude"]), float(geo["longitude"])
-    except HTTPConnectionError as e:
+    except HTTPConnectionError:
         logger.warning(f"Error connecting to {geojs}")
         return berlin
+
+
+is_running_in_jupyter = False if not get_ipython else get_ipython().__class__.__name__ == "ZMQInteractiveShell"

@@ -7,16 +7,19 @@
 #
 ###############################################################################
 
-from here_search.demo.http import HTTPSession
+import os
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
+from urllib.parse import parse_qsl, urlparse, urlunparse
+
+import orjson as json
+
+from here_search.demo.api_options import APIOptions
+from here_search.demo.entity.endpoint import Endpoint
 from here_search.demo.entity.request import Request
 from here_search.demo.entity.response import Response
-from here_search.demo.entity.endpoint import Endpoint
+from here_search.demo.http import HTTPSession
 from here_search.demo.util import logger
-from here_search.demo.api_options import APIOptions
-
-from typing import Dict, Sequence, Optional, Callable, Tuple, Mapping
-from urllib.parse import urlparse, parse_qsl, urlunparse
-import os
 
 
 def url_builder(ep_template: str):
@@ -40,23 +43,62 @@ class API:
     """
     https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
     """
+
     api_key: str
-    cache: Dict[str, Response]
-    options: APIOptions
+    cache: dict[str, Response]
+    options: dict
+    lookup_has_more_details: bool
+    raise_for_status: bool
 
     BASE_URL = base_url
+    CONFIG_FILES = ["demo-config.json", ".demo-config.json"]
+    CONFIG_FILE_PATHS = [Path.cwd()]
+    if CONFIG_FILE_PATHS[-1].parts[-4:] == ("src", "here_search", "demo", "notebooks"):
+        CONFIG_FILE_PATHS.append(CONFIG_FILE_PATHS[-1].parents[3])
+    CONFIG_FILE_PATHS.extend([Path("."), Path.home()])
 
     def __init__(
-            self,
-            api_key: str = None,
-            cache: dict = None,
-            url_format_fn: Callable[[str], str] = None,
-            options: APIOptions = None
+        self,
+        api_key: str = None,
+        cache: dict = None,
+        url_format_fn: Callable[[str], str] = None,
+        raise_for_status: bool = False,
+        options: APIOptions = None,
     ):
-        self.api_key = api_key or os.environ.get("API_KEY")
+        """
+        Creates a HERE search API instance.
+        :param api_key: your HERE API key
+        :param cache: a Cache object supporting the MutableMapping protocol. By default, set to a dict
+        :param url_format_fn: A function used to modify URLs for logging purposes (default: no change in URL)
+        :param raise_for_status: set to True to raise HTTPResponseError if HTTP status code is not 200
+        :param options: a set of APIOptions objects
+        """
+        if api_key is not None:
+            self.api_key = api_key
+        elif os.environ.get("API_KEY") is not None:
+            self.api_key = os.environ["API_KEY"]
+        else:
+            self.api_key = self._load_config()["apiKey"]
+
         self.cache = cache or {}
         self.format_url = url_format_fn or (lambda x: x)
-        self.options = options or {}
+        self.raise_for_status = raise_for_status
+        if options:
+            self.options = options.endpoint
+            self.lookup_has_more_details = options.lookup_has_more_details
+        else:
+            self.options = {}
+            self.lookup_has_more_details = False
+
+    @classmethod
+    def _load_config(cls):
+        for config_dir in cls.CONFIG_FILE_PATHS:
+            for config_file in cls.CONFIG_FILES:
+                config_path = config_dir / config_file
+                if config_path.exists():
+                    with config_path.open("r") as f:
+                        return json.loads(f.read())
+        raise FileNotFoundError("No configuration file found in expected locations.")
 
     async def get(self, request: Request, session: HTTPSession) -> Response:
         """
@@ -71,10 +113,7 @@ class API:
         if cache_key in self.cache:
             return self.__uncache(cache_key)
 
-        params = {
-            k: ",".join(v) if isinstance(v, list) else v
-            for k, v in request.params.items()
-        }
+        params = {k: ",".join(v) if isinstance(v, list) else v for k, v in request.params.items()}
         params["apiKey"] = self.api_key
         human_url, payload, headers = await self.do_get(request.url, params, request.x_headers, session)
 
@@ -90,14 +129,14 @@ class API:
         self.cache[cache_key] = human_url, response  # Not a pure function...
         return response
 
-    async def do_get(self, url: str, params: dict, headers: dict, session: HTTPSession) -> Tuple[
-        str, dict, Mapping]:  # pragma: no cover
+    async def do_get(
+        self, url: str, params: dict, headers: dict, session: HTTPSession
+    ) -> tuple[str, dict, Mapping]:  # pragma: no cover
         # I/O coupling isolation
         headers = headers or {}
         # headers.update({"Access-Control-Allow-Headers": "Accept"})
-        async with session.get(
-                url, params=params, headers=headers or {}
-        ) as get_response:
+        async with session.get(url, params=params, headers=headers or {}) as get_response:
+            self.raise_for_status and get_response.raise_for_status()
             payload = await get_response.json()
             human_url = get_response.url.human_repr()
             headers = get_response.headers
@@ -109,21 +148,19 @@ class API:
     def __uncache(self, cache_key):
         actual_url, cached_response = self.cache[cache_key]
         data = cached_response.data.copy()
-        response = Response(
-            data=data, x_headers=cached_response.x_headers, req=cached_response.req
-        )
+        response = Response(data=data, x_headers=cached_response.x_headers, req=cached_response.req)
         formatted_msg = self.format_url(actual_url)
         logger.info(f"{formatted_msg} (cached)")
         return response
 
     async def autosuggest(
-            self,
-            q: str,
-            latitude: float,
-            longitude: float,
-            session: HTTPSession,
-            x_headers: dict = None,
-            **kwargs,
+        self,
+        q: str,
+        latitude: float,
+        longitude: float,
+        session: HTTPSession,
+        x_headers: dict = None,
+        **kwargs,
     ) -> Response:
         """
         Calls HERE Search Autosuggest endpoint
@@ -137,7 +174,7 @@ class API:
         :return: a Response object
         """
         params = self.options.get(Endpoint.AUTOSUGGEST, {}).copy()
-        params.update(q=q, at=f'{latitude},{longitude}')
+        params.update(q=q, at=f"{latitude},{longitude}")
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST,
@@ -147,13 +184,7 @@ class API:
         )
         return await self.get(request, session)
 
-    async def autosuggest_href(
-            self,
-            href: str,
-            session: HTTPSession,
-            x_headers: dict = None,
-            **kwargs
-    ) -> Response:
+    async def autosuggest_href(self, href: str, session: HTTPSession, x_headers: dict = None, **kwargs) -> Response:
         """
         Calls HERE Search Autosuggest href follow-up
 
@@ -166,24 +197,25 @@ class API:
         """
 
         href_details = urlparse(href)
-        params = parse_qsl(href_details.query)
+        params = self.options.get(Endpoint.AUTOSUGGEST_HREF, {}).copy()
+        params.update(parse_qsl(href_details.query))
 
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST_HREF,
-            url=urlunparse(href_details._replace(query='')),
+            url=urlunparse(href_details._replace(query="")),
             params=dict(params),
             x_headers=x_headers,
         )
         return await self.get(request, session)
 
     async def discover(
-            self,
-            q: str,
-            latitude: float,
-            longitude: float,
-            session: HTTPSession,
-            x_headers: dict = None,
-            **kwargs,
+        self,
+        q: str,
+        latitude: float,
+        longitude: float,
+        session: HTTPSession,
+        x_headers: dict = None,
+        **kwargs,
     ) -> Response:
         """
         Calls HERE Search Discover endpoint
@@ -197,7 +229,7 @@ class API:
         :return: a Response object
         """
         params = self.options.get(Endpoint.DISCOVER, {}).copy()
-        params.update(q=q, at=f'{latitude},{longitude}')
+        params.update(q=q, at=f"{latitude},{longitude}")
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.DISCOVER,
@@ -208,15 +240,15 @@ class API:
         return await self.get(request, session)
 
     async def browse(
-            self,
-            latitude: float,
-            longitude: float,
-            session: HTTPSession,
-            categories: Optional[Sequence[str]] = None,
-            food_types: Optional[Sequence[str]] = None,
-            chains: Optional[Sequence[str]] = None,
-            x_headers: dict = None,
-            **kwargs,
+        self,
+        latitude: float,
+        longitude: float,
+        session: HTTPSession,
+        categories: Sequence[str] | None = None,
+        food_types: Sequence[str] | None = None,
+        chains: Sequence[str] | None = None,
+        x_headers: dict = None,
+        **kwargs,
     ) -> Response:
         """
         Calls HERE Search Browse endpoint
@@ -249,12 +281,7 @@ class API:
         )
         return await self.get(request, session)
 
-    async def lookup(
-            self,
-            id: str,
-            session: HTTPSession,
-            x_headers: dict = None,
-            **kwargs) -> Response:
+    async def lookup(self, id: str, session: HTTPSession, x_headers: dict = None, **kwargs) -> Response:
         """
         Calls HERE Search Lookup for a specific id
 
@@ -276,12 +303,7 @@ class API:
         return await self.get(request, session)
 
     async def reverse_geocode(
-            self,
-            latitude: float,
-            longitude: float,
-            session: HTTPSession,
-            x_headers: dict = None,
-            **kwargs
+        self, latitude: float, longitude: float, session: HTTPSession, x_headers: dict = None, **kwargs
     ) -> Response:
         """
         Calls HERE Reverse Geocode for a geo position
@@ -294,7 +316,7 @@ class API:
         :return: a Response object
         """
         params = self.options.get(Endpoint.REVGEOCODE, {}).copy()
-        params.update(at=f'{latitude},{longitude}')
+        params.update(at=f"{latitude},{longitude}")
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.REVGEOCODE,
