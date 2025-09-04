@@ -27,10 +27,10 @@ jobs:
       # https://github.com/codecov/codecov-action
       # https://github.com/actions/upload-pages-artifact
       # https://github.com/actions/deploy-pages
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -39,6 +39,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[lab]'
           pip install -r requirements/test.txt
+          src/here_search/demo/scripts/lint.sh --check
 
       - name: Test
         run: |
@@ -57,9 +58,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: 3.11
       - name: Install the dependencies
@@ -69,7 +70,7 @@ jobs:
           ls -la workspace
           mv workspace/public .
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./public
 

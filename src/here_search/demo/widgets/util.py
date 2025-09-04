@@ -7,18 +7,18 @@
 #
 ###############################################################################
 
-from IPython.display import display as Idisplay, Markdown
-from IPython.core.interactiveshell import InteractiveShell
-from ipywidgets import Output as OutputBase
-
-from typing import Sequence
 import logging
 import urllib.parse
+
+from IPython.core.interactiveshell import InteractiveShell
+from IPython.display import Markdown
+from IPython.display import display as Idisplay
+from ipywidgets import Output as OutputBase
 
 
 class Output(OutputBase):
     default_height = 30
-    out_stream = lambda t: {"name": "stdout", "output_type": "stream", "text": t}
+    out_stream = lambda t: {"name": "stdout", "output_type": "stream", "text": t}  # noqa: E731
 
     def __init__(self, **kwargs):
         height = kwargs.get("height", Output.default_height)
@@ -79,9 +79,7 @@ class TableLogWidgetHandler(logging.Handler):
         super(TableLogWidgetHandler, self).__init__(*args, **kwargs)
         self.out = Output(height=160)
         self.lines = []
-        self.separator = kwargs.pop(
-            "separator", TableLogWidgetHandler.default_separator
-        )
+        self.separator = kwargs.pop("separator", TableLogWidgetHandler.default_separator)
         self.fmt = InteractiveShell.instance().display_formatter.format
         self.columns_count = 1
 
@@ -89,10 +87,7 @@ class TableLogWidgetHandler(logging.Handler):
     def format_url(url: str) -> str:
         parts = urllib.parse.urlparse(url)
         endpoint_str = parts.path.split("/")[-1]
-        params = {
-            k: (",".join(v) if isinstance(v, list) else v)
-            for k, v in urllib.parse.parse_qs(parts.query).items()
-        }
+        params = {k: (",".join(v) if isinstance(v, list) else v) for k, v in urllib.parse.parse_qs(parts.query).items()}
         params.pop("apiKey", None)
         params_str = urllib.parse.unquote(urllib.parse.urlencode(params))
         return f"[/{endpoint_str}?{params_str}]({url})"
@@ -105,20 +100,16 @@ class TableLogWidgetHandler(logging.Handler):
         formatted_record = self.format(record)
         self.lines.insert(0, f"| {formatted_record} |")
 
-        self.columns_count = max(
-            self.columns_count, len(formatted_record.split(self.separator))
-        )
+        self.columns_count = max(self.columns_count, len(formatted_record.split(self.separator)))
         header = [
-            f'| {"&nbsp; "*100} |' + "| " * (self.columns_count - 1),
-            f"{'|:-'*self.columns_count}|",
+            f"| {'&nbsp; ' * 100} |" + "| " * (self.columns_count - 1),
+            f"{'|:-' * self.columns_count}|",
         ]
 
         log_output = Markdown("\n".join(header + self.lines))
         fmt = InteractiveShell.instance().display_formatter.format
         data, metadata = fmt(log_output)
-        self.out.outputs = (
-            {"output_type": "display_data", "data": data, "metadata": metadata},
-        )
+        self.out.outputs = ({"output_type": "display_data", "data": data, "metadata": metadata},)
 
     def clear_logs(self):
         """Clear the current logs"""

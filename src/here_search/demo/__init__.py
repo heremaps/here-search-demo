@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# Copyright (c) 2023 HERE Europe B.V.
+# Copyright (c) 2025 HERE Europe B.V.
 #
 # SPDX-License-Identifier: MIT
 # License-Filename: LICENSE

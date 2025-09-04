@@ -38,10 +38,15 @@ For the Pyodide kernels to be able to use certain packages, those need to be ins
    ```
    try:
       import piplite
-      await piplite.install(["ipywidgets==8.1.5", "ipyleaflet==0.20.0", "emfs:here_search_demo-0.12.0-py3-none-any.whl"], keep_going=True)
+      await piplite.install([
+          "ipywidgets==...", 
+          "ipyleaflet==...", 
+          "emfs:here_search_demo-..."], keep_going=True)
    except ImportError:
       pass
    ```
+
+Note that this import is done in `_install.py`.
 
 The version of `here_search_demo` in the `.ipynb` files and this `developers.md` is updated through `bumpver`.
 

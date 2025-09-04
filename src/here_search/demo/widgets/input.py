@@ -7,24 +7,18 @@
 #
 ###############################################################################
 
-from ipyleaflet import Map, ZoomControl, ScaleControl, FullScreenControl, basemap_to_tiles, basemaps
-from ipywidgets import HBox, VBox, Text, Button, Layout
-from IPython.display import display_html
-from traitlets.utils.bunch import Bunch
-import xyzservices.providers
-
-from here_search.demo.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
-from here_search.demo.entity.intent import (
-    TransientTextIntent,
-    FormulatedTextIntent,
-    PlaceTaxonomyIntent,
-    NoIntent,
-)
-from here_search.demo.util import set_dict_values
-
-from typing import Tuple, Callable, Sequence
 import asyncio
+from typing import Callable, Sequence, Tuple
 
+import xyzservices.providers
+from ipyleaflet import FullScreenControl, Map, ScaleControl, ZoomControl, basemap_to_tiles
+from IPython.display import display_html
+from ipywidgets import Button, HBox, Layout, Text, VBox
+from traitlets.utils.bunch import Bunch
+
+from here_search.demo.entity.intent import FormulatedTextIntent, NoIntent, PlaceTaxonomyIntent, TransientTextIntent
+from here_search.demo.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
+from here_search.demo.util import set_dict_values
 
 display_html("<style>.term-button button { font-size: 10px; }</style>")
 
@@ -72,9 +66,7 @@ class SubmittableTextBox(HBox):
             layout={"width": SubmittableTextBox.default_button_width},
         )
         self.queue = queue
-        self.text_w = SubmittableText(
-            *args, layout=kwargs.pop("layout", Layout()), **kwargs
-        )
+        self.text_w = SubmittableText(*args, layout=kwargs.pop("layout", Layout()), **kwargs)
 
         def get_instant_value(change: Bunch):
             value = change.new
@@ -130,9 +122,17 @@ class TermsButtons(HBox):
         target_text_box: SubmittableTextBox,
         values: list[str] = None,
         buttons_count: int = None,
-        index: int = None,
+        index: int = -1,
         layout: dict = None,
     ):
+        """
+        Initializes a TermsButtons instance.
+        :param target_text_box:
+        :param values:
+        :param buttons_count:
+        :param index: The index in the list of terms of the term to replace (Default is the last: -1)
+        :param layout:
+        """
         self.target_text_box = target_text_box
         self.values = values or []
         if values:
@@ -174,7 +174,7 @@ class TermsButtons(HBox):
                     head, target, tail = (
                         tokens[: self.token_index],
                         [button.description.strip()],
-                        tokens[self.token_index + 1:],
+                        tokens[self.token_index + 1 :],
                     )
                 self.target_text_box.text_w.value = " ".join(head + target + tail)
 
@@ -223,9 +223,7 @@ class PlaceTaxonomyButton(Button):
 class PlaceTaxonomyButtons(HBox):
     default_buttons = [PlaceTaxonomyButton(item=PlaceTaxonomyItem(name="_"), icon="")]
 
-    def __init__(
-        self, queue: asyncio.Queue, taxonomy: PlaceTaxonomy, icons: Sequence[str]
-    ):
+    def __init__(self, queue: asyncio.Queue, taxonomy: PlaceTaxonomy, icons: Sequence[str]):
         self.buttons = []
         self.queue = queue
         for item, icon in zip(taxonomy.items.values(), icons):
@@ -267,11 +265,11 @@ class PositionMap(Map):
         basemap = xyzservices.providers.HEREv3.normalDay()
         basemap["url"] = (
             "https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png"
-            f"?style=explore.day&ppi=400&size=512&apiKey={{apiKey}}&lg={{language}}"
+            "?style=explore.day&ppi=400&size=512&apiKey={apiKey}&lg={language}"
         )
 
-        basemap['apiKey'] = api_key
-        basemap['language'] = preferred_language or "en"
+        basemap["apiKey"] = api_key
+        basemap["language"] = preferred_language or "en"
 
         Map.__init__(
             self,
@@ -281,7 +279,7 @@ class PositionMap(Map):
             basemap=basemap_to_tiles(basemap, apiKey=api_key),
             layout=kvargs.pop("layout", PositionMap.default_layout),
             zoom_control=False,
-            scroll_wheel_zoom=True
+            scroll_wheel_zoom=True,
         )
         self.add(ScaleControl(position="bottomright"))
         self.add(FullScreenControl(position="bottomright"))

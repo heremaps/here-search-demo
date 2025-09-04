@@ -9,7 +9,6 @@
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Optional
 
 
 class Endpoint(IntEnum):
@@ -24,13 +23,13 @@ class Endpoint(IntEnum):
 @dataclass
 class EndpointConfig:
     DEFAULT_LIMIT = 20
-    limit: Optional[int] = DEFAULT_LIMIT
+    limit: int | None = DEFAULT_LIMIT
 
 
 @dataclass
 class AutosuggestConfig(EndpointConfig):
     DEFAULT_TERMS_LIMIT = 20
-    terms_limit: Optional[int] = DEFAULT_TERMS_LIMIT
+    terms_limit: int | None = DEFAULT_TERMS_LIMIT
 
 
 @dataclass

@@ -7,12 +7,12 @@
 #
 ###############################################################################
 
-from here_search.demo.http import HTTPSession
+import uuid
+from typing import Tuple
+
 from here_search.demo.api import API
 from here_search.demo.api_options import APIOptions
-
-from typing import Tuple
-import uuid
+from here_search.demo.http import HTTPSession
 
 
 class UserProfile:
@@ -23,20 +23,22 @@ class UserProfile:
 
     default_name = "default"
     from .entity.constants import berlin
+
     default_current_position = berlin
     default_country_code = "DEU"
     default_language = "en"
     default_profile_languages = {default_name: default_language}
 
     def __init__(
-            self,
-            use_positioning: bool,
-            share_experience: bool,
-            api: API = None,
-            start_position: Tuple[float, float] = None,
-            api_options: APIOptions = None,
-            preferred_languages: dict = None,
-            name: str = None):
+        self,
+        use_positioning: bool,
+        share_experience: bool,
+        api: API = None,
+        start_position: Tuple[float, float] = None,
+        api_options: APIOptions = None,
+        preferred_languages: dict = None,
+        name: str = None,
+    ):
         """
         :param use_position: Mandatory opt-in/out about position usage
         :param share_experience: Mandatory opt-in/out about activity usage (UNUSED)
@@ -55,8 +57,7 @@ class UserProfile:
 
         self.preferred_languages = preferred_languages or {}
         self.has_country_preferences = not (
-                self.preferred_languages == {}
-                or list(self.preferred_languages.keys()) == [UserProfile.default_name]
+            self.preferred_languages == {} or list(self.preferred_languages.keys()) == [UserProfile.default_name]
         )
         self.api_options = api_options or {}
 
@@ -92,9 +93,7 @@ class UserProfile:
         async with HTTPSession(raise_for_status=True) as session:
             local_addresses = await self.api.reverse_geocode(latitude=latitude, longitude=longitude, session=session)
 
-            if (local_addresses
-                    and "items" in local_addresses.data
-                    and len(local_addresses.data["items"]) > 0):
+            if local_addresses and "items" in local_addresses.data and len(local_addresses.data["items"]) > 0:
                 country_code = local_addresses.data["items"][0]["address"]["countryCode"]
                 address_details = await self.api.lookup(id=local_addresses.data["items"][0]["id"], session=session)
                 language = address_details.data["language"]

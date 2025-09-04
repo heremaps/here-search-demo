@@ -18,10 +18,18 @@ from here_search.demo.event import (
     DetailsSearchEvent,
     EmptySearchEvent,
 )
+from here_search.demo.entity.intent import (
+    FormulatedTextIntent,
+    TransientTextIntent,
+    PlaceTaxonomyIntent,
+    MoreDetailsIntent,
+    NoIntent,
+)
 from here_search.demo.entity.request import Request, RequestContext
 from here_search.demo.entity.response import Response, ResponseItem, QuerySuggestionItem
 from here_search.demo.entity.endpoint import Endpoint, AutosuggestConfig, DiscoverConfig, BrowseConfig, LookupConfig
 from here_search.demo.entity.place import PlaceTaxonomyItem
+from here_search.demo.widgets.input import PlaceTaxonomyButton
 from here_search.demo.base import OneBoxSimple
 
 from unittest.mock import Mock
@@ -209,6 +217,7 @@ def browse_cuisines_request(context, query_text, x_headers):
         x_headers=x_headers,
     )
 
+
 @pytest.fixture
 def browse_chains_request(context, query_text, x_headers):
     return Request(
@@ -245,6 +254,48 @@ def revgeocode_request(lat_lon, x_headers):
         x_headers=x_headers,
     )
 
+
+#########################################################
+# SearchIntent fixtures
+
+
+@pytest.fixture
+def place_taxonomy_item2():
+    return PlaceTaxonomyItem("gas", ["cat1", "cat2"], ["food1", "food2"], ["chain1", "chain2"])
+
+
+@pytest.fixture
+def place_taxonomy_button(place_taxonomy_item2):
+    return PlaceTaxonomyButton(place_taxonomy_item2, "some_icon")
+
+
+@pytest.fixture
+def formulated_text_intent():
+    return FormulatedTextIntent("formulated intent")
+
+
+@pytest.fixture
+def transient_text_intent():
+    return TransientTextIntent("formulated i")
+
+
+@pytest.fixture
+def place_taxonomy_intent(place_taxonomy_button):
+    return PlaceTaxonomyIntent(place_taxonomy_button.item)
+
+
+@pytest.fixture
+def more_details_intent(location_response_item):
+    return MoreDetailsIntent(location_response_item)
+
+
+@pytest.fixture
+def no_intent():
+    return NoIntent()
+
+
+#########################################################
+# SearchEvent fixtures
 
 
 @pytest.fixture
@@ -295,10 +346,14 @@ def session(session_response):
     )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def app():
     environ["API_KEY"] = "api_key"
     return OneBoxSimple()
+
+
+#########################################################
+# EndpointConfig fixtures
 
 
 @pytest.fixture

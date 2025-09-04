@@ -7,16 +7,16 @@
 #
 ###############################################################################
 
-from typing import Sequence, Optional
+from collections.abc import Sequence
 
 
 class PlaceTaxonomyItem:
     def __init__(
-            self,
-            name: str,
-            categories: Optional[Sequence[str]] = None,
-            food_types: Optional[Sequence[str]] = None,
-            chains: Optional[Sequence[str]] = None,
+        self,
+        name: str,
+        categories: Sequence[str] | None = None,
+        food_types: Sequence[str] | None = None,
+        chains: Sequence[str] | None = None,
     ):
         self.name = name
         self.categories = categories
@@ -36,6 +36,9 @@ class PlaceTaxonomyItem:
 
 
 class PlaceTaxonomy:
+    name: str
+    items: dict[str, PlaceTaxonomyItem]
+
     def __init__(self, name: str, items: Sequence[PlaceTaxonomyItem]):
         self.name = name
         self.items = {i.name: i for i in items or []}
@@ -56,6 +59,7 @@ class PlaceTaxonomyExample:
             #                | item name | categories     | food types | chains  | icon         |
             #                --------------------------------------------------------------------
             (PlaceTaxonomyItem("gas", ["700-7600-0000", "700-7600-0116", "700-7600-0444"], None, None), "fa-gas-pump"),
+            (PlaceTaxonomyItem("ev", ["700-7600-0322"], None, None), "fa-charging-station"),
             (PlaceTaxonomyItem("eat", ["100"], None, None), "fa-utensils"),
             (PlaceTaxonomyItem("sleep", ["500-5000"], None, None), "fa-bed"),
             (PlaceTaxonomyItem("park", ["400-4300", "800-8500"], None, None), "fa-parking"),
