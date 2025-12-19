@@ -6,10 +6,11 @@ if sys.platform == "emscripten":
         import piplite
 
         packages = [
-            "ipywidgets==8.1.7",
+            "ipywidgets==8.1.8",
             "ipyleaflet==0.20.0",
             "orjson",
-            "emfs:here_search_demo-0.17.2-py3-none-any.whl",
+            "xyzservices==2025.11.0",
+            "emfs:here_search_demo-0.17.4-py3-none-any.whl",
         ]
         await piplite.install(packages, keep_going=True)
 

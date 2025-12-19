@@ -10,8 +10,8 @@ jobs:
       # https://github.com/actions/checkout
       # https://github.com/actions/setup-python
       # https://github.com/pypa/gh-action-pypi-publish
-      - uses: actions/checkout@v5
-      - name: Set up Python 3.11
+      - uses: actions/checkout@v6
+      - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
           python-version: 3.11

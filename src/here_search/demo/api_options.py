@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# Copyright (c) 2023 HERE Europe B.V.
+# Copyright (c) 2025 HERE Europe B.V.
 #
 # SPDX-License-Identifier: MIT
 # License-Filename: LICENSE
@@ -44,6 +44,15 @@ class TripadvisorDetails(APIOption):
     def __init__(self):
         self.key = "show"
         self.values = ["tripadvisor", "tripadvisorImageVariants"]
+
+
+class RecommendPlaces(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER)
+    for_more_details = True
+
+    def __init__(self):
+        self.key = "with"
+        self.values = ["recommendPlaces"]
 
 
 class Triggers400(APIOption):
@@ -96,5 +105,6 @@ class APIOptions:
 
 details = Details()
 tripadvisorDetails = TripadvisorDetails()
+recommendPlaces = RecommendPlaces()
 evDetails = EVDetails()
 triggers400 = Triggers400()  # Can be used for tests

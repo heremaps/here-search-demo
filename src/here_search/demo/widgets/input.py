@@ -11,7 +11,7 @@ import asyncio
 from typing import Callable, Sequence, Tuple
 
 import xyzservices.providers
-from ipyleaflet import FullScreenControl, Map, ScaleControl, ZoomControl, basemap_to_tiles
+from ipyleaflet import FullScreenControl, Map, ScaleControl, ZoomControl
 from IPython.display import display_html
 from ipywidgets import Button, HBox, Layout, Text, VBox
 from traitlets.utils.bunch import Bunch
@@ -257,26 +257,20 @@ class PositionMap(Map):
 
         https://github.com/geopandas/xyzservices/blob/main/provider_sources/leaflet-providers-parsed.json
 
-        :param api_key: apiKey expected by HEREv3 basemaps
+        :param api_key: apiKey expected by HERE basemaps
         :param center:
         :param position_handler:
         :param kvargs:
         """
-        basemap = xyzservices.providers.HEREv3.normalDay()
-        basemap["url"] = (
-            "https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png"
-            "?style=explore.day&ppi=400&size=512&apiKey={apiKey}&lg={language}"
-        )
-
+        basemap = xyzservices.providers.HERE.exploreDay
         basemap["apiKey"] = api_key
         basemap["language"] = preferred_language or "en"
 
         Map.__init__(
             self,
-            api_key=api_key,
             center=center,
             zoom=kvargs.pop("zoom", PositionMap.default_zoom_level),
-            basemap=basemap_to_tiles(basemap, apiKey=api_key),
+            basemap=basemap,
             layout=kvargs.pop("layout", PositionMap.default_layout),
             zoom_control=False,
             scroll_wheel_zoom=True,
