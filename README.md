@@ -11,23 +11,37 @@ A set of jupyter notebooks demonstrating the use of [HERE Geocoding & Search][4]
 
 Requirements: a [HERE API key][1] and a Python environment. Note that HERE Base Plan [Pricing][5] allows you to get started for free.
 
-The notebooks can be [used in your browser][3] without further installation.
+| Use Case            | Installation                                                     |
+|:--------------------|:-----------------------------------------------------------------|
+| Online use          | Run the notebooks [in your browser][3]                           |
+| Package maintenance | [Install from pypi](##Install from pypi)                         |
 
-## Installation
+## 0-install use
+
+`here-search-demo` notebooks are available in a [Github page][3] hosting a JupyterLite instance. 
+This allows users to not have to install anything.
+
+## Install from pypi
 
 If you need to install the notebooks or the underlying library on your workstation, run preferably in a virtual environment:
+
 
    ```shell
    pip install 'here-search-demo[lab]'
    ```
 
-Or as a developer:
+## Install from the sources
+
+1. `git clone` it and into a `virtualenv`/`venv`, do:
+
 
    ```shell
-   pip install -r <(sort -u requirements/*) -e '.[lab]'
+   pip install -r <(sort -u requirements/*) -e '.[dev,lab]'
    ```
 
-Link the virtual environment to a IPython kernel:
+2. Copy `demo-config-example.json` to `demo-config.json` and add your [HERE API key][1] to it.
+
+3. Link the virtual environment to a IPython kernel:
 
    ```shell
    python -m ipykernel install \
@@ -35,18 +49,17 @@ Link the virtual environment to a IPython kernel:
      --name search_demo --display-name "search demo"
    ```
 
-Copy `demo-config-example.json` to `demo-config.json` and add your [HERE API key][1] to it.
+4. Start either
 
-Start JupyterLab:
+     - JupyterLab:
+       ```shell
+       python -m jupyterlab src/here_search/demo/notebooks
+       ```
+     - or JupyterLite
+       ```shell
+       bash src/here_search/demo/scripts/lite-run.sh
+       ```
 
-   ```shell
-   python -m jupyterlab src/here_search/demo/notebooks
-   ```
-
-Or instead of JupyterLab, start JupyterLite
-   ```shell
-   bash src/here_search/demo/scripts/lite-run.sh
-   ```
 
 
 (Additional [notes][2])

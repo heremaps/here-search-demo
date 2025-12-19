@@ -14,7 +14,7 @@ from ipyleaflet import WidgetControl
 from ipywidgets import HBox, Label, VBox
 
 from here_search.demo.api import API
-from here_search.demo.api_options import APIOptions, details, evDetails, tripadvisorDetails
+from here_search.demo.api_options import APIOptions, details, evDetails, recommendPlaces, tripadvisorDetails
 from here_search.demo.base import OneBoxBase
 from here_search.demo.entity.endpoint import Endpoint
 from here_search.demo.entity.intent import NoIntent, SearchIntent
@@ -37,9 +37,9 @@ class OneBoxMap(OneBoxBase, VBox):
     )
     default_options = APIOptions(
         {
-            Endpoint.AUTOSUGGEST: [details],
-            Endpoint.AUTOSUGGEST_HREF: [evDetails],
-            Endpoint.DISCOVER: [evDetails],
+            Endpoint.AUTOSUGGEST: [details, recommendPlaces],
+            Endpoint.AUTOSUGGEST_HREF: [evDetails, recommendPlaces],
+            Endpoint.DISCOVER: [evDetails, recommendPlaces],
             Endpoint.BROWSE: [evDetails],
             Endpoint.LOOKUP: [evDetails],
         }

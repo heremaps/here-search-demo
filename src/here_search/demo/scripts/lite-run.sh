@@ -56,11 +56,19 @@ wheel pack "$(dirname "$(find package -name "*.dist-info")")" -d content
 ls -l content
 
 printf "${YELLOW}Build Jupyter Lite static page${NC}\n"
-echo "{\"ContentsManager\": {\"allow_hidden\": true}}" > jupyter_lite_config.json
+cat << eof > jupyter_lite_config.json
+{
+  "ContentsManager": {
+    "allow_hidden": true
+  }
+}
+eof
+
 cp "$NOTEBOOKS_DIR"/obm*.ipynb content/
 cp "$NOTEBOOKS_DIR"/_install.py content/
 
-cp "$NOTEBOOKS_DIR"/demo.ipynb content/
+cp "$NOTEBOOKS_DIR"/demo.ipynb content/demo.ipynb
+
 cp "$ROOT_DIR"/demo-config-example.json content/demo-config.json
 
 jupyter lite build --contents content --output-dir public --lite-dir public
