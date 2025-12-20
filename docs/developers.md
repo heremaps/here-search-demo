@@ -101,6 +101,8 @@ If you need to update Jupyter libis (ipyleaflet, ipywidgets, jupyter*, ...), che
 ### Update the package
 
 1. Push your change through a branch PR.
+2. Fix potential gh related issues.
+3. Login into https://app.codecov.io/gh/heremaps/here-search-demo and check this service is properly linked to the repo.
 2. On your local main branch, after a rebase from origin, do a `bumpver update --set-version ...`.
 3. "Draft a new release" and choose the new tag you just created with `bumpver`. 
    The creation of a new release should trigger the release to pypi workflow.

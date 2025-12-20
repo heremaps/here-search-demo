@@ -182,7 +182,6 @@ class OneBoxSimple:
         except RuntimeError:
             pass
 
-
     def handle_suggestion_list(self, intent: SearchIntent, response: Response) -> None:
         """
         Typically
