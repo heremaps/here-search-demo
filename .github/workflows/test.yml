@@ -49,7 +49,7 @@ jobs:
           uv run --extra dev --extra lab --frozen src/here_search/demo/scripts/lint.sh --check
 
       - name: Coverage
-        if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        if: matrix.python-version == '3.13'
         run: |
           uv run --active --extra dev --extra lab --frozen pytest -v --cov=src tests --cov-report=xml --cov-report=term-missing
 
