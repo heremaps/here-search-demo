@@ -41,13 +41,13 @@ jobs:
 
       - name: Test with python ${{ matrix.python-version }}
         run: |
-          uv run --extra dev --frozen pytest
-          uv run --extra dev --frozen src/here_search/demo/scripts/lint.sh --check
+          uv run --extra dev --extra lab --frozen pytest
+          uv run --extra dev --extra lab --frozen src/here_search/demo/scripts/lint.sh --check
 
       - name: Coverage
         if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         run: |
-          uv run --active --frozen pytest -v --cov=src tests --cov-report=xml --cov-report=term-missing
+          uv run --active --extra dev --extra lab --frozen pytest -v --cov=src tests --cov-report=xml --cov-report=term-missing
 
       - name: Upload to Codecov
         if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
