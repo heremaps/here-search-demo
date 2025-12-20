@@ -42,7 +42,6 @@ from here_search.demo.event import (
 )
 from here_search.demo.http import HTTPSession
 from here_search.demo.user import DefaultUser, UserProfile
-from here_search.demo.util import is_running_in_jupyter
 
 
 class OneBoxSimple:
@@ -171,15 +170,18 @@ class OneBoxSimple:
     def __del__(self):
         try:
             loop = asyncio.get_running_loop()
-            if loop.is_running():
-                loop.create_task(self.stop()).add_done_callback(lambda t: t.result())
-                if not is_running_in_jupyter:
-                    loop.stop()
-                return
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            loop.create_task(self.stop()).add_done_callback(lambda t: t.exception())
+            return
+
+        try:
+            asyncio.run(self.stop())
         except RuntimeError:
             pass
 
-        asyncio.run(self.stop())
 
     def handle_suggestion_list(self, intent: SearchIntent, response: Response) -> None:
         """
