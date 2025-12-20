@@ -41,8 +41,8 @@ jobs:
 
       - name: Test with python ${{ matrix.python-version }}
         run: |
-          uv run --frozen pytest
-          src/here_search/demo/scripts/lint.sh --check
+          uv run --with dev --frozen pytest
+          uv run --with dev --frozen src/here_search/demo/scripts/lint.sh --check
 
       - name: Coverage
         if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
