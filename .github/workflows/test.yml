@@ -44,12 +44,12 @@ jobs:
           uv run --extra dev --extra lab --frozen pytest
 
       - name: Lint
-        if: matrix.python-version == '3.13'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         run: |
           uv run --extra dev --extra lab --frozen src/here_search/demo/scripts/lint.sh --check
 
       - name: Coverage
-        if: matrix.python-version == '3.13'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         run: |
           uv run --active --extra dev --extra lab --frozen pytest -v --cov=src tests --cov-report=xml --cov-report=term-missing
 
