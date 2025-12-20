@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest] #, macos-latest, windows-latest]
-        python-version: ["3.11"] # , "3.12", "3.13"]
+        python-version: ["3.13"] #, "3.12", "3.13"]
     steps:
       # https://github.com/actions/checkout
       # https://github.com/actions/setup-python
@@ -42,6 +42,10 @@ jobs:
       - name: Test with python ${{ matrix.python-version }}
         run: |
           uv run --extra dev --extra lab --frozen pytest
+
+      - name: Lint
+        if: matrix.python-version == '3.13'
+        run: |
           uv run --extra dev --extra lab --frozen src/here_search/demo/scripts/lint.sh --check
 
       - name: Coverage
