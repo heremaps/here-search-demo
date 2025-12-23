@@ -10,7 +10,7 @@ if sys.platform == "emscripten":
             "ipyleaflet==0.20.0",
             "orjson",
             "xyzservices==2025.11.0",
-            "emfs:here_search_demo-0.17.5-py3-none-any.whl",
+            "emfs:here_search_demo-0.17.4-py3-none-any.whl",
         ]
         await piplite.install(packages, keep_going=True)
 
