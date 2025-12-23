@@ -5,36 +5,38 @@
 
 # HERE Search notebooks
 
-A set of jupyter notebooks demonstrating the use of [HERE Geocoding & Search][4] endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
+A set of jupyter widgets and notebooks demonstrating the use of [HERE Geocoding & Search][4] endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
 
 ![searching for pizza][11]
 
 Requirements: a [HERE API key][1] and a Python environment. Note that HERE Base Plan [Pricing][5] allows you to get started for free.
 
-| Use Case            | Installation                                                     |
-|:--------------------|:-----------------------------------------------------------------|
-| Online use          | Run the notebooks [in your browser][3]                           |
-| Package maintenance | [Install from pypi](##Install from pypi)                         |
+| Use Case            | Installation                                          |
+|:--------------------|:------------------------------------------------------|
+| Online use          | Run the notebooks [in your browser][3]                |
+| Local use           | [Install and try locally](#install-and-try-locally)   |
+| Package maintenance | [Install from the sources](#install-from-the-sources) |
 
 ## 0-install use
 
 `here-search-demo` notebooks are available in a [Github page][3] hosting a JupyterLite instance. 
 This allows users to not have to install anything.
 
-## Install from pypi
+## Install and try locally
 
-If you need to install the notebooks or the underlying library on your workstation, run preferably in a virtual environment:
+If you want to use the library and try it through existing notebooks, do:
 
-
+1. Install the widgets:
    ```shell
    pip install 'here-search-demo[lab]'
    ```
+   
+2. Grab the notebooks from the [GitHub release asset][12]
+3. Add your [HERE API key][1] to `demo-config.json` file.
 
 ## Install from the sources
 
 1. `git clone` it and into a `virtualenv`/`venv`, do:
-
-
    ```shell
    pip install -r <(sort -u requirements/*) -e '.[dev,lab]'
    ```
@@ -82,3 +84,4 @@ This project is licensed under the MIT license - see the [LICENSE](./LICENSE) fi
 [9]: https://codecov.io/gh/heremaps/here-search-demo
 [11]: https://github.com/heremaps/here-search-demo/raw/main/docs/screenshot.jpg
 [10]: https://jupyterlite.rtfd.io/en/latest/_static/badge.svg
+[12]: https://github.com/heremaps/here-search-demo/releases/latest/download/here-search-demo-notebooks.zip

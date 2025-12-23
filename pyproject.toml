@@ -1,6 +1,6 @@
 ###############################################################################
 #
-# Copyright (c) 2023 HERE Europe B.V.
+# Copyright (c) 2025 HERE Europe B.V.
 #
 # SPDX-License-Identifier: MIT
 # License-Filename: LICENSE
@@ -50,6 +50,7 @@ lab = [
     "xyzservices"
 ]
 dev = [
+    "bumpver",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
@@ -65,7 +66,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "here_search_demo" = [
-    "notebooks/install.ipynb",
     "notebooks/obm_*.ipynb",
     "notebooks/*demo.ipynb",
     "notebooks/_install.py"

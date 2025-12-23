@@ -10,6 +10,7 @@ jobs:
       # https://github.com/actions/checkout
       # https://github.com/actions/setup-python
       # https://github.com/pypa/gh-action-pypi-publish
+      # https://github.com/softprops/action-gh-release
       - uses: actions/checkout@v6
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
@@ -22,9 +23,27 @@ jobs:
       - name: Build the package
         run: |
           python -m build --sdist --wheel
+      - name: Prepare demo notebooks
+        run: |
+          cp demo-config-example.json src/here_search/demo/notebooks/demo-config.json
+      - name: Package demo notebooks
+        run: |
+          NOTEBOOKS_DIR=src/here_search/demo/notebooks
+          rm -f here-search-demo-notebooks.zip
+          zip -j here-search-demo-notebooks.zip \
+            "$NOTEBOOKS_DIR/demo-config.json" \
+            "$NOTEBOOKS_DIR/_install.py" \
+            "$NOTEBOOKS_DIR"/*.ipynb
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}
           verbose: true
+          attestations: false
+      - name: Upload notebooks asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: here-search-demo-notebooks.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

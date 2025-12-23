@@ -57,7 +57,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: unittests
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -86,7 +86,7 @@ jobs:
 
   deploy:
     needs: pages-build
-    #if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     permissions:
       pages: write
       id-token: write
