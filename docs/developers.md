@@ -100,12 +100,13 @@ If you need to update Jupyter libis (ipyleaflet, ipywidgets, jupyter*, ...), che
 
 ### Update the package
 
-1. Push your change through a branch PR.
-2. Fix potential gh related issues.
-3. Login into https://app.codecov.io/gh/heremaps/here-search-demo and check this service is properly linked to the repo.
-2. On your local main branch, after a rebase from origin, do a `bumpver update --set-version ...`.
-3. "Draft a new release" and choose the new tag you just created with `bumpver`. 
-   The creation of a new release should trigger the release to pypi workflow and the creation of `here-search-demo-notebooks.zip` asset.
+1. Create a release branch from `main`, for example `git checkout -b release/<version>`.
+2. Make the code/doc/notebook changes that the new release requires (bug fixes, dependency updates, README notes, etc.), then commit and push those updates so they land on the release branch.
+3. Run `bumpver update --set-version <version>` on that branch. The command will update `pyproject.toml`, `_install.py`, this file, create the version commit, tag it, and push to the remote.
+4. Open a PR from your release branch.
+5. Ensure the PR’s `test.yml` jobs finish green and that Codecov still reports data for the repo (https://app.codecov.io/gh/heremaps/here-search-demo).
+6. After the PR merges into `main`, use “Draft a new release” in GitHub and select the tag created by bumpver.
+7. Publishing the release triggers the PyPI workflow and uploads the `here-search-demo-notebooks.zip` asset automatically.
 
 
 
