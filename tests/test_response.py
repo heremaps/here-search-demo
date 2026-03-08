@@ -8,8 +8,9 @@
 ###############################################################################
 
 import pytest
-from here_search.demo.entity.response import Response
-from here_search.demo.entity.endpoint import Endpoint
+
+from here_search_demo.entity.endpoint import Endpoint
+from here_search_demo.entity.response import Response
 
 
 @pytest.fixture

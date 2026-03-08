@@ -9,9 +9,9 @@
 
 import pytest
 
-from here_search.demo.entity.request import Request
-from here_search.demo.entity.response import Response
-from here_search.demo.entity.endpoint import Endpoint
+from here_search_demo.entity.endpoint import Endpoint
+from here_search_demo.entity.request import Request
+from here_search_demo.entity.response import Response
 
 expected_response_data = {"a": "b"}
 expected_x_headers = {"X-Request-Id": "userid", "X-Correlation-ID": "correlationId"}

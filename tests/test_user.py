@@ -8,10 +8,11 @@
 ###############################################################################
 
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from here_search.demo.user import UserProfile, DefaultUser
+import pytest
+
+from here_search_demo.user import DefaultUser, UserProfile
 
 
 def test_userprofile_init_defaults():
@@ -72,7 +73,7 @@ async def test_set_position_and_get_preferred_locale():
         async def __aexit__(self, exc_type, exc, tb):
             pass
 
-    with patch("here_search.demo.user.HTTPSession", AsyncSessionMock):
+    with patch("here_search_demo.user.HTTPSession", AsyncSessionMock):
         await user.set_position(52.5, 13.4)
         assert user.current_latitude == 52.5
         assert user.current_longitude == 13.4
