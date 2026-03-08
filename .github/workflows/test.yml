@@ -46,7 +46,7 @@ jobs:
       - name: Lint
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         run: |
-          uv run --extra dev --extra lab --frozen src/here_search/demo/scripts/lint.sh --check
+          uv run --extra dev --extra lab --frozen scripts/lint.sh --check
 
       - name: Coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
@@ -75,7 +75,7 @@ jobs:
         run: uv sync --locked --all-extras --dev
       - name: Create page
         run: |
-          uv run --active --frozen src/here_search/demo/scripts/lite-run.sh -n || true
+          uv run --active --frozen scripts/lite-build.sh || true
           ls -la
           ls -la workspace
           mv workspace/public .

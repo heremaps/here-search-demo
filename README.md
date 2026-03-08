@@ -28,7 +28,7 @@ If you want to use the library and try it through existing notebooks, do:
 
 1. Install the widgets:
    ```shell
-   pip install 'here-search-demo[lab]'
+   uv pip install 'here-search-demo[lab,route]'
    ```
    
 2. Grab the notebooks from the [GitHub release asset][12]
@@ -36,9 +36,12 @@ If you want to use the library and try it through existing notebooks, do:
 
 ## Install from the sources
 
+If you need to maintain this package:
+
 1. `git clone` it and into a `virtualenv`/`venv`, do:
    ```shell
-   pip install -r <(sort -u requirements/*) -e '.[dev,lab]'
+   (cd packages/demo; 
+    uv pip install -r <(sort -u requirements/*) -e '.[dev,lab,route]' )
    ```
 
 2. Copy `demo-config-example.json` to `demo-config.json` and add your [HERE API key][1] to it.
@@ -55,11 +58,11 @@ If you want to use the library and try it through existing notebooks, do:
 
      - JupyterLab:
        ```shell
-       python -m jupyterlab src/here_search/demo/notebooks
+       python -m jupyterlab notebooks
        ```
      - or JupyterLite
        ```shell
-       bash src/here_search/demo/scripts/lite-run.sh
+       bash scripts/lite-build.sh
        ```
 
 
@@ -68,7 +71,7 @@ If you want to use the library and try it through existing notebooks, do:
 
 ## License
 
-Copyright (C) 2022-2025 HERE Europe B.V.
+Copyright (C) 2022-2026 HERE Europe B.V.
 
 This project is licensed under the MIT license - see the [LICENSE](./LICENSE) file in the root of this project for license details.
 

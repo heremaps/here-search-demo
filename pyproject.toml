@@ -9,36 +9,42 @@
 
 [build-system]
 requires = [
-    "setuptools>=80.9.0",
+    "setuptools>=82.0.0",
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "here-search-demo"
-version = "0.17.6"
 description = "HERE Geocoding and Search demo and widgets"
 readme = "README.md"
 authors = [ {name = "HERE Global B.V. and its affiliate(s)", email = "590094+decitre@users.noreply.github.com"} ]
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: WebAssembly :: Emscripten",
     "Intended Audience :: Developers",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: Implementation :: CPython",
 ]
-dynamic = ["dependencies"]
+dependencies = [
+    "aiohttp",
+    "ipyleaflet==0.20.0",
+    "ipywidgets==8.1.8",
+    "orjson",
+    "xyzservices==2025.11.0",
+    "yarl",
+]
+dynamic = ["version"]
 
 [tool.setuptools.dynamic]
-dependencies = {file = ["requirements/build.txt"]}
+version = {attr = "here_search_demo.__version__"}
 
 [project.urls]
 homepage = "https://here.com"
@@ -46,16 +52,23 @@ repository = "https://github.com/heremaps/here-search-demo"
 
 [project.optional-dependencies]
 lab = [
-    "aiohttp",
-    "xyzservices"
+    "ipykernel==6.31.0",  # 6.x becasue of https://github.com/jupyter-widgets/ipywidgets/issues/4012
+    "jupyterlab"
+]
+route = [
+    "flexpolyline==0.1.0",
+    "pyproj==3.7.2",
+    "shapely",
 ]
 dev = [
+    "build",
     "bumpver",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
     "ruff",
-    "isort"
+    "twine",
+    "wheel"
 ]
 
 [tool.setuptools]
@@ -63,31 +76,35 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = true
 
 [tool.setuptools.package-data]
 "here_search_demo" = [
     "notebooks/obm_*.ipynb",
     "notebooks/*demo.ipynb",
-    "notebooks/_install.py"
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["src"]
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
+norecursedirs = [
+    "workspace",
+]
 
 [tool.ruff]
-exclude = [
-    "*.ipynb",
-]
+line-length = 120
+exclude = ["*.ipynb"]
 
-[tool.isort]
-skip = [
-   "*.ipynb",
-]
+[tool.ruff.lint.isort]
+combine-as-imports = true
 
 [bumpver]
-current_version = "0.17.6"
+current_version = "0.24.1"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
@@ -96,9 +113,8 @@ push = true
 
 [bumpver.file_patterns]
 "pyproject.toml" = [
-    '^version = "{version}"',
     '^current_version = "{version}"',
 ]
-"src/here_search/demo/notebooks/*.py" = [
-    'here_search_demo-{version}-py3-none-any.whl'
+"src/here_search_demo/__init__.py" = [
+    '__version__ = "{version}"'
 ]
