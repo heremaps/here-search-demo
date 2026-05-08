@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 @dataclass
 class Request:
     endpoint: Endpoint | None = None
-    url: str | None = None
+    base_url: str | None = None
     params: dict[str, str] | None = None
     data: str | None = None
     x_headers: dict | None = None
@@ -29,11 +29,11 @@ class Request:
 
     @property
     def key(self) -> str:
-        return self.url + "".join(f"{k}{v}" for k, v in self.params.items())
+        return self.base_url + "".join(f"{k}{v}" for k, v in self.params.items())
 
     @property
     def full(self):
-        return f"{self.url}?{urlencode(self.params)}"
+        return f"{self.base_url}?{urlencode(self.params)}"
 
 
 @dataclass

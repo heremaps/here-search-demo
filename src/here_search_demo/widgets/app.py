@@ -15,7 +15,16 @@ from IPython.display import display
 from ipywidgets import HBox, Label, VBox
 
 from here_search_demo.api import API
-from here_search_demo.api_options import APIOptions, details, evDetails, recommendPlaces, tripadvisorDetails
+from here_search_demo.auth import Credentials
+from here_search_demo.api_options import (
+    APIOptions,
+    recommendPlaces,
+    tripadvisorDetails,
+    fuelDetails,
+    fuelPriceDetails,
+    default_options_config,
+    build_api_options,
+)
 from here_search_demo.base import OneBoxBase
 from here_search_demo.entity.endpoint import Endpoint
 from here_search_demo.entity.intent import SearchIntent
@@ -32,20 +41,6 @@ from .util import TableLogWidget
 style_refactor = True
 
 
-def _build_api_options(config, include_recommend_places: bool) -> APIOptions:
-    options = {}
-    for endpoint, base_options in config.items():
-        endpoint_options = list(base_options)
-        if (
-            include_recommend_places
-            and endpoint in recommendPlaces.endpoints
-            and recommendPlaces not in endpoint_options
-        ):
-            endpoint_options.append(recommendPlaces)
-        options[endpoint] = endpoint_options
-    return APIOptions(options)
-
-
 class OneBoxMap(OneBoxBase):
     default_search_box_layout = {"width": "240px"}
     default_placeholder = "free text"
@@ -54,38 +49,24 @@ class OneBoxMap(OneBoxBase):
         PlaceTaxonomyExample.taxonomy,
         PlaceTaxonomyExample.icons,
     )
-    default_options_config = {
-        Endpoint.AUTOSUGGEST: (details,),
-        Endpoint.AUTOSUGGEST_HREF: (evDetails,),
-        Endpoint.DISCOVER: (evDetails,),
-        Endpoint.BROWSE: (evDetails,),
-        Endpoint.LOOKUP: (evDetails,),
-    }
-    default_options = _build_api_options(default_options_config, include_recommend_places=True)
-    premium_ta_options_config = {
-        Endpoint.AUTOSUGGEST: (details,),
-        Endpoint.AUTOSUGGEST_HREF: (tripadvisorDetails, evDetails),
-        Endpoint.DISCOVER: (tripadvisorDetails, evDetails),
-        Endpoint.BROWSE: (tripadvisorDetails, evDetails),
-        Endpoint.LOOKUP: (tripadvisorDetails, evDetails),
-    }
-    premium_ta_options = _build_api_options(premium_ta_options_config, include_recommend_places=False)
+
+    default_options = build_api_options(default_options_config)
 
     def __init__(
         self,
-        api_key: str = None,
-        api: API = None,
-        user_profile: UserProfile = None,
-        results_limit: int = None,
-        suggestions_limit: int = None,
-        terms_limit: int = None,
-        place_taxonomy_buttons: PlaceTaxonomyButtons = None,
-        extra_api_params: dict = None,
+        credentials: Credentials | None = None,
+        user_profile: UserProfile | None = None,
+        results_limit: int | None = None,
+        suggestions_limit: int | None = None,
+        terms_limit: int | None = None,
+        place_taxonomy_buttons: PlaceTaxonomyButtons | None = None,
+        extra_api_params: dict | None = None,
         on_map: bool = False,
+        fuel: bool = False,
         tripadvisor: bool = False,
         recommendations: bool = False,
         route_post: bool = False,
-        options: APIOptions = None,
+        options: APIOptions | None = None,
         **kwargs,
     ):
         self.logger = logging.getLogger("here_search")
@@ -94,18 +75,25 @@ class OneBoxMap(OneBoxBase):
         self._recommendations = recommendations
         self._route_post = route_post
 
+        self.credentials = credentials or Credentials()
+
         self.log_handler = TableLogWidget()
 
-        if not api:
-            if (opts := options) is None:
-                config = self.premium_ta_options_config if tripadvisor else self.default_options_config
-                opts = _build_api_options(config, include_recommend_places=recommendations)
-            api = API(
-                api_key=api_key,
-                options=opts,
-                log_fn=self.log_handler.log,
-                url_format_fn=self.log_handler.url_to_md_link,
-            )
+        if options is None:
+            extra = []
+            if tripadvisor:
+                extra.append(tripadvisorDetails)
+            if fuel:
+                extra.extend([fuelDetails, fuelPriceDetails])
+            if recommendations:
+                extra.append(recommendPlaces)
+            options = build_api_options(default_options_config, extra_options=extra)
+
+        api = API(
+            credentials=self.credentials,
+            options=options,
+            log_fn=self.log_handler.log,
+        )
 
         OneBoxBase.__init__(
             self,
@@ -124,7 +112,7 @@ class OneBoxMap(OneBoxBase):
             self.discover_backend_limit = max(self.discover_backend_limit, 100)
 
         self.map_w = ResponseMap(
-            api_key=self.api.api_key,
+            credentials=self.credentials,
             center=self.search_center,
             search_center_handler=self.set_search_center,
             queue=self.queue,

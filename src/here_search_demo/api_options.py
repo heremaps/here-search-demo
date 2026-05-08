@@ -80,6 +80,38 @@ class EVDetails(APIOption):
         self.values = ["ev"]
 
 
+class FuelDetails(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["fuel"]
+
+
+class TruckDetails(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST, Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["truck"]
+
+
+class FuelPriceDetails(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["fuel", "fuelPrices"]
+
+
+class TruckFuelPriceDetails(APIOption):
+    endpoints = (Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER, Endpoint.LOOKUP, Endpoint.BROWSE)
+
+    def __init__(self):
+        self.key = "show"
+        self.values = ["truck", "fuelPrices"]
+
+
 @dataclass
 class APIOptions:
     endpoint: dict[str, dict[str, str]]
@@ -107,4 +139,43 @@ details = Details()
 tripadvisorDetails = TripadvisorDetails()
 recommendPlaces = RecommendPlaces()
 evDetails = EVDetails()
+fuelDetails = FuelDetails()
+fuelPriceDetails = FuelPriceDetails()
+truckDetails = TruckDetails()
+truckFuelPriceDetails = TruckFuelPriceDetails()
 triggers400 = Triggers400()  # Can be used for tests
+
+default_options_config = {
+    Endpoint.AUTOSUGGEST: (details,),
+    Endpoint.AUTOSUGGEST_HREF: (evDetails,),
+    Endpoint.DISCOVER: (evDetails,),
+    Endpoint.BROWSE: (evDetails,),
+    Endpoint.LOOKUP: (evDetails,),
+}
+
+premium_ta_options_config = {
+    Endpoint.AUTOSUGGEST: (details,),
+    Endpoint.AUTOSUGGEST_HREF: (tripadvisorDetails, evDetails),
+    Endpoint.DISCOVER: (tripadvisorDetails, evDetails),
+    Endpoint.BROWSE: (tripadvisorDetails, evDetails),
+    Endpoint.LOOKUP: (tripadvisorDetails, evDetails),
+}
+
+premium_fuel_options_config = {
+    Endpoint.AUTOSUGGEST: (details, fuelDetails),
+    Endpoint.AUTOSUGGEST_HREF: (fuelPriceDetails, evDetails),
+    Endpoint.DISCOVER: (fuelPriceDetails, evDetails),
+    Endpoint.BROWSE: (fuelPriceDetails, evDetails),
+    Endpoint.LOOKUP: (fuelPriceDetails, evDetails),
+}
+
+
+def build_api_options(config, extra_options=()) -> APIOptions:
+    options = {}
+    for endpoint, base_options in config.items():
+        endpoint_options = list(base_options)
+        for opt in extra_options:
+            if endpoint in opt.endpoints and opt not in endpoint_options:
+                endpoint_options.append(opt)
+        options[endpoint] = endpoint_options
+    return APIOptions(options)

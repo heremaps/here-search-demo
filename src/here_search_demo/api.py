@@ -7,19 +7,17 @@
 #
 ###############################################################################
 
-import json
-import os
 from collections.abc import Callable, Mapping, Sequence
-from pathlib import Path
 from typing import Literal, cast
-from urllib.parse import parse_qsl, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlparse, urlunparse, urlencode
 
 from here_search_demo.api_options import APIOptions
+from here_search_demo.auth import Credentials
 from here_search_demo.entity.endpoint import Endpoint
 from here_search_demo.entity.request import Request
 from here_search_demo.entity.response import Response
 from here_search_demo.entity.response_data import ResponseData, make_response
-from here_search_demo.http import HTTPSession
+from here_search_demo.http import HTTPSession, IS_BROWSER_RUNTIME
 
 import orjson
 from yarl import URL
@@ -44,56 +42,37 @@ base_url = url_builder("https://{endpoint}.search.hereapi.com/v1/{endpoint}")
 
 class API:
     """
-    https://developer.here.com/documentation/geocoding-search-api/api-reference-swagger.html
+    https://docs.here.com/geocoding-and-search/reference
     """
 
-    api_key: str
-    cache: dict[str, tuple[str, Response, str]]
+    cache: dict[str, Response]
     options: dict
     lookup_has_more_details: bool
     raise_for_status: bool
 
     BASE_URL = base_url
-    CONFIG_FILES = ["demo-config.json", ".demo-config.json"]
-    CONFIG_FILE_PATHS = [
-        Path("/drive"),  # Jupyterlite default root directory for artifacts
-        Path.cwd(),  # Current working directory, to allow config file next to notebooks
-        Path(""),  # Current working directory (".")
-        Path.home(),  # User home directory
-    ]
-    if Path.cwd().parts[-1] == "notebooks":
-        CONFIG_FILE_PATHS.append(Path.cwd().parents[1])
 
     def __init__(
         self,
-        api_key: str = None,
+        credentials: Credentials | None = None,
         cache: dict | None = None,
         raise_for_status: bool = True,
         options: APIOptions | None = None,
-        log_fn: Callable[[str, bool | None, list | None], None] | None = None,
-        url_format_fn: Callable[[str], str] | None = None,
+        log_fn: Callable[[str, list | None], None] | None = None,
     ):
         """
         Creates a HERE search API instance.
-        :param api_key: your HERE API key
+        :param credentials: a :class:`Credentials` instance; one is created automatically when omitted
         :param cache: a Cache object supporting the MutableMapping protocol. By default, set to a dict
         :param raise_for_status: set to True to raise HTTPResponseError if HTTP status code is not 200
         :param options: a set of APIOptions objects
         :param log_fn: optional logging callback, e.g. ``TableLogWidget.log``
-        :param url_format_fn: optional URL formatting callback used for caching formatted URLs,
-                              e.g. ``TableLogWidget.url_to_md_link``; defaults to identity
         """
-        if api_key is not None:
-            self.api_key = api_key
-        elif os.environ.get("API_KEY") is not None:
-            self.api_key = os.environ["API_KEY"]
-        else:
-            self.api_key = self._load_config()["apiKey"]
+        self._credentials: Credentials = credentials or Credentials()
 
         self.cache = cache or {}
         self.raise_for_status = raise_for_status
-        self.log_fn: Callable[[str, bool | None, list | None], None] | None = log_fn
-        self.url_format_fn: Callable[[str], str] = url_format_fn or (lambda u: u)
+        self.log_fn: Callable[[str, list | None], None] | None = log_fn
         if options:
             self.options = options.endpoint
             self.lookup_has_more_details = options.lookup_has_more_details
@@ -101,16 +80,15 @@ class API:
             self.options = {}
             self.lookup_has_more_details = False
 
-    @classmethod
-    def _load_config(cls) -> dict:
-        for config_dir in cls.CONFIG_FILE_PATHS:
-            for config_file in cls.CONFIG_FILES:
-                config_path = config_dir / config_file
-                if config_path.exists():
-                    with config_path.open("r") as f:
-                        config = json.loads(f.read())
-                        return config
-        raise FileNotFoundError("No configuration file found in expected locations.")
+    @property
+    def api_key(self) -> str | None:
+        """Return the current API key from credentials."""
+        return self._credentials.api_key
+
+    @property
+    def credentials(self) -> Credentials:
+        """Return the credentials object."""
+        return self._credentials
 
     async def send(self, session: HTTPSession, method: Literal["GET", "POST"], request: Request) -> Response:
         """Returns from HERE Search backend the response for a specific Request, or from the cache if it has been cached.
@@ -124,27 +102,61 @@ class API:
         if cache_key in self.cache:
             return self.__uncache(cache_key)
 
-        params = {k: ",".join(v) if isinstance(v, list) else v for k, v in request.params.items()}
-        params["apiKey"] = self.api_key
-
-        url, payload, headers = await self.do_send(
-            session, method, request.url, params, request.data, request.x_headers
+        _, payload, rsp_headers = await self.do_send(
+            session,
+            method,
+            request.base_url,
+            request.params,
+            request.data,
+            request.x_headers,
         )
-        formatted_url = self.url_format_fn(url)
-        x_headers = self.get_x_headers(headers)
-        self.do_log(formatted_url, formatted=True)
-
-        # Preserve full response headers in Response.x_headers so callers/tests
-        # can access all values (including X-* headers) directly.
+        rsp_x_headers = self.get_x_headers(rsp_headers)
         immutable_payload = make_response(cast(ResponseData, payload)) if isinstance(payload, dict) else payload
-        response = Response(data=immutable_payload, req=request, x_headers=x_headers)
-
-        self.cache[cache_key] = (url, response, formatted_url)
+        response = Response(data=immutable_payload, req=request, x_headers=rsp_x_headers)
+        self.cache[cache_key] = response
+        self.do_log(request)
         return response
+
+    def _build_display_urls(self, request: Request) -> tuple[str, str]:
+        """Build log_url (Markdown label) and browser_url (clickable href) for a request."""
+        params = request.params or {}
+        endpoint_str = (request.base_url or "").rsplit("/", 1)[-1]
+
+        log_parts: list[str] = []
+        browser_params: dict[str, str] = {}
+        for k, v in params.items():
+            if k == "route":
+                log_parts.append("route=...")
+                browser_params["route"] = v
+            elif k == "show" and "fuelPrices" in v:
+                stripped = v.replace("fuelPrices,", "").replace(",fuelPrices", "").replace("fuelPrices", "")
+                if stripped:
+                    log_parts.append(f"show={stripped}")
+                    browser_params["show"] = stripped
+            else:
+                log_parts.append(f"{k}={v}")
+                browser_params[k] = v
+
+        log_url = f"/{endpoint_str}?{'&'.join(log_parts)}" if log_parts else f"/{endpoint_str}"
+
+        api_key = self._credentials.api_key
+        browser_qs = urlencode(browser_params)
+        if api_key:
+            browser_qs += f"&apiKey={api_key}"
+        browser_url = f"{request.base_url}?{browser_qs}" if browser_qs else request.base_url
+
+        return log_url, browser_url
 
     def get_x_headers(self, headers: Mapping[str, str]) -> dict:
         """Extract X-* headers from a full headers dict."""
         return {k: v for k, v in headers.items() if k.lower().startswith("x-")}
+
+    def auth_headers(self) -> dict:
+        """Return HTTP request headers with Bearer token in ``Authorization`` field.
+
+        :return: authorization tokens
+        """
+        return {"Authorization": f"Bearer {self._credentials.token}"}
 
     async def do_send(
         self,
@@ -155,23 +167,31 @@ class API:
         data: str | None,
         headers: dict,
     ) -> tuple[str | URL, dict, Mapping[str, str]]:  # pragma: no cover
-        headers = headers or {}
-        async with session.request(method, url, params=params, data=data, headers=headers or {}) as get_response:
-            headers: Mapping[str, str] = get_response.headers
+        if IS_BROWSER_RUNTIME:
+            token = await self._credentials.atoken
+        else:
+            token = self._credentials.token
+        req_headers = {"Authorization": f"Bearer {token}"}
+        if headers:
+            req_headers.update(headers)
+
+        async with session.request(method, url, params=params, data=data, headers=req_headers) as get_response:
+            rsp_headers: Mapping[str, str] = get_response.headers
             text = await get_response.text()
             self.raise_for_status and get_response.raise_for_status()
             payload = orjson.loads(text)
-        return get_response.url, payload, headers
+        return get_response.url, payload, rsp_headers
 
-    def do_log(self, url: str, formatted: bool | None = None, extra_columns: list | None = None) -> None:
-        """Send a log message to the configured sink, if any."""
+    def do_log(self, request: Request, extra_columns: list | None = None) -> None:
+        """Build display URLs for the request and send a log entry to the configured sink, if any."""
         if self.log_fn is not None:
-            self.log_fn(url, formatted, extra_columns)
+            log_url, browser_url = self._build_display_urls(request)
+            self.log_fn(f"[{log_url}]({browser_url})", extra_columns)
 
     def __uncache(self, cache_key):
-        actual_url, cached_response, formatted_url = self.cache[cache_key]
+        cached_response = self.cache[cache_key]
         response = Response(data=cached_response.data, x_headers=cached_response.x_headers, req=cached_response.req)
-        self.do_log(formatted_url, formatted=True, extra_columns=["(cached)"])
+        self.do_log(cached_response.req, extra_columns=["(cached)"])
         return response
 
     async def autosuggest(
@@ -182,7 +202,7 @@ class API:
         longitude: float,
         route: str | None = None,
         all_along: bool | None = None,
-        x_headers: dict = None,
+        x_headers: dict | None = None,
         **kwargs,
     ) -> Response:
         """
@@ -211,7 +231,7 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST,
-            url=type(self).BASE_URL[Endpoint.AUTOSUGGEST],
+            base_url=type(self).BASE_URL[Endpoint.AUTOSUGGEST],
             params=params,
             data=data,
             x_headers=x_headers,
@@ -224,7 +244,7 @@ class API:
         href: str,
         route: str | None = None,
         all_along: bool | None = None,
-        x_headers: dict = None,
+        x_headers: dict | None = None,
         **kwargs,
     ) -> Response:
         """
@@ -253,7 +273,7 @@ class API:
 
         request = Request(
             endpoint=Endpoint.AUTOSUGGEST_HREF,
-            url=urlunparse(href_details._replace(query="")),  # TODO: fix bytes/str incoonsisteny
+            base_url=urlunparse(href_details._replace(query="")),  # TODO: fix bytes/str incoonsisteny
             params=dict(params),
             data=data,
             x_headers=x_headers,
@@ -268,7 +288,7 @@ class API:
         longitude: float,
         route: str | None = None,
         all_along: bool | None = None,
-        x_headers: dict = None,
+        x_headers: dict | None = None,
         **kwargs,
     ) -> Response:
         """
@@ -297,7 +317,7 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.DISCOVER,
-            url=type(self).BASE_URL[Endpoint.DISCOVER],
+            base_url=type(self).BASE_URL[Endpoint.DISCOVER],
             params=params,
             data=data,
             x_headers=x_headers,
@@ -314,7 +334,7 @@ class API:
         chains: Sequence[str] | None = None,
         route: str | None = None,
         all_along: bool | None = None,
-        x_headers: dict = None,
+        x_headers: dict | None = None,
         **kwargs,
     ) -> Response:
         """
@@ -353,14 +373,14 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.BROWSE,
-            url=type(self).BASE_URL[Endpoint.BROWSE],
+            base_url=type(self).BASE_URL[Endpoint.BROWSE],
             params=params,
             data=data,
             x_headers=x_headers,
         )
         return await self.send(session, method, request)
 
-    async def lookup(self, session: HTTPSession, id: str, x_headers: dict = None, **kwargs) -> Response:
+    async def lookup(self, session: HTTPSession, id: str, x_headers: dict | None = None, **kwargs) -> Response:
         """
         Calls HERE Search Lookup for a specific id
 
@@ -375,14 +395,14 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.LOOKUP,
-            url=type(self).BASE_URL[Endpoint.LOOKUP],
+            base_url=type(self).BASE_URL[Endpoint.LOOKUP],
             params=params,
             x_headers=x_headers,
         )
         return await self.send(session, "GET", request)
 
     async def reverse_geocode(
-        self, session: HTTPSession, latitude: float, longitude: float, x_headers: dict = None, **kwargs
+        self, session: HTTPSession, latitude: float, longitude: float, x_headers: dict | None = None, **kwargs
     ) -> Response:
         """
         Calls HERE Reverse Geocode for a geo position
@@ -399,7 +419,7 @@ class API:
         params.update(kwargs)
         request = Request(
             endpoint=Endpoint.REVGEOCODE,
-            url=type(self).BASE_URL[Endpoint.REVGEOCODE],
+            base_url=type(self).BASE_URL[Endpoint.REVGEOCODE],
             params=params,
             x_headers=x_headers,
         )

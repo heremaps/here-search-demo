@@ -19,19 +19,6 @@ RED='\033[0;31m'
 YELLOW='\033[33m'
 NC='\033[0m'
 
-patch_wheel() {
-    local package_name=$1
-    local directory=$2
-    local wheel_file=$(find "$directory" -name "${package_name}-*.whl" | sort -V | tail -n 1)
-    local temp_dir=$(mktemp -d)
-
-    wheel unpack "$wheel_file" -d "$temp_dir"
-    sed -i.bak '/Requires/d' "$(find "$temp_dir" -name METADATA)"
-    wheel pack "$(dirname "$(find "$temp_dir" -name "*.dist-info")")" -d $directory
-
-    rm -rf "$temp_dir"
-}
-
 printf "${YELLOW}Build workspace${NC}\n"
 rm -rf workspace
 mkdir -p workspace/content-xeus workspace/content-pyodide
@@ -43,22 +30,36 @@ else
   python -m pip -q install --upgrade pip
 fi
 
-printf "${YELLOW}Create venv-xeus${NC}\n"
-pushd workspace
-python -m venv venv-xeus
-source venv-xeus/bin/activate
+add_credentials_file () {
+    local directory=$1
+    cat <<EOF >$directory/credentials.properties.txt
+here.token.endpoint.url = https://account.api.here.com/oauth2/token
+here.access.key.id = ...
+here.access.key.secret = ...
+here.api.key = ...
+#here.token.scope = ...
+EOF
+}
 
-printf "${YELLOW}Install jupyter/xeus packages:${NC}\n"
-$pip_cmd install jupyter_server jupyterlite-core jupyterlite-xeus libarchive-c
+process_for_xeus() {
+    printf "${YELLOW}Create venv-xeus${NC}\n"
+    pushd workspace
+    mkdir -p content-xeus
+    python -m venv venv-xeus
+    source venv-xeus/bin/activate
 
-printf "${YELLOW}Copy static content for jupyterlite-xeus site${NC}\n"
-cp "$NOTEBOOKS_DIR"/obm*.ipynb content-xeus/
-cp "$NOTEBOOKS_DIR"/demo.ipynb content-xeus/
-cp "$ROOT_DIR/demo-config-example.json" content-xeus/demo-config.json
+    printf "${YELLOW}Install jupyter/xeus packages:${NC}\n"
+    $pip_cmd install jupyter_server jupyterlite-core jupyterlite-xeus libarchive-c
 
-ls -l content-xeus
+    printf "${YELLOW}Copy static content for jupyterlite-xeus site${NC}\n"
+    cp "$NOTEBOOKS_DIR"/obm*.ipynb content-xeus/
+    # Use gl-demo.ipynb internally, demo.ipynb on github
+    # cp "$NOTEBOOKS_DIR"/demo.ipynb content-xeus/
+    cp "$NOTEBOOKS_DIR"/gl-demo.ipynb content-xeus/demo.ipynb
+    add_credentials_file content-xeus
+    ls -l content-xeus
 
-cat << eof > environment.yml
+    cat << eof > environment.yml
 name: xeus-kernels
 channels:
   - https://prefix.dev/emscripten-forge-dev
@@ -76,75 +77,87 @@ dependencies:
 
 eof
 
-jupyter lite build \
-    --contents content-xeus \
-    --output-dir public \
-    --XeusAddon.environment_file=$(pwd)/environment.yml \
-    --XeusAddon.mount_jupyterlite_content=True \
-    --XeusAddon.mounts="$ROOT_DIR/src/here_search_demo:/lib/python3.13/site-packages/here_search_demo"
+    jupyter lite build \
+        --contents content-xeus \
+        --output-dir public \
+        --XeusAddon.environment_file=$(pwd)/environment.yml \
+        --XeusAddon.mount_jupyterlite_content=True \
+        --XeusAddon.mounts="$ROOT_DIR/src/here_search_demo:/lib/python3.13/site-packages/here_search_demo"
 
-deactivate
-printf "${YELLOW}Create venv-pyodide${NC}\n"
-python -m venv venv-pyodide
-source venv-pyodide/bin/activate
+    deactivate
+    popd
+}
 
-printf "${YELLOW}Install jupyter/pyodide packages:${NC}\n"
-# https://pyodide.org/en/stable/usage/packages-in-pyodide.html
-$pip_cmd install build \
-  -e '..[route]' \
-  jupyter_server jupyterlab_server jupyterlite-core jupyterlite-pyodide-kernel libarchive-c \
-  "orjson==3.10.16" "shapely==2.0.7"
+process_for_pyodide() {
+    printf "${YELLOW}Create venv-pyodide${NC}\n"
+    pushd workspace
+    mkdir -p content-pyodide
+    python -m venv venv-pyodide
+    source venv-pyodide/bin/activate
 
-printf "${YELLOW}Build here-search-demo wheel${NC}\n"
-python -m build "$ROOT_DIR" --wheel --outdir content-pyodide --skip-dependency-check
+    printf "${YELLOW}Install jupyter/pyodide packages:${NC}\n"
+    # https://pyodide.org/en/stable/usage/packages-in-pyodide.html
+    $pip_cmd install build \
+      -e '..[route]' \
+      jupyter_server jupyterlab_server jupyterlite-core jupyterlite-pyodide-kernel libarchive-c
 
-printf "${YELLOW}Copy static content for jupyterlite-pyodide site${NC}\n"
-echo "{\"ContentsManager\": {\"allow_hidden\": true}}" > jupyter_lite_config.json
-cp content-xeus/demo.ipynb content-xeus/obm_{1,2,3}*.ipynb content-pyodide
-cat << EOP | python
-from importlib import import_module
+    printf "${YELLOW}Build here-search-demo wheel${NC}\n"
+    python -m build "$ROOT_DIR" --wheel --outdir content-pyodide --skip-dependency-check
+
+    printf "${YELLOW}Copy static content for jupyterlite-pyodide site${NC}\n"
+    cp "$NOTEBOOKS_DIR"/obm*.ipynb content-pyodide/
+    cp "$NOTEBOOKS_DIR"/demo.ipynb content-pyodide/
+    add_credentials_file content-pyodide
+    cat << EOP | python
+import re, tomllib
 from importlib.metadata import version
-PKGS = ["here_search_demo", "ipyleaflet", "flexpolyline", "ipywidgets", "orjson", "pyproj", "shapely", "xyzservices", "yarl"]
-pkgs = ", ".join(
-    f'"emfs:{n}-{version(n)}-py3-none-any.whl"'
-    if n.startswith("here_")
-    else f'"{n}=={version(n)}"'
-    for n in PKGS
-)
+proj = tomllib.load(open("$ROOT_DIR/pyproject.toml", "rb"))
+def pkg_name(dep):
+    return re.split(r"[>=<!;\[ ]", dep)[0].strip()
+exclude = {"aiohttp"}  # replaced by pyfetch on emscripten
+deps = proj["project"]["dependencies"]
+route_deps = proj["project"]["optional-dependencies"]["route"]
+pkgs = [pkg_name(d) for d in deps + route_deps if pkg_name(d) not in exclude]
+
+v = version("here_search_demo")
+pkg_list = f'"emfs:here_search_demo-{v}-py3-none-any.whl", ' + ", ".join(f'"{p}"' for p in pkgs)
 with open("content-pyodide/install.py", "wt") as f:
-    f.write("import piplite\nasync def _():\n"
-        f"  packages = [{pkgs}]\n"   # <- now {pkgs} is evaluated
+    f.write(f"import piplite\nasync def _():\n"
+        f"  packages = [{pkg_list}]\n"
         "  await piplite.install(packages, keep_going=True)\n")
 EOP
-cat content-pyodide/install.py
+    cat content-pyodide/install.py
 
-# Add a pyodide pipeline related install line
-if ! command -v jq &> /dev/null; then
-    printf "${RED}jq is required to patch the notebooks${NC}\n"
-    exit 1
-fi
-for nb in content-pyodide/demo.ipynb content-pyodide/obm*.ipynb; do
-    [ -f "$nb" ] || continue
-    jq '
-        .cells |= map(
-        if .cell_type == "code" then
-            .source |= ["from install import _; await _()\n"] + .
-        else
-            .
-        end)
-    ' "$nb" > notebook.tmp && mv notebook.tmp "$nb"
-done
-cp content-xeus/demo-config.json content-pyodide/demo-config.json
+    # Add a pyodide pipeline related install line
+    if ! command -v jq &> /dev/null; then
+        printf "${RED}jq is required to patch the notebooks${NC}\n"
+        exit 1
+    fi
+    for nb in content-pyodide/demo.ipynb content-pyodide/obm*.ipynb; do
+        [ -f "$nb" ] || continue
+        jq '
+            .cells |= map(
+            if .cell_type == "code" then
+                .source |= ["from install import _; await _()\n"] + .
+            else
+                .
+            end)
+        ' "$nb" > notebook.tmp && mv notebook.tmp "$nb"
+    done
 
-ls -l content-pyodide
+    ls -l content-pyodide
 
-jupyter lite build \
-    --contents content-pyodide \
-    --output-dir public/pyodide \
-    --lite-dir public/pyodide
+    jupyter lite build \
+        --contents content-pyodide \
+        --output-dir public/pyodide \
+        --lite-dir public/pyodide
 
-deactivate
-popd
+    deactivate
+    popd
+}
+
+process_for_xeus
+process_for_pyodide
 
 printf "${YELLOW}Done${NC}\n"
 cat << eof

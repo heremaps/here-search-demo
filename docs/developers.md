@@ -34,6 +34,11 @@ To test the jupyterlite page locally, run from the local git repository:
 By default, JupyterLite uses the [browser storage][1] to store settings and site preferences. 
 It is sometimes helpful to clear in the browser settings the `127.0.0.1` site data to not use a stale state. 
 
+Reference: 
+- https://jupyterlite.readthedocs.io/en/stable/
+- https://emscripten-forge.org/blog/
+- https://xeus-python-kernel.readthedocs.io/en/latest/
+
 
 ### Inject a lat/lon using geojs.io
 
@@ -47,6 +52,18 @@ your IP, please check the [GeoJS Terms Of Service][3].
    from here_search_demo.util import get_lat_lon
    latitude, longitude = await get_lat_lon()
    ```
+
+### Python 3.14
+
+`here-search-demo` is supporting Python 3.14 on JupyterLab, but not on jupyter-xeus:
+emscripten-forge [recipe](https://github.com/emscripten-forge/recipes/blob/main/recipes/recipes_emscripten/python/recipe.yaml) for python is currently at 3.13.1, not 3.14
+
+### Python 3.15
+
+Python 3.15 is interesting because of its async profiler. At the time of writing (11/3/2026), 
+following packages were not available on Python 3.15 (`3.15.0a8`): 
+- `rdps-py` needed by the `lab` extra (actually by the `jupyterlab` package)
+- `pyproj` needed by the `route` extra
 
 ### Update the package
 

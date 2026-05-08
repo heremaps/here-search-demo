@@ -8,17 +8,19 @@
 ###############################################################################
 
 import asyncio
+from html import escape
 import re
 import time
 from collections.abc import Callable
 from urllib.parse import urlparse
 
-from ipyleaflet import GeoJSON, Popup, wait_for_change
+from ipyleaflet import DivIcon, GeoJSON, Marker, Popup, wait_for_change
 from IPython.display import JSON as IJSON, display as Idisplay
 from ipywidgets import HTML, Button, HBox, Label, Layout, Output, VBox, Widget
-from traitlets import Any
+from traitlets import Int
 
 from here_search_demo.entity.intent import SearchIntent
+from here_search_demo.entity.place import ev_category_ids, gas_category_ids
 from here_search_demo.entity.response import LocationResponseItem, Response
 from here_search_demo.entity.response_data import LocationDataItemDict, PlaceDataItemDict
 from here_search_demo.widgets.state import MapState, SearchState
@@ -41,10 +43,10 @@ class SearchResultList(VBox):
 
     def __init__(
         self,
-        widget: Widget = None,
-        max_results_number: int = None,
-        queue: asyncio.Queue = None,
-        layout: dict = None,
+        widget: Widget | None = None,
+        max_results_number: int | None = None,
+        queue: asyncio.Queue | None = None,
+        layout: dict | None = None,
         **kwargs,
     ):
         self.widget = widget or Output()
@@ -54,23 +56,23 @@ class SearchResultList(VBox):
         self.futures = []
         super().__init__([self.widget], **kwargs)
 
-    def _display(self, resp: Response, intent: SearchIntent = None) -> Widget:
+    def _display(self, resp: Response, intent: SearchIntent | None = None) -> Widget:
         raise NotImplementedError()
 
-    def _modify(self, resp: Response, intent: SearchIntent = None) -> Widget:
+    def _modify(self, resp: Response, intent: SearchIntent | None = None) -> Widget:
         raise NotImplementedError()
 
     def _clear(self):
         return Output(layout=self.layout)
 
-    def display(self, resp: Response, intent: SearchIntent = None) -> None:
+    def display(self, resp: Response, intent: SearchIntent | None = None) -> None:
         # https://github.com/jupyterlab/jupyterlab/issues/3151#issuecomment-339476572
         old_out = self.children[0]
         out = self._display(resp, intent=intent)
         self.children = [out]
         old_out.close()
 
-    def modify(self, resp: Response, intent: SearchIntent = None) -> None:
+    def modify(self, resp: Response, intent: SearchIntent | None = None) -> None:
         self._modify(resp, intent=intent)
 
     def clear(self):
@@ -81,14 +83,34 @@ class SearchResultList(VBox):
 
 
 class SearchResultJson(SearchResultList):
-    def _display(self, resp: Response, intent: SearchIntent = None) -> Widget:
-        out: Output = self._clear()
+    _pool_size = 20
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._pool: list[Output] = [Output(layout=self.layout) for _ in range(self._pool_size)]
+        self._pool_index = 0
+
+    def _display(self, resp: Response, intent: SearchIntent | None = None) -> Widget:
+        out: Output = self._next_output()
         out.append_display_data(IJSON(dict(resp.data), expanded=True, root="data"))
         out.append_display_data(IJSON(resp.x_headers, expanded=True, root="headers"))
         return out
 
     def _clear(self) -> Output:
-        return Output(layout=self.layout)
+        return self._next_output()
+
+    def _next_output(self) -> Output:
+        out = self._pool[self._pool_index]
+        self._pool_index += 1
+        if self._pool_index >= self._pool_size:
+            # Pool exhausted — recycle: close all old widgets and create fresh ones
+            for w in self._pool:
+                w.close()
+            self._pool = [Output(layout=self.layout) for _ in range(self._pool_size)]
+            self._pool_index = 0
+            out = self._pool[self._pool_index]
+            self._pool_index += 1
+        return out
 
 
 class DetailsMixin:
@@ -105,7 +127,20 @@ class DetailsMixin:
         "-289 221 -625 476 -335 254 -616 468 -624 475 -11 11 2 16 68 30 86 19 115 33 103 51 -4 6 -128 93 "
         '-276 194 -409 278 -1719 1060 -1776 1060 -6 0 -13 -6 -16 -14z"/></g></svg>'
     )
-    ev_categories = {"700-7600-0322", "700-7600-0323", "700-7600-0324"}
+    fuel_icon = (
+        '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">'
+        '<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="12px" height="12px; margin-right:4px; margin-top:2px;" '
+        'viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"><g fill="#000000" stroke="none">'
+        '<rect x="10" y="30" width="45" height="60" rx="4"/>'
+        '<rect x="18" y="38" width="29" height="18" rx="2" fill="white"/>'
+        '<rect x="55" y="20" width="8" height="40" rx="2"/>'
+        '<rect x="63" y="20" width="18" height="8" rx="2"/>'
+        '<rect x="75" y="28" width="8" height="25" rx="4"/>'
+        '<rect x="55" y="56" width="28" height="8" rx="2"/>'
+        "</g></svg>"
+    )
+    ev_categories = set(ev_category_ids)
+    fuel_categories = set(gas_category_ids)
     ta_logo = """<div style='display: flex; align-items: center; margin: 0px;'>
                  <!-- See https://developer-tripadvisor.com/content-api/business-content/images -->
                  <img src='https://static.tacdn.com/img2/brand_refresh_2025/logos/logo.svg' style='height: 14px; margin-right: 4px;' />
@@ -190,17 +225,27 @@ class DetailsMixin:
                         line = f"{line} [{number_of_connectors}]</div>"
                         html_parts.append(line)
 
+            if category_id in self.fuel_categories and "extended" in data:
+                for fuel_type_element in data["extended"].get("fuelStation", {}).get("fuelTypes", []):
+                    fuel_type = fuel_type_element.get("type")
+                    price_element = fuel_type_element.get("price")
+                    price_txt = ""
+                    if isinstance(price_element, dict):
+                        amount = price_element.get("amount")
+                        currency = price_element.get("currency")
+                        price_txt = f" - {amount} {currency}"
+
+                    html_parts.append(
+                        f"<div style='margin: 0; padding: 0; line-height: 1.2;'>{self.fuel_icon}{fuel_type}{price_txt}</div>"
+                    )
+
             contacts = data.get("contacts", [])
-            for contact_type in ("phone", "www", "email"):
+            for contact_type in ("phone", "www"):
                 contact = self.__get_labeled_contact_item(contacts, contact_type, category_id)
                 if contact:
                     if contact_type == "www":
                         html_parts.append(
                             f"<div style='margin: 0; padding: 0; line-height: 1.2;'><a href='{contact}' target='_blank'>{urlparse(contact).netloc or contact}</a></div>"
-                        )
-                    elif contact_type == "email":
-                        html_parts.append(
-                            f"<div style='margin: 0; padding: 0; line-height: 1.2;'><a href='mailto:{contact}'>{contact}</a></div>"
                         )
                     else:
                         html_parts.append(f"<div style='margin: 0; padding: 0; line-height: 1.2;'>{contact}</div>")
@@ -314,7 +359,7 @@ class DebouncedButton(Button):
         "display": "flex",
     }
 
-    def __init__(self, *args, debounce_ms: int = None, **kwargs):
+    def __init__(self, *args, debounce_ms: int | None = None, **kwargs):
         super().__init__(*args, layout=Layout(**DebouncedButton.default_layout), **kwargs)
         self._debounce_interval = (debounce_ms or self.default_debounce_ms) / 1000
         self._last_click_time = 0.0
@@ -345,16 +390,16 @@ class DebouncedButton(Button):
 
 
 class SearchResultButton(DebouncedButton):
-    rank = Any(allow_none=True)
+    rank = Int(allow_none=True, default_value=None)
 
     def __init__(self, queue: asyncio.Queue, **kwargs):
         kwargs = kwargs.pop("layout", {})
         DebouncedButton.__init__(self, **kwargs)
 
-    def set_metadata(self, rank: int, icon: str, title: str):
+    def set_metadata(self, rank: int, icon: str, description: str):
         self.rank = rank
         self.icon = icon
-        self.description = title
+        self.description = description
 
 
 class SearchResultButtonBox(HBox):
@@ -374,6 +419,9 @@ class SearchResultButtonBox(HBox):
             **kvargs,
         )
         self.add_class("result-button")
+        self._cached_handler = self._button_handler()
+        self._current_expanded = False
+        self.button.set_handler(self._cached_handler)
 
     def _button_handler(self) -> Callable[["SearchResultButton"], None]:
         def handle(button: SearchResultButton):
@@ -400,16 +448,20 @@ class SearchResultButtonBox(HBox):
         item = self.state.get_item(rank)
         if not item:
             return
-        self.label.value = f"{rank + 1: <2}"
+        new_label = f"{rank + 1: <2}"
+        if self.label.value != new_label:
+            self.label.value = new_label
         icon = self.state.icon_for(rank)
-        title = self.state.title_for(rank)
-        self.button.set_metadata(rank=rank, icon=icon, title=title)
-        self.button.set_handler(self._button_handler())
-        if rank in self.state.expanded_ranks:
-            details = ResultDetailsBox(item.data)
-            self.button_box.children = [self.button, details]
-        else:
-            self.button_box.children = [self.button]
+        description = self.state.title_for(rank)
+        self.button.set_metadata(rank=rank, icon=icon, description=description)
+        expanded = rank in self.state.expanded_ranks
+        if expanded != self._current_expanded:
+            self._current_expanded = expanded
+            if expanded:
+                details = ResultDetailsBox(item.data)
+                self.button_box.children = [self.button, details]
+            else:
+                self.button_box.children = [self.button]
 
 
 class SearchResultButtons(VBox):
@@ -421,30 +473,25 @@ class SearchResultButtons(VBox):
 
     def __init__(
         self,
-        widget: Widget = None,
-        max_results_number: int = None,
-        queue: asyncio.Queue = None,
+        widget: Widget | None = None,
+        max_results_number: int | None = None,
+        queue: asyncio.Queue | None = None,
         state: SearchState | None = None,
-        layout: dict = None,
+        layout: dict | None = None,
         **kwargs,
     ):
         self.queue = queue or asyncio.Queue()
         self.layout = Layout(**(layout or self.default_layout))
         self.layout.overflow_y = self.default_overflow_y
         self.layout.overflow_x = self.default_overflow_x
-        super().__init__([widget or Output()], layout=self.layout, **kwargs)
+        self._inner_box = VBox([], layout=self.layout)
+        super().__init__([self._inner_box], layout=self.layout, **kwargs)
 
         self.state = state or SearchState()
         self._max = max_results_number or self.default_max_results_count
         self.buttons = [SearchResultButtonBox(self.queue, self.state) for _ in range(self._max)]
 
-    def display(self, resp: Response, intent: SearchIntent = None) -> None:
-        old_out: Output | VBox = self.children[0]
-        if isinstance(old_out, VBox):
-            old_out.close()
-        else:
-            old_out.close()
-
+    def display(self, resp: Response, intent: SearchIntent | None = None) -> None:
         self.state.hydrate(resp)
         visible_ranks = self.state.ranks()
         for rank in visible_ranks:
@@ -452,14 +499,16 @@ class SearchResultButtons(VBox):
                 self.buttons[rank].render(rank)
 
         try:
-            out = VBox(children=[self.buttons[rank] for rank in visible_ranks], layout=self.layout)
+            new_children = tuple(self.buttons[rank] for rank in visible_ranks)
         except IndexError:
             import traceback
 
             traceback.print_exc()
             print(f"rank={rank} len(visible_ranks)={len(visible_ranks)} len(self.buttons)={len(self.buttons)}")
             raise
-        self.children = [out]
+
+        if new_children != self._inner_box.children:
+            self._inner_box.children = new_children
 
     def apply_style(self) -> None:
         # (SearchResultButton.__init__ already calls add_class("result-button")).
@@ -470,7 +519,7 @@ class SearchResultButtons(VBox):
             )
             SearchResultButtons._style_applied = True
 
-    def modify(self, resp: Response, intent: SearchIntent = None) -> None:
+    def modify(self, resp: Response, intent: SearchIntent | None = None) -> None:
         target_rank = intent.materialization.rank
         self.state.update_item(target_rank, resp.data, resp)
         if target_rank < len(self.buttons):
@@ -488,7 +537,7 @@ class ResponseMap(PositionMap, DetailsMixin):
 
     def __init__(
         self,
-        queue: asyncio.Queue = None,
+        queue: asyncio.Queue | None = None,
         state: SearchState | None = None,
         search_center_handler: Callable[[tuple[float, float]], None] = None,
         **kwargs,
@@ -496,8 +545,46 @@ class ResponseMap(PositionMap, DetailsMixin):
         self.queue = queue
         self.state = state or SearchState()
         self.collection = None
+        self.fuel_text_markers: list[Marker] = []
         self.map_state = MapState()
         super().__init__(position_handler=search_center_handler, **kwargs)
+
+    @staticmethod
+    def _fuel_price_text(price_element) -> str | None:
+        if isinstance(price_element, dict):
+            amount = price_element.get("amount")
+            currency = price_element.get("currency")
+            if amount is not None and currency:
+                return f"{amount} {currency}"
+            if amount is not None:
+                return f"{amount}"
+            return None
+        if price_element is not None:
+            return str(price_element)
+        return None
+
+    @classmethod
+    def _diesel_price_text(cls, item: dict) -> str | None:
+        fuel_types = item.get("extended", {}).get("fuelStation", {}).get("fuelTypes", [])
+        for fuel_type in fuel_types:
+            fuel_name = str(fuel_type.get("name") or fuel_type.get("type") or fuel_type.get("id") or "")
+            if "diesel" not in fuel_name.lower():
+                continue
+            return cls._fuel_price_text(fuel_type.get("price"))
+        return None
+
+    @classmethod
+    def _gas_station_label_parts(cls, item: dict) -> tuple[str, str | None] | None:
+        """Return ``(title, diesel_price_text | None)`` or *None* if the item is not a fuel station."""
+        primary_category = next((c for c in item.get("categories", []) if c.get("primary")), None)
+        category_id = primary_category.get("id") if primary_category else None
+        if category_id not in cls.fuel_categories:
+            return None
+        title = item.get("title")
+        if not title:
+            return None
+        diesel_price = cls._diesel_price_text(item)
+        return title, f"diesel: {diesel_price}" if diesel_price else None
 
     async def _fit_bounds(self, bounds):
         (b_south, b_west), (b_north, b_east) = bounds
@@ -566,20 +653,62 @@ class ResponseMap(PositionMap, DetailsMixin):
             "fillColor": ResponseMap.item_color(feature),
         }
 
-    def display(self, resp: Response, intent: SearchIntent = None, fit: bool = False):
+    def display(self, resp: Response, intent: SearchIntent | None = None, fit: bool = False):
         if self.collection:
             self.remove(self.collection)
             self.collection = None
+        for marker in self.fuel_text_markers:
+            try:
+                self.remove(marker)
+            except Exception:
+                pass
+        self.fuel_text_markers = []
         self.close_popups()
         bbox = resp.bbox()
         if bbox:
+            geojson_data = resp.geojson()
             self.collection = GeoJSON(
-                data=resp.geojson(),
+                data=geojson_data,
                 show_bubble=True,
                 point_style=ResponseMap.default_point_style,
                 style_callback=ResponseMap.style_callback,
             )
             self.add(self.collection)
+
+            for feature in geojson_data.get("features", []):
+                item = feature.get("properties", {})
+                lng, lat = feature["geometry"]["coordinates"]
+                # For fuel stations, optionally show diesel price on a second line
+                label_parts = self._gas_station_label_parts(item)
+                if label_parts:
+                    _, diesel_text = label_parts
+                    second_line = f"<br>{escape(diesel_text)}" if diesel_text else ""
+                else:
+                    second_line = ""
+                icon_height = 40 if second_line else 20
+                icon_anchor_y = icon_height // 2
+                label_html = (
+                    "<style>"
+                    ".leaflet-marker-pane .leaflet-div-icon {"
+                    "  background: transparent !important;"
+                    "  border: none !important;"
+                    "  box-shadow: none !important;"
+                    "  pointer-events: none !important;"
+                    "}"
+                    "</style>"
+                    "<div style='margin-left: 12px; white-space: nowrap; font-size: 13px; "
+                    "padding: 1px 4px; "
+                    "text-shadow: 0 0 6px #fff, 0 0 10px #fff, 0 0 14px #fff, 0 0 18px #fff, 0 0 22px #fff;'>"
+                    f"<b>{escape(item['title'])}</b>{second_line}"
+                    "</div>"
+                )
+                marker = Marker(
+                    location=(lat, lng),
+                    draggable=False,
+                    icon=DivIcon(html=label_html, icon_size=[250, icon_height], icon_anchor=[0, icon_anchor_y]),
+                )
+                self.fuel_text_markers.append(marker)
+                self.add(marker)
             if fit and bbox[0] != bbox[1] and bbox[2] != bbox[3]:
                 south, north, east, west = bbox
                 height = north - south

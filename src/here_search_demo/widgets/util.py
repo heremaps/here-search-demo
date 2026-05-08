@@ -7,13 +7,11 @@
 #
 ###############################################################################
 
-import urllib.parse
 
 from IPython.core.interactiveshell import InteractiveShell
 from IPython.display import Markdown, display as Idisplay
 from ipyleaflet import Map
 from ipywidgets import Layout, Output as OutputBase
-from yarl import URL
 
 
 class Output(OutputBase):
@@ -47,8 +45,8 @@ class Output(OutputBase):
 class TableLogWidget:
     """Lightweight widget that renders log lines as a Markdown table.
 
-    Designed to be used with API.log_fn: pass ``TableLogWidget.log``
-    as the callback and ``TableLogWidget.url_to_md_link`` as url_format_fn.
+    Designed to be used with API.log_fn: pass ``TableLogWidget.log`` as the callback.
+    URLs are formatted as Markdown links by ``API.do_log`` before reaching this widget.
     """
 
     default_separator = "|"
@@ -60,32 +58,9 @@ class TableLogWidget:
         self.fmt = InteractiveShell.instance().display_formatter.format
         self.columns_count = 1
 
-    @staticmethod
-    def url_to_md_link(url: str) -> str:
-        human_readable_url = URL(url).human_repr()
-        parts = urllib.parse.urlparse(human_readable_url)
-        endpoint_str = parts.path.rsplit("/", 1)[-1]
-        params = urllib.parse.parse_qs(parts.query, keep_blank_values=True)
-        params.pop("apiKey", None)
-        if "route" in params:
-            params["route"] = ["..."]  # hide route details for better readability
-        params_str = urllib.parse.unquote(
-            urllib.parse.urlencode({k: ",".join(v) if isinstance(v, list) else v for k, v in params.items()})
-        )
-        if params_str:
-            # Label shows relative path + cleaned query; href is full original URL
-            return f"[/{endpoint_str}?{params_str}]({url})"
-        else:
-            return f"[/{endpoint_str}]({url})"
-
-    def log(self, url: str, formatted: bool = False, extra_columns: list | None = None) -> None:
-        """Append a single log line to the table.
-
-        ``url`` is rendered as a Markdown link unless ``formatted`` is True,
-        in which case it is assumed to be pre-formatted (e.g. cached).
-        """
-        formatted_url = self.url_to_md_link(url) if not formatted else url
-        columns = [formatted_url]
+    def log(self, url: str, extra_columns: list | None = None) -> None:
+        """Append a single pre-formatted log line to the table."""
+        columns = [url]
         if extra_columns:
             columns.extend(extra_columns)
         formatted_record = "|".join(columns)
@@ -116,7 +91,7 @@ class FakeRouteController:
     all_along = None
     fake = True
 
-    def __init__(self, map_instance: Map):
+    def __init__(self, map_instance: Map, credentials=None):
         pass
 
     def get_route_select_options(self):

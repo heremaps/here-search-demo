@@ -68,8 +68,9 @@ def test_details_mixin_html_includes_place_metadata(details_tester):
 
     assert "Open" in html
     assert "Type 2" in html  # connector info
-    assert "+123" in html and "mailto:info@example.com" in html
+    assert "+123" in html
     assert "example.com" in html  # website anchor text
+    assert "mailto:" not in html  # email is excluded
     assert "https://img" in html
     assert "Great!" in html
 
@@ -83,6 +84,49 @@ def test_details_mixin_html_handles_non_place(details_tester):
     html = details_tester.html(data)
     assert "Public Park" in html
     assert "<div" in html
+
+
+def test_details_mixin_html_includes_fuel_types_with_price(details_tester):
+    data = {
+        "resultType": "place",
+        "title": "Fuel Hub",
+        "address": {"label": "Fuel Hub, 1 Main St, City"},
+        "categories": [{"primary": True, "id": "700-7600-0116", "name": "Gas Station"}],
+        "openingHours": [],
+        "extended": {
+            "fuelStation": {
+                "fuelTypes": [
+                    {"type": "diesel", "available": True, "price": {"amount": 1.789, "currency": "EUR", "unit": "l"}},
+                ]
+            }
+        },
+    }
+
+    html = details_tester.html(data)
+
+    assert "diesel" in html
+    assert "1.789 EUR" in html
+
+
+def test_details_mixin_html_includes_fuel_types_without_price(details_tester):
+    data = {
+        "resultType": "place",
+        "title": "Fuel Hub",
+        "address": {"label": "Fuel Hub, 1 Main St, City"},
+        "categories": [{"primary": True, "id": "700-7600-0116", "name": "Gas Station"}],
+        "openingHours": [],
+        "extended": {
+            "fuelStation": {
+                "fuelTypes": [
+                    {"type": "e10"},
+                ]
+            }
+        },
+    }
+
+    html = details_tester.html(data)
+
+    assert "e10" in html
 
 
 @pytest.mark.parametrize(
@@ -153,6 +197,66 @@ def test_response_map_style_callback_delegates_to_item_color(monkeypatch):
 
     assert called["feature"] is feature
     assert style == {"fillColor": "purple"}
+
+
+def test_response_map_diesel_price_text_extracts_price():
+    item = {
+        "extended": {
+            "fuelStation": {
+                "fuelTypes": [
+                    {"type": "diesel", "price": {"amount": 1.789, "currency": "EUR"}},
+                    {"type": "e10", "price": {"amount": 1.699, "currency": "EUR"}},
+                ]
+            }
+        }
+    }
+
+    assert ResponseMap._diesel_price_text(item) == "1.789 EUR"
+
+
+def test_response_map_gas_station_label_parts_includes_station_name_and_diesel_price():
+    item = {
+        "title": "Fuel Hub",
+        "categories": [{"primary": True, "id": "700-7600-0116", "name": "Gas Station"}],
+        "extended": {
+            "fuelStation": {
+                "fuelTypes": [
+                    {"type": "diesel", "price": {"amount": 1.789, "currency": "EUR"}},
+                ]
+            }
+        },
+    }
+
+    assert ResponseMap._gas_station_label_parts(item) == ("Fuel Hub", "diesel: 1.789 EUR")
+
+
+def test_response_map_gas_station_label_parts_no_diesel():
+    item = {
+        "title": "Fuel Hub",
+        "categories": [{"primary": True, "id": "700-7600-0116", "name": "Gas Station"}],
+        "extended": {
+            "fuelStation": {
+                "fuelTypes": [
+                    {"type": "e10", "price": {"amount": 1.699, "currency": "EUR"}},
+                ]
+            }
+        },
+    }
+
+    title, diesel_text = ResponseMap._gas_station_label_parts(item)
+    assert title == "Fuel Hub"
+    assert diesel_text is None
+
+
+def test_response_map_gas_station_label_parts_no_fuel_types():
+    item = {
+        "title": "Fuel Hub",
+        "categories": [{"primary": True, "id": "700-7600-0116", "name": "Gas Station"}],
+    }
+
+    title, diesel_text = ResponseMap._gas_station_label_parts(item)
+    assert title == "Fuel Hub"
+    assert diesel_text is None
 
 
 class _FakeGeoJSON:
@@ -235,6 +339,7 @@ class _StubResponseMap(ResponseMap):
         self.queue = queue
         self.state = state
         self.collection = None
+        self.fuel_text_markers = []
         self.map_state = MapState()
         self.added = []
         self.removed = []

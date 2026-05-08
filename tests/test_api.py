@@ -14,13 +14,34 @@ import pytest
 
 import here_search_demo as demo
 from here_search_demo.api import API
+from here_search_demo.auth import Credentials
 from here_search_demo.entity.request import Request
 from here_search_demo.entity.endpoint import Endpoint
 
 
 @pytest.fixture
-def api():
-    return API(api_key="api_key")
+def api(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("HERE_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("HERE_ACCESS_KEY_SECRET", raising=False)
+    monkeypatch.delenv("HERE_TOKEN_ENDPOINT_URL", raising=False)
+    monkeypatch.delenv("HERE_API_KEY", raising=False)
+    monkeypatch.setenv("API_KEY", "api_key")
+    monkeypatch.chdir(tmp_path)
+    return API(credentials=Credentials())
+
+
+@pytest.fixture
+def credentials_api(monkeypatch, tmp_path):
+    """API instance backed by a Credentials object with only an api_key."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("HERE_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("HERE_ACCESS_KEY_SECRET", raising=False)
+    monkeypatch.delenv("HERE_TOKEN_ENDPOINT_URL", raising=False)
+    monkeypatch.delenv("HERE_API_KEY", raising=False)
+    monkeypatch.setenv("API_KEY", "creds_api_key")
+    monkeypatch.chdir(tmp_path)
+    return API(credentials=Credentials())
 
 
 @pytest.fixture
@@ -69,7 +90,7 @@ def session():
 def a_dummy_request():
     return Request(
         endpoint=Endpoint.AUTOSUGGEST,
-        url="url",
+        base_url="url",
         params={"p1": "v1", "p2": "v2"},
         data=None,
         x_headers={"X-Request-Id": "userid", "X-Correlation-ID": "correlationId"},
@@ -208,3 +229,15 @@ async def test_revgeocode(api, revgeocode_request, session):
             session=session, latitude=latitude, longitude=longitude, x_headers=revgeocode_request.x_headers
         )
     send.assert_called_once_with(session, "GET", revgeocode_request)
+
+
+def test_api_key_from_credentials_api_key(credentials_api):
+    """When Credentials has no token but has an api_key, use that."""
+    assert credentials_api.api_key == "creds_api_key"
+
+
+@pytest.mark.asyncio
+async def test_send_uses_credentials_api_key(credentials_api, a_dummy_request, session):
+    """send() injects the credential-derived api_key into params."""
+    response = await credentials_api.send(session, "GET", a_dummy_request)
+    assert response.data == {"items": []}
