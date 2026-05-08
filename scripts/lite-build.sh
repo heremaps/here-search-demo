@@ -53,9 +53,7 @@ process_for_xeus() {
 
     printf "${YELLOW}Copy static content for jupyterlite-xeus site${NC}\n"
     cp "$NOTEBOOKS_DIR"/obm*.ipynb content-xeus/
-    # Use gl-demo.ipynb internally, demo.ipynb on github
-    # cp "$NOTEBOOKS_DIR"/demo.ipynb content-xeus/
-    cp "$NOTEBOOKS_DIR"/gl-demo.ipynb content-xeus/demo.ipynb
+    cp "$NOTEBOOKS_DIR"/demo.ipynb content-xeus/
     add_credentials_file content-xeus
     ls -l content-xeus
 
