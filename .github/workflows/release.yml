@@ -25,13 +25,13 @@ jobs:
           python -m build --sdist --wheel
       - name: Prepare demo notebooks
         run: |
-          cp demo-config-example.json notebooks/demo-config.json
+          cp example-credentials.properties notebooks/credentials.properties
       - name: Package demo notebooks
         run: |
           NOTEBOOKS_DIR=notebooks
           rm -f here-search-demo-notebooks.zip
           zip -j here-search-demo-notebooks.zip \
-            "$NOTEBOOKS_DIR/demo-config.json" \
+            "$NOTEBOOKS_DIR/credentials.properties" \
             "$NOTEBOOKS_DIR"/*.ipynb
       - name: Publish package
         uses: pypa/gh-action-pypi-publish@release/v1
