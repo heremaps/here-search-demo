@@ -251,6 +251,10 @@ class HTTPSession(_ContextManagerMixing):
         Generic async HTTP request (GET, HEAD, etc). Use method=... in kwargs.
         """
         encoded_url, data, headers, kwargs = HTTPSession.prepare(url, **kwargs)
+        if headers:
+            kwargs["headers"] = headers
+        if data is not None:
+            kwargs["body"] = data
         res = await pyfetch(encoded_url, **kwargs)
         return ClientResponse(encoded_url, res.js_response, res.status)
 

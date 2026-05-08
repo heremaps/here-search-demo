@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from here_search_demo.api import API
+from here_search_demo.auth import Credentials
 from here_search_demo.base import OneBoxSimple
 from here_search_demo.entity.endpoint import AutosuggestConfig, BrowseConfig, DiscoverConfig, Endpoint, LookupConfig
 from here_search_demo.entity.intent import SearchIntent
@@ -35,8 +36,13 @@ def api_key():
 
 
 @pytest.fixture
-def api(api_key):
-    return API(api_key=api_key)
+def api(api_key, monkeypatch):
+    monkeypatch.delenv("HERE_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("HERE_ACCESS_KEY_SECRET", raising=False)
+    monkeypatch.delenv("HERE_API_KEY", raising=False)
+    monkeypatch.delenv("HERE_TOKEN_ENDPOINT_URL", raising=False)
+    monkeypatch.setenv("API_KEY", api_key)
+    return API(credentials=Credentials())
 
 
 @pytest.fixture
@@ -48,7 +54,7 @@ def x_headers():
 def a_dummy_request(x_headers):
     return Request(
         endpoint=Endpoint.AUTOSUGGEST,
-        url="url",
+        base_url="url",
         params={"p1": "v1", "p2": "v2"},
         x_headers=x_headers,
     )
@@ -94,7 +100,7 @@ def context(lat_lon):
 def autosuggest_request(context, instant_query_text, x_headers):
     return Request(
         endpoint=Endpoint.AUTOSUGGEST,
-        url=API.BASE_URL[Endpoint.AUTOSUGGEST],
+        base_url=API.BASE_URL[Endpoint.AUTOSUGGEST],
         params={
             "q": instant_query_text,
             "at": f"{context.latitude},{context.longitude}",
@@ -107,7 +113,7 @@ def autosuggest_request(context, instant_query_text, x_headers):
 def autosuggest_href_request(context, x_headers):
     return Request(
         endpoint=Endpoint.AUTOSUGGEST_HREF,
-        url=API.BASE_URL[Endpoint.DISCOVER],
+        base_url=API.BASE_URL[Endpoint.DISCOVER],
         params={
             "foo": "bar",
         },
@@ -153,7 +159,7 @@ def category_query_response_item(autosuggest_response):
 def discover_request(context, query_text, x_headers):
     return Request(
         endpoint=Endpoint.DISCOVER,
-        url=API.BASE_URL[Endpoint.DISCOVER],
+        base_url=API.BASE_URL[Endpoint.DISCOVER],
         params={
             "q": query_text,
             "at": f"{context.latitude},{context.longitude}",
@@ -176,7 +182,7 @@ def discover_browse_response(discover_request):
 def browse_request(context, query_text, x_headers):
     return Request(
         endpoint=Endpoint.BROWSE,
-        url=API.BASE_URL[Endpoint.BROWSE],
+        base_url=API.BASE_URL[Endpoint.BROWSE],
         params={
             "at": f"{context.latitude},{context.longitude}",
         },
@@ -188,7 +194,7 @@ def browse_request(context, query_text, x_headers):
 def browse_categories_request(context, query_text, x_headers):
     return Request(
         endpoint=Endpoint.BROWSE,
-        url=API.BASE_URL[Endpoint.BROWSE],
+        base_url=API.BASE_URL[Endpoint.BROWSE],
         params={
             "categories": "foo",
             "at": f"{context.latitude},{context.longitude}",
@@ -201,7 +207,7 @@ def browse_categories_request(context, query_text, x_headers):
 def browse_cuisines_request(context, query_text, x_headers):
     return Request(
         endpoint=Endpoint.BROWSE,
-        url=API.BASE_URL[Endpoint.BROWSE],
+        base_url=API.BASE_URL[Endpoint.BROWSE],
         params={
             "foodTypes": "bar,foo",
             "at": f"{context.latitude},{context.longitude}",
@@ -214,7 +220,7 @@ def browse_cuisines_request(context, query_text, x_headers):
 def browse_chains_request(context, query_text, x_headers):
     return Request(
         endpoint=Endpoint.BROWSE,
-        url=API.BASE_URL[Endpoint.BROWSE],
+        base_url=API.BASE_URL[Endpoint.BROWSE],
         params={
             "chains": "1,2,3",
             "at": f"{context.latitude},{context.longitude}",
@@ -227,7 +233,7 @@ def browse_chains_request(context, query_text, x_headers):
 def lookup_request(context, location_id, x_headers):
     return Request(
         endpoint=Endpoint.LOOKUP,
-        url=API.BASE_URL[Endpoint.LOOKUP],
+        base_url=API.BASE_URL[Endpoint.LOOKUP],
         params={
             "id": location_id,
         },
@@ -239,7 +245,7 @@ def lookup_request(context, location_id, x_headers):
 def revgeocode_request(lat_lon, x_headers):
     return Request(
         endpoint=Endpoint.REVGEOCODE,
-        url=API.BASE_URL[Endpoint.REVGEOCODE],
+        base_url=API.BASE_URL[Endpoint.REVGEOCODE],
         params={
             "at": f"{lat_lon[0]},{lat_lon[1]}",
         },
@@ -342,6 +348,10 @@ def session(session_response):
 @pytest.fixture(scope="session")
 def app():
     environ["API_KEY"] = "api_key"
+    environ.pop("HERE_ACCESS_KEY_ID", None)
+    environ.pop("HERE_ACCESS_KEY_SECRET", None)
+    environ.pop("HERE_API_KEY", None)
+    environ.pop("HERE_TOKEN_ENDPOINT_URL", None)
     return OneBoxSimple()
 
 

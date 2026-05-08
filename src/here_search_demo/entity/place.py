@@ -44,11 +44,19 @@ class PlaceTaxonomy:
         self.items = {i.name: i for i in items or []}
 
     def __getattr__(self, item_name: str):
-        return self.items[item_name]
+        try:
+            return self.items[item_name]
+        except KeyError as exc:
+            # Introspection (help/inspect) expects AttributeError for unknown attrs.
+            raise AttributeError(item_name) from exc
 
     def __repr__(self):
         items = ", ".join(map(str, self.items.values()))
         return f"{self.name}({items})"
+
+
+gas_category_ids = ["700-7600-0000", "700-7600-0116", "700-7600-0444"]
+ev_category_ids = ["700-7600-0322", "700-7600-0323", "700-7600-0324"]
 
 
 # fmt: off
@@ -58,8 +66,8 @@ class PlaceTaxonomyExample:
             #                --------------------------------------------------------------------
             #                | item name | categories     | food types | chains  | icon         |
             #                --------------------------------------------------------------------
-            (PlaceTaxonomyItem("gas", ["700-7600-0000", "700-7600-0116", "700-7600-0444"], None, None), "fa-gas-pump"),
-            (PlaceTaxonomyItem("ev", ["700-7600-0322"], None, None), "fa-charging-station"),
+            (PlaceTaxonomyItem("gas", gas_category_ids, None, None), "fa-gas-pump"),
+            (PlaceTaxonomyItem("ev", ev_category_ids, None, None), "fa-charging-station"),
             (PlaceTaxonomyItem("eat", ["100"], None, None), "fa-utensils"),
             (PlaceTaxonomyItem("sleep", ["500-5000"], None, None), "fa-bed"),
             (PlaceTaxonomyItem("park", ["400-4300", "800-8500"], None, None), "fa-parking"),

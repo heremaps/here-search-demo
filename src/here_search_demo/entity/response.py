@@ -85,7 +85,7 @@ class Response:
 @dataclass
 class ResponseItemMixin(metaclass=ABCMeta):
     resp: Response = None
-    rank: int = None
+    rank: int | None = None
 
 
 @dataclass

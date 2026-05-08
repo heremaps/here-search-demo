@@ -82,13 +82,13 @@ class OneBoxSimple:
 
     def __init__(
         self,
-        api: API = None,
-        queue: asyncio.Queue = None,
-        search_center: Tuple[float, float] = None,
-        language: str = None,
-        results_limit: int = None,
-        suggestions_limit: int = None,
-        terms_limit: int = None,
+        api: API | None = None,
+        queue: asyncio.Queue | None = None,
+        search_center: Tuple[float, float] | None = None,
+        language: str | None = None,
+        results_limit: int | None = None,
+        suggestions_limit: int | None = None,
+        terms_limit: int | None = None,
         max_transient_keep: int | None = None,
         **kwargs,
     ):
@@ -276,7 +276,7 @@ class OneBoxSimple:
     ) -> None:
         pass  # pragma: no cover
 
-    def run(self, handle_search_events: Callable = None) -> "OneBoxSimple":
+    def run(self, handle_search_events: Callable | None = None) -> "OneBoxSimple":
         self._running = True
         coro = (handle_search_events or self.handle_search_events)()
         self.task = asyncio.ensure_future(coro)
@@ -360,13 +360,13 @@ class OneBoxSimple:
 class OneBoxBase(OneBoxSimple):
     def __init__(
         self,
-        user_profile: UserProfile = None,
-        api: API = None,
-        results_limit: int = None,
-        suggestions_limit: int = None,
-        terms_limit: int = None,
-        extra_api_params: dict = None,
-        initial_query: str = None,
+        user_profile: UserProfile | None = None,
+        api: API | None = None,
+        results_limit: int | None = None,
+        suggestions_limit: int | None = None,
+        terms_limit: int | None = None,
+        extra_api_params: dict | None = None,
+        initial_query: str | None = None,
         **kwargs,
     ):
         self.user_profile = user_profile or DefaultUser()
@@ -415,7 +415,7 @@ class OneBoxBase(OneBoxSimple):
             await self.adapt_language(resp)
         return intent, event, resp
 
-    def get_preferred_language(self, country_code: str = None):
+    def get_preferred_language(self, country_code: str | None = None):
         if country_code:
             return self.user_profile.get_preferred_country_language(country_code)
         else:

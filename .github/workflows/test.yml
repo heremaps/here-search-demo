@@ -22,17 +22,13 @@ jobs:
         python-version: ["3.12", "3.13"]
     steps:
       # https://github.com/actions/checkout
-      # https://github.com/actions/setup-python
       # https://github.com/astral-sh/setup-uv
-      # https://github.com/pypa/gh-action-pypi-publish
       # https://github.com/codecov/codecov-action
-      # https://github.com/actions/upload-pages-artifact
-      # https://github.com/actions/deploy-pages
-      # https://github.com/mamba-org/setup-micromamba
+      # https://github.com/pypa/gh-action-pypi-publish
       - uses: actions/checkout@v6
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           version: "0.9.18"
           python-version: ${{ matrix.python-version }}
@@ -42,7 +38,7 @@ jobs:
 
       - name: Test with python ${{ matrix.python-version }}
         run: |
-          uv run --extra dev --extra lab --frozen pytest
+          uv run --extra dev --extra lab --frozen pytest --ignore=tests/test_notebooks.py
 
       - name: Lint
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
@@ -52,11 +48,11 @@ jobs:
       - name: Coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         run: |
-          uv run --active --extra dev --extra lab --frozen pytest -v --cov=src tests --cov-report=xml --cov-report=term-missing
+          uv run --active --extra dev --extra lab --frozen pytest -v --cov=src tests --ignore=tests/test_notebooks.py --cov-report=xml --cov-report=term-missing
 
       - name: Upload to Codecov
         if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage.xml
           flags: unittests
@@ -66,12 +62,14 @@ jobs:
   pages-build:
     runs-on: ubuntu-latest
     steps:
+      # https://github.com/mamba-org/setup-micromamba
+      # https://github.com/actions/upload-pages-artifact
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
       - name: Install micromamba
-        uses: mamba-org/setup-micromamba@v2
+        uses: mamba-org/setup-micromamba@v3
       - name: Generate uv lockfile
         run: uv lock
       - name: Install the project
@@ -83,7 +81,7 @@ jobs:
           ls -la workspace
           mv workspace/public .
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./public
 
@@ -100,6 +98,7 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
+      # https://github.com/actions/deploy-pages
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -11,7 +11,8 @@ import asyncio
 import math
 from typing import Callable, Any, cast, TYPE_CHECKING
 
-from here_search_demo.http import HTTPSession
+from here_search_demo.auth import Credentials
+from here_search_demo.http import HTTPSession, IS_BROWSER_RUNTIME
 
 if TYPE_CHECKING:
     from here_search_demo.widgets.input import PositionMap
@@ -29,16 +30,17 @@ from shapely.ops import transform
 
 class RouteController:
     routing_api_tpl = (
-        "https://router.hereapi.com/v8/routes?apikey={api_key}"
-        "&origin={start_lat},{start_lon}"
+        "https://router.hereapi.com/v8/routes"
+        "?origin={start_lat},{start_lon}"
         "&destination={stop_lat},{stop_lon}"
         "&return=polyline,summary&spans=duration,dynamicSpeedInfo,length"
         "&transportMode=car"
     )
     max_waypoints_count = 2000
 
-    def __init__(self, map_instance: "PositionMap"):
+    def __init__(self, map_instance: "PositionMap", credentials: Credentials):
         self.map_instance = map_instance
+        self.credentials = credentials
         self.geojson_w: GeoJSON | None = None
         self.at_w: Marker | None = None
         self.start_w: Marker | None = None
@@ -174,15 +176,20 @@ class RouteController:
 
     async def draw_route(self):
         routing_url = self.routing_api_tpl.format(
-            api_key=self.map_instance.api_key,
             start_lat=self.start_position[0],
             start_lon=self.start_position[1],
             stop_lat=self.stop_position[0],
             stop_lon=self.stop_position[1],
         )
 
+        if IS_BROWSER_RUNTIME:
+            token = await self.credentials.atoken
+        else:
+            token = self.credentials.token
+        headers = {"Authorization": f"Bearer {token}"}
+
         async with HTTPSession() as session:
-            async with session.get(routing_url) as get_response:
+            async with session.get(routing_url, headers=headers) as get_response:
                 get_response.raise_for_status()
                 route = await get_response.json()
 

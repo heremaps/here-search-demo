@@ -33,11 +33,11 @@ class UserProfile:
         self,
         use_positioning: bool,
         share_experience: bool,
-        api: API = None,
-        start_position: Tuple[float, float] = None,
-        api_options: APIOptions = None,
-        preferred_languages: dict = None,
-        name: str = None,
+        api: API | None = None,
+        start_position: Tuple[float, float] | None = None,
+        api_options: APIOptions | None = None,
+        preferred_languages: dict | None = None,
+        name: str | None = None,
     ):
         """
         :param use_position: Mandatory opt-in/out about position usage

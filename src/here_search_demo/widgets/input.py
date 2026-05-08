@@ -25,6 +25,7 @@ from traitlets.utils.bunch import Bunch
 
 from here_search_demo.entity.intent import SearchIntent
 from here_search_demo.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
+from here_search_demo.auth import Credentials
 from here_search_demo.widgets.util import FakeRouteController
 from here_search_demo.util import set_dict_values
 
@@ -135,6 +136,7 @@ class SubmittableTextBox(HBox):
                 await asyncio.sleep(self._debounce_delay)
                 value = (self._pending_transient_value or "").strip()
                 self.state.set_query_text(value)
+                # print(value)
                 if value:
                     self._queue_put(SearchIntent(kind="transient_text", materialization=value, time=perf_counter_ns()))
                     _trim_transients(self.max_transient_keep)
@@ -191,7 +193,7 @@ class SubmittableTextBox(HBox):
         self.text_w.disabled = False
         self.lens_w.disabled = False
 
-    async def feed(self, text, delay: float = None):
+    async def feed(self, text, delay: float | None = None):
         delay = delay or SubmittableTextBox.default_simulation_delay_sec
         self.text_w.value = ""
         for ch in text:
@@ -223,9 +225,9 @@ class TermsButtons(HBox):
         target_text_box: SubmittableTextBox,
         state: SearchState,
         values: list[str] | None = None,
-        buttons_count: int = None,
+        buttons_count: int | None = None,
         index: int = -1,
-        layout: dict = None,
+        layout: dict | None = None,
     ):
         self.target_text_box = target_text_box
         self.state = state
@@ -352,11 +354,11 @@ class PositionMap(Map):
 
     def __init__(
         self,
-        api_key: str,
+        credentials: Credentials,
         center: Tuple[float, float],
         position_handler: Callable[[tuple[float, float]], None] = None,
         route_post: bool = False,
-        preferred_language: str = None,
+        preferred_language: str | None = None,
         **kvargs,
     ):
         """
@@ -364,18 +366,17 @@ class PositionMap(Map):
 
         https://github.com/geopandas/xyzservices/blob/main/provider_sources/leaflet-providers-parsed.json
 
-        :param api_key: apiKey expected by HERE basemaps
+        :param credentials: HERE credentials (provides api_key for basemaps and token for routing)
         :param center:
         :param position_handler:
         :param kvargs:
         """
-        self.api_key = api_key
-        basemap = xyzservices.providers.HERE.exploreDay
+        basemap = xyzservices.providers.HERE.liteDay
         basemap["url"] = (
             "https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png"
-            "?style=explore.day&ppi=400&size=512&apiKey={apiKey}&lang={language}"
+            "?style=lite.day&ppi=400&size=512&apiKey={apiKey}&lang={language}"
         )  # Workaround against https://github.com/geopandas/xyzservices/issues/193
-        basemap["apiKey"] = api_key
+        basemap["apiKey"] = credentials.api_key
         basemap["language"] = preferred_language or "en"
 
         Map.__init__(
@@ -403,7 +404,7 @@ class PositionMap(Map):
         self.long_press_task: asyncio.Task | None = None
 
         # Route-related logic lives in a dedicated controller.
-        self.route = RouteController(self) if route_post else FakeRouteController(self)
+        self.route = RouteController(self, credentials) if route_post else FakeRouteController(self, credentials)
 
         # Configure long-press interaction (map options for center / route).
         if RouteController != FakeRouteController:

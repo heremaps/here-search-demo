@@ -46,14 +46,14 @@ class SearchState:
         self.items_by_rank.clear()
         self.items_data_by_rank.clear()
         self.expanded_ranks.clear()
-        self.last_endpoint = resp.req.endpoint
+        self.last_endpoint = resp.req.endpoint if resp.req is not None else None
 
         for rank, item_data in self._iter_response_items(resp):
             self.items_by_rank[rank] = self._build_item(resp, item_data, rank)
             self.items_data_by_rank[rank] = item_data
 
     def update_item(self, rank: int, data: dict, resp: Response) -> None:
-        if self.last_endpoint is None:
+        if self.last_endpoint is None and resp.req is not None:
             self.last_endpoint = resp.req.endpoint
         self.items_by_rank[rank] = self._build_item(resp, data, rank)
         self.items_data_by_rank[rank] = data
@@ -90,7 +90,7 @@ class SearchState:
 
     @staticmethod
     def _iter_response_items(resp: Response):
-        if resp.req.endpoint == Endpoint.LOOKUP:
+        if resp.req is not None and resp.req.endpoint == Endpoint.LOOKUP:
             yield 0, resp.data
         else:
             for rank, item in enumerate(resp.data.get("items", [])):

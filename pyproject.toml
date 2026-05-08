@@ -9,7 +9,7 @@
 
 [build-system]
 requires = [
-    "setuptools>=82.0.0",
+    "setuptools>=82.0.1",
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
@@ -52,7 +52,7 @@ repository = "https://github.com/heremaps/here-search-demo"
 
 [project.optional-dependencies]
 lab = [
-    "ipykernel==6.31.0",  # 6.x becasue of https://github.com/jupyter-widgets/ipywidgets/issues/4012
+    "ipykernel==6.31.0",  # 6.x because of https://github.com/ipython/ipykernel/issues/1510
     "jupyterlab"
 ]
 route = [
@@ -104,7 +104,7 @@ exclude = ["*.ipynb"]
 combine-as-imports = true
 
 [bumpver]
-current_version = "0.24.2"
+current_version = "0.25.1"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true

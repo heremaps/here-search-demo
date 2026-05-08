@@ -15,7 +15,7 @@ class _FakeFormatter:
         return record.getMessage().upper()
 
 
-def test_table_log_widget_uses_url_to_md_link(monkeypatch):
+def test_table_log_widget_log_stores_preformatted_line(monkeypatch):
     class _FakeMarkdown:
         def __init__(self, text):
             self.text = text
@@ -24,7 +24,6 @@ def test_table_log_widget_uses_url_to_md_link(monkeypatch):
         def __init__(self):
             self.display_formatter = type("Formatter", (), {"format": lambda self, obj: (obj.text, {})})()
 
-    # Patch IPython/Markdown dependencies out so we only exercise our logic
     monkeypatch.setattr(
         "here_search_demo.widgets.util.InteractiveShell",
         type("S", (), {"instance": staticmethod(_FakeShell)}),
@@ -32,42 +31,28 @@ def test_table_log_widget_uses_url_to_md_link(monkeypatch):
     monkeypatch.setattr("here_search_demo.widgets.util.Markdown", _FakeMarkdown)
 
     widget = TableLogWidget()
+    md_link = "[/discover?q=test](https://discover.search.hereapi.com/v1/discover?q=test&apiKey=KEY)"
+    widget.log(md_link)
 
-    # Spy on url_to_md_link to ensure log() delegates to it
-    calls = {}
+    assert widget.lines[0].strip("| ").startswith("[/discover?")
 
-    def fake_url_to_md_link(url: str) -> str:
-        calls["url"] = url
-        return f"[LABEL]({url})"
+
+def test_table_log_widget_log_accepts_extra_columns(monkeypatch):
+    class _FakeMarkdown:
+        def __init__(self, text):
+            self.text = text
+
+    class _FakeShell:
+        def __init__(self):
+            self.display_formatter = type("Formatter", (), {"format": lambda self, obj: (obj.text, {})})()
 
     monkeypatch.setattr(
-        "here_search_demo.widgets.util.TableLogWidget.url_to_md_link",
-        staticmethod(fake_url_to_md_link),
+        "here_search_demo.widgets.util.InteractiveShell",
+        type("S", (), {"instance": staticmethod(_FakeShell)}),
     )
+    monkeypatch.setattr("here_search_demo.widgets.util.Markdown", _FakeMarkdown)
 
-    url = "https://example.com/v1/discover?q=test"
-    widget.log(url)
-
-    # log() must have called url_to_md_link with the URL
-    assert calls["url"] == url
-    # and stored the returned Markdown link in the first line
-    assert widget.lines[0].strip("| ").startswith("[LABEL](")
-
-
-def test_table_log_widget_url_to_md_link_strips_apikey_from_label():
     widget = TableLogWidget()
-    url = "https://example.com/v1/discover?q=test&apiKey=SECRET&lang=en"
+    widget.log("[/browse?at=1,2](https://browse.search.hereapi.com/v1/browse?at=1,2)", extra_columns=["(cached)"])
 
-    md = widget.url_to_md_link(url)
-
-    # Split into label and href parts
-    label, href = md.split("](")
-    label = label.lstrip("[")
-    href = href.rstrip(")")
-
-    # Label should show relative path and cleaned query (no apiKey)
-    assert label.startswith("/discover?")
-    assert "apiKey" not in label
-
-    # Href should contain the original full URL (with apiKey)
-    assert href == url
+    assert "(cached)" in widget.lines[0]

@@ -20,15 +20,17 @@ This prevents importing the browser transport in regular notebooks where the
 HTTPConnectionError("js module unavailable; lite.py requires a browser runtime").
 """
 
-_IS_BROWSER_RUNTIME = False
+IS_BROWSER_RUNTIME = False
 try:  # pragma: no cover
     import js  # type: ignore[attr-defined]
-except ImportError:  # pragma: no cover
+
+    js.Object
+except (ImportError, AttributeError):  # pragma: no cover
     js = None  # type: ignore[assignment]
 else:  # pragma: no cover
-    _IS_BROWSER_RUNTIME = True
+    IS_BROWSER_RUNTIME = True
 
-if _IS_BROWSER_RUNTIME:
+if IS_BROWSER_RUNTIME:
     from .lite import HTTPConnectionError, HTTPResponseError, HTTPSession
 else:
     from aiohttp import (
@@ -37,4 +39,4 @@ else:
         ClientSession as HTTPSession,
     )
 
-__all__ = ["HTTPSession", "HTTPConnectionError", "HTTPResponseError"]
+__all__ = ["HTTPSession", "HTTPConnectionError", "HTTPResponseError", "IS_BROWSER_RUNTIME"]

@@ -173,14 +173,15 @@ async def test_search_events_preprocess_and_postprocess_are_noops():
     assert await app.search_event_postprocess(None, None, None, session) is None
 
 
-def test_run_and_stop(monkeypatch):
+@pytest.mark.asyncio
+async def test_run_and_stop(monkeypatch):
     app = OneBoxSimple()
-    fut = asyncio.Future()
+    fut = asyncio.get_running_loop().create_future()
     fut.set_result(None)
     monkeypatch.setattr(asyncio, "ensure_future", lambda coro: fut)
     app.run(lambda: fut)
     assert app.task is fut
-    asyncio.run(app.stop())
+    await app.stop()
     assert app.task.cancelled() or app.task.done()
 
 

@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from here_search_demo.auth import Credentials
 from here_search_demo.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
 from here_search_demo.widgets.input import (
     PlaceTaxonomyButton,
@@ -28,6 +29,11 @@ from here_search_demo.widgets.state import SearchState
 @pytest.fixture
 def queue():
     return MagicMock(spec=asyncio.Queue)
+
+
+@pytest.fixture
+def credentials():
+    return Credentials()
 
 
 def test_submittable_text_on_submit_and_handle_msg():
@@ -91,13 +97,13 @@ def test_placetaxonomybuttons_default_button(queue):
     assert isinstance(ptb.buttons[0], PlaceTaxonomyButton)
 
 
-def test_positionmap_set_position_handler():
+def test_positionmap_set_position_handler(credentials):
     called = []
 
     def handler(latlon):
         called.append(latlon)
 
-    map_obj = PositionMap(api_key="key", center=(1.0, 2.0), position_handler=handler)
+    map_obj = PositionMap(credentials=credentials, center=(1.0, 2.0), position_handler=handler)
     map_obj.center = (3.0, 4.0)
     assert tuple(called[-1]) == (3.0, 4.0)
 
@@ -166,13 +172,13 @@ def test_placetaxonomybuttons_default_fallback(queue):
     assert ptb.buttons[0].item.name == "_"
 
 
-def test_positionmap_set_position_handler_zoom(monkeypatch):
+def test_positionmap_set_position_handler_zoom(monkeypatch, credentials):
     called = []
 
     def handler(latlon):
         called.append(latlon)
 
-    map_obj = PositionMap(api_key="key", center=(1.0, 2.0))
+    map_obj = PositionMap(credentials=credentials, center=(1.0, 2.0))
     observers = []
 
     def fake_observe(fn, names=None):
@@ -190,8 +196,8 @@ def test_positionmap_set_position_handler_zoom(monkeypatch):
     assert tuple(called[-1]) == (1.0, 2.0)
 
 
-def test_positionmap_observer_registration(monkeypatch):
-    map_obj = PositionMap(api_key="key", center=(1.0, 2.0))
+def test_positionmap_observer_registration(monkeypatch, credentials):
+    map_obj = PositionMap(credentials=credentials, center=(1.0, 2.0))
     called = []
 
     def handler(lat, lon):
@@ -206,3 +212,28 @@ def test_positionmap_observer_registration(monkeypatch):
     map_obj.bind_position_handler(handler)
     assert len(observed) == 1
     assert callable(observed[0])
+
+
+def test_positionmap_has_no_api_key_attribute(credentials):
+    """api_key must not leak onto the map instance; it belongs to the route controller."""
+    map_obj = PositionMap(credentials=credentials, center=(1.0, 2.0))
+    assert not hasattr(map_obj, "api_key")
+
+
+def test_route_controller_stores_credentials(credentials):
+    """RouteController must own the Credentials, not an api_key borrowed from the map."""
+    from here_search_demo.widgets.util import FakeRouteController
+
+    map_obj = PositionMap(credentials=credentials, center=(1.0, 2.0))
+    # FakeRouteController is used when route_post=False (the default).
+    assert isinstance(map_obj.route, FakeRouteController)
+
+    # When route_post=True the real RouteController is used (requires the
+    # optional 'route' extras; skip gracefully if not installed).
+    try:
+        from here_search_demo.widgets.route import RouteController
+    except ImportError:
+        return
+    map_route = PositionMap(credentials=credentials, center=(1.0, 2.0), route_post=True)
+    assert isinstance(map_route.route, RouteController)
+    assert map_route.route.credentials is credentials
