@@ -4,37 +4,55 @@
 [![pyodide-badge][10b]][3b]
 
 
-# HERE Search notebooks
+# HERE Search demo
 
-A set of widgets and notebooks demonstrating the use of [HERE Geocoding & Search][4] endpoints `/autosuggest`,  `/discover`, `/browse`, and `/lookup`.
+A set of widgets and notebooks demonstrating the use of [HERE Geocoding & Search][4] endpoints `/autosuggest`,  `/discover`, `/browse`, `/lookup` and `/signals`.
 
-![searching for pizza][11]
 
-Requirements: a [HERE API key][1] and a Python environment. Note that HERE Base Plan [Pricing][5] allows you to get started for free.
+<table>
+  <tr>
+    <td><img src="https://github.com/heremaps/here-search-demo/raw/main/docs/screenshot_ta.jpg"/></td>
+    <td><img src="https://github.com/heremaps/here-search-demo/raw/main/docs/screenshot_fuel.jpg"/></td>
+  </tr>
+</table>
 
-| Use Case            | Installation                                          |
-|:--------------------|:------------------------------------------------------|
-| Online use          | Run the notebooks [in your browser][3]                |
-| Local use           | [Install and try locally](#install-and-try-locally)   |
-| Package maintenance | [Install from the sources](#install-from-the-sources) |
+Requirements: [HERE credentials][1] (both API key and Oauth2 key/secret) and a Python environment. Note that HERE Base Plan [Pricing][5] allows you to get started for free.
+
+| Use Case    | Installation                                          |
+|:------------|:------------------------------------------------------|
+| Online use  | Run the notebooks [in your browser][3]                |
+| Local use   | [Install and try locally](#install-and-try-locally)   |
+| Development | [Install from the sources](#install-from-the-sources) |
 
 ## 0-install use
 
-`here-search-demo` notebooks are available for immediate use in a [Github page][3] hosting a JupyterLite instance based on the `xeus` stack (CPython running on `xeus-python` kernel). 
+`here-search-demo` notebooks are available for immediate use in a [Github page][3] hosting a JupyterLite instance based on the `xeus` stack (CPython running on `xeus-python` kernel).
 
 A version of these pages based on the Pyodide stack and the `jupyterlite-pyodide-kernel` is also available [here][3b]. 
 
 ## Install and try locally
 
-If you want to use the library and try it through existing notebooks, do:
+If you want to use the library and notebooks in a local JupyterLab, do:
 
-1. Install the widgets:
+1. Install the widgets into a `virtualenv`/`venv`:
    ```shell
    uv pip install 'here-search-demo[lab,route]'
    ```
    
-2. Grab the notebooks from the [GitHub release asset][12]
-3. Add your [HERE API key][1] to `demo-config.json` file.
+2. Extract the notebooks and `credentials.properties` the [GitHub release asset][12]
+3. Keep `credentials.properties` in the same directory as the notebooks and update it with your [HERE credentials][1].
+4. Link the virtual environment to a IPython kernel:
+
+   ```shell
+   python -m ipykernel install \
+     --prefix $(python -c "import sys; print(sys.prefix)") \
+     --name search_demo --display-name "search demo"
+   ```
+
+5. Start JupyterLab and browse to the notebooks' directory:
+   ```shell
+   python -m jupyterlab
+   ```
 
 ## Install from the sources
 
@@ -45,7 +63,7 @@ If you need to maintain this package:
    uv pip install -e '.[dev,lab,route]'
    ```
 
-2. Copy `example-credentials.properties` to `notebooks/credentials.properties` and update the later one with your [HERE credentials][1].
+2. Copy `example-credentials.properties` to `notebooks/credentials.properties` and update it with your [HERE credentials][1].
 
 3. Link the virtual environment to a IPython kernel:
 
@@ -55,7 +73,12 @@ If you need to maintain this package:
      --name search_demo --display-name "search demo"
    ```
 
-4. Start either
+4. Run the tests to check the installation:
+   ```shell
+   pytest -v
+   ```
+
+5. Start either
 
      - JupyterLab:
        ```shell
@@ -87,7 +110,6 @@ This project is licensed under the MIT license - see the [LICENSE](./LICENSE) fi
 [7]: https://github.com/heremaps/here-search-demo/actions/workflows/test.yml
 [8]: https://codecov.io/gh/heremaps/here-search-demo/branch/main/graph/badge.svg?token=MVFCS4BUFN
 [9]: https://codecov.io/gh/heremaps/here-search-demo
-[11]: https://github.com/heremaps/here-search-demo/raw/main/docs/screenshot.jpg
 [10]: https://img.shields.io/badge/try-lite%20now-f7dc1e.svg?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0Ni43IDQ2LjciPgogIDxwYXRoCiAgICBmaWxsPSIjNDBCM0MzIgogICAgZD0iTTUgMGMyLjUuOCA0LjUgMiA0LjYgMi4xIDEuOSAxLjMgMy42IDMuMSA0LjggNS4xLjQuNiA1LjIgNy44IDguNiAxMi45LS44IDEuMi0xLjUgMi4zLTIuMSAzLjEgMC0uMS0uMS0uMS0uMS0uMkMxNy42IDE3LjkgMTEuNCA4LjYgMTEgNy45Yy0uOS0xLjMtMi0yLjUtMy41LTMuNCAwIDAtMS41LTEtMy41LTEuNkMzLjIgMi42IDEuOCAyLjQgMCAyLjJ2NDIuNGMxLjgtLjIgMy4yLS40IDQtLjcgMi0uNiAzLjUtMS42IDMuNS0xLjYgMS41LTEgMi43LTIuMiAzLjUtMy40LjQtLjcgNi42LTkuOSAxMC4xLTE1LjJDMjQgMTkuMSAzMS40IDguMSAzMS45IDcuM2MxLjItMiAyLjktMy44IDQuOC01LjEgMC0uMSAyLjEtMS4zIDQuNi0yLjFMNDEuOCAwSDV6CiAgICAgICBNNDYuNyAyLjJjLTEuOC4yLTMuMi40LTQgLjctMi4xLjYtMy42IDEuNi0zLjYgMS42LTEuNS45LTIuNiAyLjEtMy41IDMuNC0uNC43LTYuNiA5LjktMTAuMSAxNS4yLTIuOSA0LjQtMTAuMyAxNS41LTEwLjggMTYuMi0xLjIgMi0yLjkgMy44LTQuOCA1LjEgMCAuMS0yLjEgMS4zLTQuNiAyLjFsLS41LjFoMzYuOGwtLjQtLjFjLTIuNS0uOC00LjUtMi00LjYtMi4xLTEuOS0xLjMtMy42LTMuMS00LjgtNS4xLS40LS42LTUuMi03LjgtOC42LTEyLjkuOC0xLjIgMS41LTIuMyAyLjEtMy4xIDAgLjEuMS4xLjEuMiAzLjUgNS4zIDkuNyAxNC41IDEwLjEgMTUuMi45IDEuMyAyIDIuNSAzLjUgMy40IDAgMCAxLjUgMSAzLjUgMS42LjguMyAyLjIuNSA0IC43VjIuMnoiCiAgLz4KPC9zdmc+Cgo=
 [10b]: https://jupyterlite.rtfd.io/en/latest/_static/badge.svg
 [12]: https://github.com/heremaps/here-search-demo/releases/latest/download/here-search-demo-notebooks.zip

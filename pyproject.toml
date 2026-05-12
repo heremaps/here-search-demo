@@ -96,6 +96,15 @@ norecursedirs = [
     "workspace",
 ]
 
+[tool.coverage.run]
+source = ["src"]
+
+[tool.coverage.report]
+omit = [
+    # Pure UI composition
+    "*/widgets/app.py",
+]
+
 [tool.ruff]
 line-length = 120
 exclude = ["*.ipynb"]
