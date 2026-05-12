@@ -69,7 +69,7 @@ async def get_lat_lon() -> Tuple[float, float]:
 is_running_in_jupyter = False if not get_ipython else get_ipython().__class__.__name__ == "ZMQInteractiveShell"
 
 
-class AsyncCPUProfiler:
+class AsyncCPUProfiler:  # pragma: no cover
     TOOL_ID = 1
 
     def __init__(self):

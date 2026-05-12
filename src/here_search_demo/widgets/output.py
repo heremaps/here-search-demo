@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from urllib.parse import urlparse
 
-from ipyleaflet import DivIcon, GeoJSON, Marker, Popup, wait_for_change
+from ipyleaflet import DivIcon, GeoJSON, Marker, Popup
 from IPython.display import JSON as IJSON, display as Idisplay
 from ipywidgets import HTML, Button, HBox, Label, Layout, Output, VBox, Widget
 from traitlets import Int
@@ -147,6 +147,20 @@ class DetailsMixin:
                  <img src='https://static.tacdn.com/img2/ratings/traveler/ss{rating}.svg' style='height: 14px;' />
                  <span style='font-size: 10px; color: #333;'>/ Reviews: {reviews}</span></div>"""
 
+    @staticmethod
+    def _fuel_price_text(price_element) -> str | None:
+        if isinstance(price_element, dict):
+            amount = price_element.get("amount")
+            currency = price_element.get("currency")
+            if amount is not None and currency:
+                return f"{amount} {currency}"
+            if amount is not None:
+                return f"{amount}"
+            return None
+        if price_element is not None:
+            return str(price_element)
+        return None
+
     def html(self, data: PlaceDataItemDict | LocationDataItemDict, image_variant: str | None = None) -> str:
         html_parts = []
 
@@ -228,12 +242,8 @@ class DetailsMixin:
             if category_id in self.fuel_categories and "extended" in data:
                 for fuel_type_element in data["extended"].get("fuelStation", {}).get("fuelTypes", []):
                     fuel_type = fuel_type_element.get("type")
-                    price_element = fuel_type_element.get("price")
-                    price_txt = ""
-                    if isinstance(price_element, dict):
-                        amount = price_element.get("amount")
-                        currency = price_element.get("currency")
-                        price_txt = f" - {amount} {currency}"
+                    price_txt_raw = self._fuel_price_text(fuel_type_element.get("price"))
+                    price_txt = f" - {price_txt_raw}" if price_txt_raw else ""
 
                     html_parts.append(
                         f"<div style='margin: 0; padding: 0; line-height: 1.2;'>{self.fuel_icon}{fuel_type}{price_txt}</div>"
@@ -549,26 +559,12 @@ class ResponseMap(PositionMap, DetailsMixin):
         self.map_state = MapState()
         super().__init__(position_handler=search_center_handler, **kwargs)
 
-    @staticmethod
-    def _fuel_price_text(price_element) -> str | None:
-        if isinstance(price_element, dict):
-            amount = price_element.get("amount")
-            currency = price_element.get("currency")
-            if amount is not None and currency:
-                return f"{amount} {currency}"
-            if amount is not None:
-                return f"{amount}"
-            return None
-        if price_element is not None:
-            return str(price_element)
-        return None
-
     @classmethod
     def _diesel_price_text(cls, item: dict) -> str | None:
         fuel_types = item.get("extended", {}).get("fuelStation", {}).get("fuelTypes", [])
         for fuel_type in fuel_types:
-            fuel_name = str(fuel_type.get("name") or fuel_type.get("type") or fuel_type.get("id") or "")
-            if "diesel" not in fuel_name.lower():
+            fuel_type_name = str(fuel_type.get("type") or fuel_type.get("name") or fuel_type.get("id") or "")
+            if fuel_type_name.lower() != "diesel":
                 continue
             return cls._fuel_price_text(fuel_type.get("price"))
         return None
@@ -585,39 +581,6 @@ class ResponseMap(PositionMap, DetailsMixin):
             return None
         diesel_price = cls._diesel_price_text(item)
         return title, f"diesel: {diesel_price}" if diesel_price else None
-
-    async def _fit_bounds(self, bounds):
-        (b_south, b_west), (b_north, b_east) = bounds
-        center = b_south + (b_north - b_south) / 2, b_west + (b_east - b_west) / 2
-        if center != self.center:
-            self.center = center
-            await wait_for_change(self, "bounds")
-
-        # Zoom out until the map contains the bounds
-        while self.zoom > 1:
-            (south, west), (north, east) = self.bounds
-            if south > b_south or north < b_north or west > b_west or east < b_east:
-                self.zoom -= 1
-                await wait_for_change(self, "bounds")
-            else:
-                break
-
-        # Zoom in as much as possible while still containing the bounds
-        while True:
-            (south, west), (north, east) = self.bounds
-            if (
-                south < b_south
-                and north > b_north
-                and west < b_west
-                and east > b_east
-                and self.zoom < ResponseMap.maximum_zoom_level
-            ):
-                self.zoom += 1
-                await wait_for_change(self, "bounds")
-            else:
-                self.zoom -= 1
-                await wait_for_change(self, "bounds")
-                break
 
     @staticmethod
     def item_color(feature) -> str:
@@ -716,7 +679,12 @@ class ResponseMap(PositionMap, DetailsMixin):
                 bounds = ((south - height / 8, west - width / 8), (north + height / 8, east + width / 8))
                 if None in (south, north, east, west):
                     return
-                asyncio.ensure_future(self._fit_bounds(bounds))
+                asyncio.create_task(self.fit_bounds(bounds))
+            elif fit:
+                # Single-point result: just recenter, keep zoom.
+                south, north, east, west = bbox
+                if None not in (south, west):
+                    asyncio.create_task(self.recenter(south, west))
 
             def show_feature_popup(event, feature, **kwargs):
                 if self.long_press_popup is not None:

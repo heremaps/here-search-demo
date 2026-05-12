@@ -18,6 +18,7 @@ from ipyleaflet import (
     Popup,
     ScaleControl,
     ZoomControl,
+    wait_for_change,
 )
 from IPython.display import display as Idisplay
 from ipywidgets import HTML, Button, Checkbox, HBox, Layout, Select, Text, VBox, Widget
@@ -136,7 +137,6 @@ class SubmittableTextBox(HBox):
                 await asyncio.sleep(self._debounce_delay)
                 value = (self._pending_transient_value or "").strip()
                 self.state.set_query_text(value)
-                # print(value)
                 if value:
                     self._queue_put(SearchIntent(kind="transient_text", materialization=value, time=perf_counter_ns()))
                     _trim_transients(self.max_transient_keep)
@@ -351,6 +351,7 @@ class PositionMap(Map):
     default_zoom_level = 12
     default_layout = {"height": "600px"}
     long_press_threshold = 0.5
+    maximum_zoom_level = 18
 
     def __init__(
         self,
@@ -430,6 +431,52 @@ class PositionMap(Map):
 
     def set_center(self, latlon: tuple[float, float]):
         self.center = latlon
+
+    async def recenter(self, lat: float, lng: float):
+        """Pan the map to (lat, lng) without changing the zoom level."""
+        await asyncio.sleep(0)
+        new_center = (lat, lng)
+        if new_center != tuple(self.center):
+            self.center = new_center
+            await wait_for_change(self, "bounds")
+
+    async def fit_bounds(self, bounds: tuple[tuple[float, float], tuple[float, float]]):
+        """Adjust center and zoom so that *bounds* is fully visible.
+
+        *bounds* is ``((south, west), (north, east))``.
+        """
+        await asyncio.sleep(0)
+        (b_south, b_west), (b_north, b_east) = bounds
+        center = b_south + (b_north - b_south) / 2, b_west + (b_east - b_west) / 2
+        if center != self.center:
+            self.center = center
+            await wait_for_change(self, "bounds")
+
+        # Zoom out until the map contains the bounds
+        while self.zoom > 1:
+            (south, west), (north, east) = self.bounds
+            if south > b_south or north < b_north or west > b_west or east < b_east:
+                self.zoom -= 1
+                await wait_for_change(self, "bounds")
+            else:
+                break
+
+        # Zoom in as much as possible while still containing the bounds
+        while True:
+            (south, west), (north, east) = self.bounds
+            if (
+                south < b_south
+                and north > b_north
+                and west < b_west
+                and east > b_east
+                and self.zoom < self.maximum_zoom_level
+            ):
+                self.zoom += 1
+                await wait_for_change(self, "bounds")
+            else:
+                self.zoom -= 1
+                await wait_for_change(self, "bounds")
+                break
 
     def long_press_handler(self, position, long_press_select_options, long_press_checkbox_options, *widgets: Widget):
         """Handle a long press at the given position.

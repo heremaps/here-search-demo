@@ -205,20 +205,47 @@ class RouteController:
         self.start_w = Marker(
             location=waypoints[0],
             popup=HTML("<b>Start</b>"),
-            icon=AwesomeIcon(color="green", name="play"),
+            icon=AwesomeIcon(name="play"),
             draggable=False,
         )
+        self.start_w.icon.color = "green"
         self.stop_w = Marker(
             location=waypoints[-1],
             popup=HTML("<b>Arrival</b>"),
-            icon=AwesomeIcon(color="blue", name="flag"),
+            icon=AwesomeIcon(name="flag"),
             draggable=False,
         )
+        self.stop_w.icon.color = "blue"
 
         self.map_instance.add(self.start_w)
         self.map_instance.add(self.stop_w)
         self.map_instance.add(self.geojson_w)
         self.draw_at()
+        # Yield to the event loop so the pending comm messages (route GeoJSON,
+        # start/stop markers) are flushed to the front-end before the caller
+        # continues.
+        await asyncio.sleep(0)
+
+        # Fit the map to the union of the route corridor and any already-displayed
+        # search results so that the full context remains visible.
+        c_west, c_south, c_east, c_north = corridor.bounds
+        collection = getattr(self.map_instance, "collection", None)
+        if collection is not None:
+            lats, lngs = [], []
+            for feature in collection.data.get("features", []):
+                coords = feature.get("geometry", {}).get("coordinates")
+                if coords and len(coords) >= 2:
+                    lngs.append(coords[0])
+                    lats.append(coords[1])
+            if lats:
+                c_south = min(c_south, min(lats))
+                c_north = max(c_north, max(lats))
+                c_west = min(c_west, min(lngs))
+                c_east = max(c_east, max(lngs))
+        h = c_north - c_south
+        w = c_east - c_west
+        bbox = ((c_south - h / 8, c_west - w / 8), (c_north + h / 8, c_east + w / 8))
+        asyncio.create_task(self.map_instance.fit_bounds(bbox))
 
     @staticmethod
     def _perpendicular_distance(
@@ -302,10 +329,11 @@ class RouteController:
             #    icon_size=[30, 30], # Adjust the bounding box
             #    icon_anchor=[15, 30] # Anchor the bottom tip to the coordinates
             # ),
-            icon=AwesomeIcon(name="car", marker_color="blue", icon_color="white", extra_classes="fa-2x"),
+            icon=AwesomeIcon(name="car", marker_color="blue", icon_color="white"),
             # icon=DivIcon(html=html),
             draggable=False,
         )
+        self.at_w.icon.extra_classes = "fa-2x"
         self.map_instance.add(self.at_w)
 
     def has_any_route_property(self) -> bool:

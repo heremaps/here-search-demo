@@ -34,7 +34,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Generate uv lockfile
-        run: uv lock
+        run: |
+          uv sync --extra route
+          uv lock
 
       - name: Test with python ${{ matrix.python-version }}
         run: |
