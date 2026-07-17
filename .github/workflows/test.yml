@@ -63,9 +63,6 @@ jobs:
       - name: Install micromamba
         uses: mamba-org/setup-micromamba@v3
 
-      - name: Download baseline
-        run: uv run --python 3.11 --extra ci python jupyterlite_build/download_gh_locked_baseline.py
-
       - name: Create page
         run: |
           uv run --active --frozen jupyterlite_build/xeus.sh
