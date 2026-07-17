@@ -35,10 +35,11 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp",
-    "ipyleaflet==0.20.0",
-    "ipywidgets==8.1.8",
+    "flexpolyline",
+    "ipyleaflet",
+    "ipywidgets",
     "orjson",
-    "xyzservices==2025.11.0",
+    "shapely",
     "yarl",
 ]
 dynamic = ["version"]
@@ -52,13 +53,24 @@ repository = "https://github.com/heremaps/here-search-demo"
 
 [project.optional-dependencies]
 lab = [
-    "ipykernel==6.31.0",  # 6.x because of https://github.com/ipython/ipykernel/issues/1510
+    "ipykernel",
     "jupyterlab"
 ]
-route = [
-    "flexpolyline==0.1.0",
-    "pyproj==3.7.2",
-    "shapely",
+pyodide_notebook_build = [
+  "jupyter_server",
+  # "notebook",  # Do not add the notebook package
+  "jupyterlab_server",
+  "jupyterlite-core",
+  "jupyterlite-pyodide-kernel",
+  "libarchive-c",
+]
+pyodide_voici_build = [
+    "jupyter_server",
+	"jupyterlite-core==0.7.0",
+	"jupyterlite-pyodide-kernel==0.7.0",
+	"voici-core==0.10.0",
+	"notebook>=7.5.0,<7.6",
+	"libarchive-c"
 ]
 dev = [
     "build",
@@ -66,9 +78,27 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
+    "pytest-xdist",
     "ruff",
     "twine",
     "wheel"
+]
+docs = [  # Not needed on github for now
+    "sphinx",
+    "furo",
+    "myst-parser",
+    "sphinx-autodoc-typehints==3.6.1",  # highest version available in ELM
+    "here-search-demo"
+]
+
+[dependency-groups]
+xeus_build = [
+  "jupyter_server",
+  # "notebook",  # Do not add the notebook package
+  "jupyterlite-core",
+  "jupyterlab_server",
+  "jupyterlite-xeus",
+  "libarchive-c",
 ]
 
 [tool.setuptools]
@@ -82,12 +112,13 @@ namespaces = true
 "here_search_demo" = [
     "notebooks/obm_*.ipynb",
     "notebooks/*demo.ipynb",
+    "widgets/css/*.css",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-pythonpath = ["src"]
+pythonpath = ["src", "jupyterlite_build"]
 addopts = "-ra -q"
 testpaths = [
     "tests",
@@ -97,7 +128,7 @@ norecursedirs = [
 ]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src", "jupyterlite_build"]
 
 [tool.coverage.report]
 omit = [
@@ -113,7 +144,7 @@ exclude = ["*.ipynb"]
 combine-as-imports = true
 
 [bumpver]
-current_version = "0.25.3"
+current_version = "0.35.1"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
@@ -126,4 +157,7 @@ push = true
 ]
 "src/here_search_demo/__init__.py" = [
     '__version__ = "{version}"'
+]
+"README.md" = [
+    '^Package version: `{version}`$'
 ]

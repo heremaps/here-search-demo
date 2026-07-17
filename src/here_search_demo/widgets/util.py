@@ -8,10 +8,19 @@
 ###############################################################################
 
 
+from importlib.resources import files
+
 from IPython.core.interactiveshell import InteractiveShell
 from IPython.display import Markdown, display as Idisplay
-from ipyleaflet import Map
-from ipywidgets import Layout, Output as OutputBase
+from ipywidgets import HTML, Layout, Output as OutputBase
+
+
+def load_css(filename: str) -> str:
+    return files("here_search_demo.widgets").joinpath("css", filename).read_text(encoding="utf-8")
+
+
+def style_html(filename: str) -> HTML:
+    return HTML(f"<style>{load_css(filename)}</style>")
 
 
 class Output(OutputBase):
@@ -83,22 +92,3 @@ class TableLogWidget:
     def clear_logs(self) -> None:
         self.out.clear_output()
         self.lines.clear()
-
-
-class FakeRouteController:
-    route = None
-    flexpolyline = None
-    all_along = None
-    fake = True
-
-    def __init__(self, map_instance: Map, credentials=None):
-        pass
-
-    def get_route_select_options(self):
-        return {}
-
-    def get_route_checkbox_options(self):
-        return {}
-
-    def get_widgets(self, *args):
-        return []

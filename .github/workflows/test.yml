@@ -15,46 +15,33 @@ on:
 jobs:
 
   test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.12", "3.13"]
+    runs-on: ubuntu-latest
     steps:
       # https://github.com/actions/checkout
       # https://github.com/astral-sh/setup-uv
       # https://github.com/codecov/codecov-action
-      # https://github.com/pypa/gh-action-pypi-publish
       - uses: actions/checkout@v6
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
-        with:
-          version: "0.9.18"
-          python-version: ${{ matrix.python-version }}
 
-      - name: Generate uv lockfile
+      - name: Test
         run: |
-          uv sync --extra route
-          uv lock
-
-      - name: Test with python ${{ matrix.python-version }}
-        run: |
-          uv run --extra dev --extra lab --frozen pytest --ignore=tests/test_notebooks.py
+          for version in 3.11 3.12 3.13; do
+            uv run --python "$version" --extra dev pytest -n auto -vv tests --ignore=tests/test_notebooks.py
+          done
 
       - name: Lint
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         run: |
-          uv run --extra dev --extra lab --frozen scripts/lint.sh --check
+          uv run --python 3.13 --extra dev ruff check src tests jupyterlite_build
+          uv run --python 3.13 --extra dev ruff format src tests jupyterlite_build --check
 
       - name: Coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
         run: |
-          uv run --active --extra dev --extra lab --frozen pytest -v --cov=src tests --ignore=tests/test_notebooks.py --cov-report=xml --cov-report=term-missing
+          uv run --python 3.13 --extra dev pytest -v --cov=src tests --ignore=tests/test_notebooks.py --cov-report=xml --cov-report=term-missing
 
       - name: Upload to Codecov
-        if: github.ref == 'refs/heads/main' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        if: github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v6
         with:
           files: ./coverage.xml
@@ -69,20 +56,21 @@ jobs:
       # https://github.com/actions/upload-pages-artifact
       - name: Checkout
         uses: actions/checkout@v6
+
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
       - name: Install micromamba
         uses: mamba-org/setup-micromamba@v3
-      - name: Generate uv lockfile
-        run: uv lock
-      - name: Install the project
-        run: uv sync --locked --all-extras --dev
+
       - name: Create page
         run: |
-          uv run --active --frozen scripts/lite-build.sh || true
+          uv run --active jupyterlite_build/xeus.sh
+          uv run --active --extra docs sphinx-build -b html docs/ workspace/public/docs
           ls -la
           ls -la workspace
           mv workspace/public .
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:

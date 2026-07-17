@@ -9,6 +9,7 @@
 
 from typing import Any, Coroutine, Generator, Literal, cast
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+import orjson
 
 try:  # At runtime this succeeds only in pyodide/python-xeus environments
     import js  # type: ignore[attr-defined]
@@ -55,7 +56,7 @@ class _BrowserFetchResponse:
         return bytes(list(js.Uint8Array.new(buf)))  # type: ignore[attr-defined]
 
     async def json(self):
-        return await self.js_response.json()
+        return orjson.loads(await self.text())
 
 
 async def _browser_pyfetch(
@@ -192,44 +193,47 @@ class ClientResponse(FetchResponse, _ContextManagerMixing):
 
 
 class HTTPSession(_ContextManagerMixing):
-    """
-    A context manager using pyodide pyfetch and mimicking aiohttp ClientSession interface.
+    """Browser runtime HTTP session adapter.
+
+    Uses ``pyfetch`` in Pyodide/JupyterLite and mimics the subset of the
+    ``aiohttp.ClientSession`` interface used by this project (``get``,
+    ``post``, and ``request``).
+
     Reference:
     https://pyodide.org/en/stable/usage/api/python-api/http.html
-    https://github.com/pyodide/pyodide/tree/main/src/py/pyodide
 
-    Examples (illustrative, not executed by doctest):
+    Examples (illustrative):
 
-    - Basic GET
-      async def demo_get(url):
-          session = await HTTPSession()
-          get_response = await session.get(url)
-          get_response.raise_for_status()
-          resp = await get_response.json()
-          return resp
+    Basic GET::
 
-    - Context-managed GET
-      async def demo_ctx_get(url):
-          async with HTTPSession() as session:
-              async with session.get(url) as get_response:
-                  get_response.raise_for_status()
-                  resp = await get_response.json()
-                  return resp
+        async def demo_get(url):
+            session = await HTTPSession()
+            get_response = await session.get(url)
+            get_response.raise_for_status()
+            return await get_response.json()
 
-    - Reading bytes (e.g., image)
-      async def demo_read(image_url):
-          async with HTTPSession() as session:
-              async with session.get(image_url) as get_response:
-                  image_data = await get_response.read()
-                  return image_data
+    Context-managed GET::
 
-    - Basic POST
-      async def demo_post(url):
-          async with HTTPSession() as session:
-              async with session.post(url) as post_response:
-                  post_response.raise_for_status()
-                  resp = await post_response.text()
-                  return resp
+        async def demo_ctx_get(url):
+            async with HTTPSession() as session:
+                async with session.get(url) as get_response:
+                    get_response.raise_for_status()
+                    return await get_response.json()
+
+    Reading bytes (e.g. image)::
+
+        async def demo_read(image_url):
+            async with HTTPSession() as session:
+                async with session.get(image_url) as get_response:
+                    return await get_response.read()
+
+    Basic POST::
+
+        async def demo_post(url):
+            async with HTTPSession() as session:
+                async with session.post(url) as post_response:
+                    post_response.raise_for_status()
+                    return await post_response.text()
     """
 
     warmup_url = "https://example.com/"  # lightweight HEAD/GET target

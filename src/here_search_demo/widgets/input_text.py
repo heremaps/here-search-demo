@@ -1,0 +1,388 @@
+###############################################################################
+#
+# Copyright (c) 2025 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+"""Text-input and taxonomy-button widgets.
+
+This module contains all *non-map* input widgets:
+- :class:`SubmittableText`
+- :class:`SubmittableTextBox`
+- :class:`SearchTermsBox`
+- :class:`TermsButtons`
+- :class:`PlaceTaxonomyButton`
+- :class:`PlaceTaxonomyButtons`
+"""
+
+import asyncio
+from time import perf_counter_ns
+from typing import Callable, Sequence
+
+from IPython.display import display as Idisplay
+from ipywidgets import HTML, Button, HBox, Layout, Text, VBox
+from traitlets.utils.bunch import Bunch
+
+from here_search_demo.entity.intent import SearchIntent
+from here_search_demo.entity.place import PlaceTaxonomy, PlaceTaxonomyItem
+from here_search_demo.util import set_dict_values
+from here_search_demo.widgets.state import SearchState
+
+
+class SubmittableText(Text):
+    """A ipywidgets Text class enhanced with an on_submit() method"""
+
+    def on_submit(self, callback, remove=False):
+        self._submission_callbacks.register_callback(callback, remove=remove)
+
+    def trigger_submit(self) -> None:
+        """Programmatically invoke all registered submit callbacks.
+
+        This mirrors the behavior when the front-end fires a ``submit``
+        custom event, without reaching into private attributes from
+        outside this subclass.
+        """
+        self._submission_callbacks(self)
+
+    def _handle_msg(self, msg: dict) -> None:
+        """
+        Called when a msg is received from the front-end
+
+        (Overrides from widgets.Widget._handle_msg)
+        :param msg:
+        :return:
+        """
+        data = msg["content"]["data"]
+        method = data["method"]
+
+        if method == "update":
+            if "state" in data:
+                state = data["state"]
+                if "buffer_paths" in data:
+                    state = set_dict_values(state, data["buffer_paths"], msg["buffers"])
+                self.set_state(state)
+        elif method == "request_state":
+            self.send_state()
+        elif method == "custom":
+            if "content" in data:
+                if data["content"].get("event") == "submit":
+                    self.trigger_submit()
+
+
+class SubmittableTextBox(HBox):
+    """A ipywidgets HBox made of a SubmittableText and a lens Button"""
+
+    default_icon = "search"
+    default_button_width = "32px"
+    default_debounce_delay = 0.1  # We keep it low to improve UX
+    min_debounce_delay = 0.05
+    max_debounce_delay = 0.4
+    queue_backlog_threshold = 3
+    default_simulation_delay_sec = 0.02
+
+    def __init__(self, queue: asyncio.Queue, state: SearchState, *args, **kwargs):
+        text_kwargs = kwargs.copy()
+        self.lens_w = Button(
+            icon=text_kwargs.pop("icon", SubmittableTextBox.default_icon),
+            layout={"width": SubmittableTextBox.default_button_width},
+        )
+        self.queue = queue
+        self._queue_put = queue.put_nowait
+        self._queue_get_nowait = queue.get_nowait
+        self.state = state
+        self._debounce_delay = text_kwargs.pop("debounce_delay", self.default_debounce_delay)
+        self.max_transient_keep = text_kwargs.pop("max_transient_keep", 3)
+        self._debounce_task: asyncio.Task | None = None
+        self._pending_transient_value: str | None = None
+        self._last_queued_transient_value: str | None = None
+        text_layout = text_kwargs.pop("layout", Layout())
+        self.text_w = SubmittableText(*args, layout=text_layout, **text_kwargs)
+        self.text_w.value = state.current_query
+
+        def cancel_debounce():
+            if self._debounce_task and not self._debounce_task.done():
+                self._debounce_task.cancel()
+            self._debounce_task = None
+
+        async def emit_transient():
+            try:
+                await asyncio.sleep(self._debounce_delay)
+                value = (self._pending_transient_value or "").strip()
+                self.state.set_query_text(value)
+                if value:
+                    if value != self._last_queued_transient_value:
+                        self._queue_put(
+                            SearchIntent(kind="transient_text", materialization=value, time=perf_counter_ns())
+                        )
+                        self._last_queued_transient_value = value
+                        self._trim_transients(self.max_transient_keep)
+                else:
+                    self._last_queued_transient_value = None
+                    self._queue_put(SearchIntent(kind="empty", materialization=None, time=perf_counter_ns()))
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self._debounce_task = None
+
+        def adjust_debounce_delay():
+            try:
+                qsize_fn = getattr(self.queue, "qsize", None)
+                raw_depth = qsize_fn() if callable(qsize_fn) else getattr(self.queue, "qsize", 0)
+                depth = int(raw_depth)
+            except Exception:
+                depth = 0
+            if depth >= self.queue_backlog_threshold:
+                self._debounce_delay = min(self.max_debounce_delay, self._debounce_delay * 1.5)
+            else:
+                self._debounce_delay = max(self.min_debounce_delay, self._debounce_delay * 0.9)
+
+        def on_value_change(change: Bunch):
+            self._pending_transient_value = change.new or ""
+            adjust_debounce_delay()
+            cancel_debounce()
+            self._debounce_task = asyncio.create_task(emit_transient())
+
+        self.text_w.observe(on_value_change, "value")
+
+        def commit(_):
+            cancel_debounce()
+            value = (self.text_w.value or "").strip()
+            self.state.set_query_text(value)
+            if value:
+                self._queue_put(SearchIntent(kind="submitted_text", materialization=value, time=perf_counter_ns()))
+
+        self.on_submit(commit)
+        self.on_click(commit)
+
+        super().__init__([self.text_w, self.lens_w])
+
+    def on_submit(self, callback, remove=False):
+        self.text_w.on_submit(callback, remove=remove)
+
+    def on_click(self, callback, remove=False):
+        self.lens_w.on_click(callback, remove=remove)
+
+    def disable(self):
+        self.text_w.disabled = True
+        self.lens_w.disabled = True
+
+    def emable(self):
+        self.text_w.disabled = False
+        self.lens_w.disabled = False
+
+    async def feed(self, text, delay: float | None = None):
+        """Type text programmatically into the input widget.
+
+        Useful for notebook demos/tests that simulate user typing.
+        ``"\\b"`` characters are interpreted as backspace.
+
+        :param text: Text sequence to inject.
+        :param delay: Delay in seconds between characters.
+            Defaults to ``default_simulation_delay_sec``.
+        """
+        delay = delay or SubmittableTextBox.default_simulation_delay_sec
+        self.text_w.value = ""
+        for ch in text:
+            self.text_w.value = self.text_w.value[:-1] if ch == "\b" else self.text_w.value + ch
+            await asyncio.sleep(delay)
+        await asyncio.sleep(2 * SubmittableTextBox.default_debounce_delay)
+
+    def submit(self):
+        """Programmatically trigger a submit."""
+        self.text_w.trigger_submit()
+
+    def _trim_transients(self, max_keep: int) -> tuple[int, int, int]:
+        """Drain the queue, discard excess transient intents, re-enqueue the rest.
+
+        Returns ``(items_drained, items_trimmed, transients_total)``.
+        """
+        if not max_keep:
+            return (0, 0, 0)
+        items: list = []
+        try:
+            while True:
+                items.append(self._queue_get_nowait())
+        except asyncio.QueueEmpty:
+            pass
+        transients = [it for it in items if getattr(it, "kind", None) == "transient_text"]
+        keep_tail = transients[-max_keep:]
+        rebuilt = []
+        to_skip = len(transients) - len(keep_tail)
+        for it in items:
+            if getattr(it, "kind", None) == "transient_text":
+                if to_skip:
+                    to_skip -= 1
+                    continue
+            rebuilt.append(it)
+        for it in rebuilt:
+            self._queue_put(it)
+        return len(items), len(items) - len(rebuilt), len(transients)
+
+
+class SearchTermsBox(VBox):
+    def __init__(self, text: "SubmittableTextBox", terms_buttons: "TermsButtons"):
+        self.text = text
+        self.terms_buttons = terms_buttons
+        VBox.__init__(self, [text, terms_buttons])
+
+
+class TermsButtons(HBox):
+    """Suggestion buttons bound to a :class:`SubmittableTextBox`.
+
+    The widget renders one button per value in ``state.term_suggestions``.
+    Clicking a button replaces one token in the target text box and updates
+    :class:`~here_search_demo.widgets.state.SearchState`.
+
+    :param target_text_box: Text widget to update when a button is clicked.
+    :param state: Shared search state carrying the current term suggestions.
+    :param values: Optional initial suggestions; when provided they are stored
+        in ``state.term_suggestions`` before rendering.
+    :param buttons_count: Number of buttons to create when no suggestions are
+        available yet.
+    :param index: Token index to replace in the target query. ``-1`` replaces
+        the last token, ``None`` replaces the whole query text.
+    :param layout: Optional ipywidgets layout for the button container.
+    """
+
+    default_layout = {"width": "280px"}
+    default_buttons_count = 3
+    _style_applied = False
+
+    def __init__(
+        self,
+        target_text_box: SubmittableTextBox,
+        state: SearchState,
+        values: list[str] | None = None,
+        buttons_count: int | None = None,
+        index: int = -1,
+        layout: dict | None = None,
+    ):
+        self.target_text_box = target_text_box
+        self.state = state
+        if values is not None:
+            self.state.set_term_suggestions(values)
+        if state.term_suggestions:
+            buttons_count = len(state.term_suggestions)
+        elif not isinstance(buttons_count, int):
+            buttons_count = TermsButtons.default_buttons_count
+        width = int(100 / buttons_count)
+        self.token_index = index
+        box_layout = Layout(
+            display="flex",
+            justify_content="center",
+            width=f"{width}%",
+        )
+        buttons = []
+        on_click_handler = self.__get_click_handler()
+        for _ in range(buttons_count):
+            button = Button(layout=box_layout)
+            button.on_click(on_click_handler)
+            buttons.append(button)
+        HBox.__init__(self, buttons, layout=layout or TermsButtons.default_layout)
+        self.render()
+
+    def apply_style(self):
+        self.add_class("term-button")
+        if not TermsButtons._style_applied:
+            Idisplay(HTML("<style>.term-button button { font-size: 10px; }</style>"), display_id=True)
+            TermsButtons._style_applied = True
+
+    def __get_click_handler(self) -> Callable:
+        def handler(button):
+            tokens = self.target_text_box.text_w.value.strip().split(" ")
+            if tokens:
+                if self.token_index is None:
+                    head, target, tail = [], [button.description.strip()], []
+                elif self.token_index == -1:
+                    head, target, tail = (
+                        tokens[: self.token_index],
+                        [button.description.strip()],
+                        [""],
+                    )
+                else:
+                    head, target, tail = (
+                        tokens[: self.token_index],
+                        [button.description.strip()],
+                        tokens[self.token_index + 1 :],
+                    )
+                new_value = " ".join(head + target + tail)
+                self.target_text_box.text_w.value = new_value
+                self.state.set_query_text(new_value)
+
+        return handler
+
+    def render(self):
+        values = self.state.term_suggestions
+        for i, button in enumerate(self.children):
+            button.description = values[i] if i < len(values) else " "
+
+    def set(self, values: list[str]):
+        self.state.set_term_suggestions(values)
+        self.render()
+
+
+class PlaceTaxonomyButton(Button):
+    """
+    A Button returning a taxonomy future
+    """
+
+    item: PlaceTaxonomyItem
+    default_icon = "question"
+    default_layout = {"width": "32px"}
+
+    def __init__(self, item: PlaceTaxonomyItem, icon: str, **kwargs):
+        """
+        Creates a Button for a taxonomy instance with a specific Font-Awesome icon.
+        See:
+          - https://fontawesome.com/v5/search?m=free&s=regular
+          - https://fontawesome.com/v5/cheatsheet/
+          - https://use.fontawesome.com/releases/v5.12.0/fontawesome-free-5.12.0-web.zip
+
+        :param icon: fontawesome-free v5.12.0 icon name (with fa- prefix) or text
+        :param taxonomy: taxonomy instance
+        :param kwargs: Button class other attributes
+        """
+        self.item = item
+        if not icon:
+            kwargs.update({"icon": PlaceTaxonomyButton.default_icon})
+        elif icon.startswith("fa-"):
+            kwargs.update({"icon": icon[3:]})
+        else:
+            kwargs.update({"description": icon})
+        super().__init__(layout=PlaceTaxonomyButton.default_layout, **kwargs)
+
+
+class PlaceTaxonomyButtons(HBox):
+    """Buttons that emit taxonomy search intents.
+
+    Each button maps to one :class:`~here_search_demo.entity.place.PlaceTaxonomyItem`.
+    On click, the selected taxonomy item is stored in ``state`` and a
+    ``SearchIntent(kind="taxonomy", ...)`` is pushed to ``queue``.
+
+    :param queue: Queue receiving taxonomy intents.
+    :param taxonomy: Taxonomy source used to create buttons.
+    :param icons: Icons/text labels paired with taxonomy items.
+    :param state: Shared search state updated with the selected taxonomy item.
+    """
+
+    default_buttons = [PlaceTaxonomyButton(item=PlaceTaxonomyItem(name="_"), icon="")]
+
+    def __init__(self, queue: asyncio.Queue, taxonomy: PlaceTaxonomy, icons: Sequence[str], state: SearchState):
+        self.buttons = []
+        self.queue = queue
+        self.state = state
+        for item, icon in zip(taxonomy.items.values(), icons):
+            button = PlaceTaxonomyButton(item, icon)
+
+            def handle(btn: Button):
+                self.state.select_taxonomy_item(btn.item)
+                intent = SearchIntent(kind="taxonomy", materialization=btn.item, time=perf_counter_ns())
+                self.queue.put_nowait(intent)
+
+            button.on_click(handle)
+            self.buttons.append(button)
+        self.buttons = self.buttons or PlaceTaxonomyButtons.default_buttons
+
+        HBox.__init__(self, self.buttons)

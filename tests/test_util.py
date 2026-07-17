@@ -15,9 +15,61 @@ import here_search_demo.util as util_module
 from here_search_demo.util import (
     berlin,
     get_lat_lon,
+    log_signature,
     set_dict_values,
     setLevel,
 )
+
+
+def test_log_signature_sync_logs_entry_and_return(capsys):
+    @log_signature
+    def add(a, b):
+        return a + b
+
+    assert add(2, 3) == 5
+    out = capsys.readouterr().out
+    assert "Entering" in out
+    assert "(a=2, b=3)" in out
+    assert "-> 5" in out
+
+
+def test_log_signature_sync_logs_and_reraises_exception(capsys):
+    @log_signature
+    def boom():
+        raise ValueError("nope")
+
+    with pytest.raises(ValueError, match="nope"):
+        boom()
+    out = capsys.readouterr().out
+    assert "Entering" in out
+    assert "Exception in" in out
+    assert "boom" in out
+
+
+@pytest.mark.asyncio
+async def test_log_signature_async_logs_entry_and_return(capsys):
+    @log_signature
+    async def aadd(a, b):
+        return a + b
+
+    assert await aadd(1, 2) == 3
+    out = capsys.readouterr().out
+    assert "Entering" in out
+    assert "(a=1, b=2)" in out
+    assert "-> 3" in out
+
+
+@pytest.mark.asyncio
+async def test_log_signature_async_logs_and_reraises_exception(capsys):
+    @log_signature
+    async def aboom():
+        raise KeyError("bad")
+
+    with pytest.raises(KeyError):
+        await aboom()
+    out = capsys.readouterr().out
+    assert "Exception in" in out
+    assert "aboom" in out
 
 
 def test_set_dict_values():
@@ -50,7 +102,7 @@ def test_set_dict_values5():
 
 def test_set_level_configures_loggers():
     setLevel(logging.DEBUG)
-    assert logging.getLogger("here_search").level == logging.DEBUG
+    assert logging.getLogger("here_search_demo").level == logging.DEBUG
     assert logging.getLogger("aiohttp.client").level == logging.DEBUG
 
 

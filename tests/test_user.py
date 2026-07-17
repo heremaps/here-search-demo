@@ -92,4 +92,4 @@ def test_defaultuser_inherits_userprofile():
     user = DefaultUser()
     assert isinstance(user, UserProfile)
     assert user.use_positioning is True
-    assert user.share_experience is True
+    assert user.share_experience is False

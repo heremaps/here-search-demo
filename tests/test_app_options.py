@@ -16,6 +16,7 @@ from here_search_demo.api_options import (
     recommendPlaces,
     tripadvisorDetails,
     build_api_options,
+    Route,
 )
 from here_search_demo.entity.endpoint import Endpoint
 
@@ -145,3 +146,25 @@ def test_no_duplicate_extra_options():
     opts_single = build_api_options(default_options_config, extra_options=[details])
     opts_baseline = build_api_options(default_options_config)
     assert opts_single.endpoint[Endpoint.AUTOSUGGEST] == opts_baseline.endpoint[Endpoint.AUTOSUGGEST]
+
+
+# ---------------------------------------------------------------------------
+# Route incompatibility with recommendPlaces
+# ---------------------------------------------------------------------------
+
+
+def test_route_excludes_recommend_places():
+    """When searching along a route, with=recommendPlaces must not be used."""
+    route = Route(polyline="BlBoz5xJ67i1B", width=100)
+    opts = build_api_options(default_options_config, extra_options=[route, recommendPlaces])
+    for endpoint in (Endpoint.AUTOSUGGEST, Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER):
+        assert "with" not in opts.endpoint.get(endpoint, {}), (
+            f"with=recommendPlaces must not be set for {endpoint} when Route is used"
+        )
+
+
+def test_recommend_places_without_route_still_works():
+    """Without a route, with=recommendPlaces is set as usual."""
+    opts = build_api_options(default_options_config, extra_options=[recommendPlaces])
+    for endpoint in (Endpoint.AUTOSUGGEST, Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER):
+        assert opts.endpoint[endpoint].get("with") == "recommendPlaces"
