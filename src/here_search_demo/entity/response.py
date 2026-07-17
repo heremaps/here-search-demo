@@ -8,7 +8,7 @@
 ###############################################################################
 
 from abc import ABCMeta
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping, Tuple
 
 from here_search_demo.entity.endpoint import Endpoint
@@ -20,12 +20,25 @@ ResponseDataView = Mapping[str, Any]
 
 @dataclass(frozen=True)
 class Response:
+    """Immutable HERE Search response wrapper.
+
+    :ivar req: originating request
+    :ivar data: parsed JSON payload view
+    :ivar x_headers: captured response ``X-*`` headers
+    :ivar raw: optional raw response body
+    """
+
     req: Request | None
     data: ResponseDataView | None
-    x_headers: dict | None = None
+    x_headers: dict = field(default_factory=dict)
+    raw: str | None = None
 
     @property
     def titles(self):
+        """Return response item titles in display order.
+
+        :return: list of item titles
+        """
         if self.req.endpoint == Endpoint.LOOKUP:
             return [self.data["title"]]
         else:
@@ -33,11 +46,18 @@ class Response:
 
     @property
     def terms(self):
+        """Return unique autosuggest query terms in first-seen order.
+
+        :return: list of autosuggest query terms
+        """
         return list({term["term"]: None for term in self.data.get("queryTerms", [])}.keys())
 
     def bbox(self) -> Tuple[float, float, float, float] | None:
         """
-        Returns response bounding rectangle (south latitude, north latitude, east longitude, west longitude)
+        Return response bounding rectangle.
+
+        :return: tuple ``(south_lat, north_lat, east_lng, west_lng)`` when
+                 positioned items exist, else ``None``
         """
         latitudes, longitudes = [], []
         items = [self.data] if self.req.endpoint == Endpoint.LOOKUP else self.data.get("items", [])
@@ -59,8 +79,9 @@ class Response:
 
     def geojson(self) -> dict:
         """
-        Returns response geojson for items with a position
-        :return: a GeoJSON dict
+        Return a GeoJSON FeatureCollection for items that include ``position``.
+
+        :return: GeoJSON mapping containing only items with coordinates
         """
         collection = {"type": "FeatureCollection", "features": []}
         items: list[ResponseData] = [self.data] if self.req.endpoint == Endpoint.LOOKUP else self.data.get("items", [])
@@ -72,6 +93,12 @@ class Response:
         return collection
 
     def item_geojson(self, item: ResponseData, rank: int):
+        """Convert a single HERE item to a GeoJSON ``Feature``.
+
+        :param item: HERE item payload
+        :param rank: rank to store as ``_rank`` in feature properties
+        :return: GeoJSON feature mapping
+        """
         longitude, latitude = item["position"]["lng"], item["position"]["lat"]
         item["_rank"] = rank
         item_feature = {

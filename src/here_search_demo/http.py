@@ -32,7 +32,7 @@ else:  # pragma: no cover
 
 if IS_BROWSER_RUNTIME:
     from .lite import HTTPConnectionError, HTTPResponseError, HTTPSession
-else:
+else:  # Fallback to aiohttp, a python asyncio client
     from aiohttp import (
         ClientConnectorError as HTTPConnectionError,
         ClientResponseError as HTTPResponseError,

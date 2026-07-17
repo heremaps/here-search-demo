@@ -8,87 +8,225 @@
 ###############################################################################
 
 import asyncio
-import math
-from typing import Callable, Any, cast, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING, cast, Any
+from traitlets.utils.bunch import Bunch
 
-from here_search_demo.auth import Credentials
-from here_search_demo.http import HTTPSession, IS_BROWSER_RUNTIME
+from ..auth import Credentials
+from ..route_engine import RouteEngine
+from .route_geometry import build_corridor, haversine_m  # noqa: F401 – available to callers
 
 if TYPE_CHECKING:
-    from here_search_demo.widgets.input import PositionMap
+    from .input_map import PositionMap
 
-from flexpolyline import decode, encode
-from ipyleaflet import GeoJSON, Marker, Popup, Polygon, AwesomeIcon
+from flexpolyline import decode
+from ipyleaflet import GeoJSON, Marker, Polyline, AwesomeIcon
 from ipywidgets import Text, Layout, HTML
-from pyproj import CRS, Transformer
-from pyproj.aoi import AreaOfInterest
-from pyproj.database import query_utm_crs_info
-from shapely import LineString, Polygon as ShapelyPolygon
+from shapely import Polygon as ShapelyPolygon
 from shapely.geometry import mapping
-from shapely.ops import transform
+
+
+def _engine_property(name: str) -> property:
+    """Build a read/write property that delegates to ``self.engine.<name>``.
+
+    Keeps :class:`RouteEngine` the single source of truth for route state while
+    letting callers read and write these fields directly on the controller.
+    """
+
+    def getter(self: "RouteController") -> Any:
+        return getattr(self.engine, name)
+
+    def setter(self: "RouteController", value: Any) -> None:
+        setattr(self.engine, name, value)
+
+    return property(getter, setter)
 
 
 class RouteController:
-    routing_api_tpl = (
-        "https://router.hereapi.com/v8/routes"
-        "?origin={start_lat},{start_lon}"
-        "&destination={stop_lat},{stop_lon}"
-        "&return=polyline,summary&spans=duration,dynamicSpeedInfo,length"
-        "&transportMode=car"
-    )
-    max_waypoints_count = 2000
+    """Route acquisition and rendering controller for map widgets.
 
-    def __init__(self, map_instance: "PositionMap", credentials: Credentials):
+    The controller fetches route geometry, renders route overlays/markers,
+    and exposes helpers used by notebooks and UI callbacks to update route
+    start/stop/at positions and corridor width.
+
+    :param map_instance: Map widget receiving route layers.
+    :param credentials: HERE credentials used for routing requests.
+    """
+
+    map_instance: "PositionMap"
+    # Widgets
+    geojson_w: GeoJSON | None
+    at_w: Marker | None
+    future_position_w: Marker | None  # semi-transparent car at the future position
+    start_w: Marker | None
+    stop_w: Marker | None
+
+    # Orchestration
+    credentials: Credentials
+    acquisition_task: asyncio.Task | None
+    route_pl: Polyline | None
+    _to_detour_pl: Polyline | None
+    _from_detour_pl: Polyline | None
+
+    # State delegated to the head-agnostic RouteEngine (single source of truth).
+    has_route = _engine_property("has_route")
+    start_position = _engine_property("start_position")
+    stop_position = _engine_property("stop_position")
+    current_position = _engine_property("current_position")
+    future_position = _engine_property("future_position")
+    width = _engine_property("width")
+    mins_from_pos = _engine_property("mins_from_pos")
+    ranking_mode = _engine_property("ranking_mode")
+    route_flexpolyline = _engine_property("route_flexpolyline")
+    search_flexpolyline = _engine_property("search_flexpolyline")
+    waypoints_count = _engine_property("waypoints_count")
+    route_summary_length = _engine_property("route_summary_length")
+    _current_waypoints = _engine_property("_current_waypoints")
+    _cached_spans = _engine_property("_cached_spans")
+    _route_cache = _engine_property("_route_cache")
+
+    def __init__(
+        self,
+        map_instance: "PositionMap",
+        credentials: Credentials,
+        routing_api_call_handler: Callable[[], None] | None = None,
+    ):
         self.map_instance = map_instance
         self.credentials = credentials
-        self.geojson_w: GeoJSON | None = None
-        self.at_w: Marker | None = None
-        self.start_w: Marker | None = None
-        self.stop_w: Marker | None = None
-        self.acquisition_task: asyncio.Task | None = None
-        self.popup: Popup | None = None
-        self.ui_cleanup: Callable[[], None] | None = None
+        self.routing_api_call_handler = routing_api_call_handler
+        self.engine = RouteEngine(
+            credentials=credentials,
+            on_routing_request=routing_api_call_handler,
+        )
+        self.geojson_w = None
+        self.at_w = None
+        self.future_position_w = None
+        self.start_w = None
+        self.stop_w = None
+        self.acquisition_task = None
+        self._on_drawn_callbacks: list[Callable[["RouteController"], None]] = []
+        self._on_removed_callbacks: list[Callable[["RouteController"], None]] = []
         self._init_route_attributes()
 
     def _init_route_attributes(self):
-        self.start_position: tuple[float, float] | None = None
-        self.stop_position: tuple[float, float] | None = None
-        self.at_position: tuple[float, float] | None = None
-        self.width: int | None = 100
-        self.all_along: bool = False
-        self.flexpolyline: str | None = None
-        self.waypoints_count: int | None = None
+        self.engine._init_route_attributes()
+        self.future_position_w = None
+        self.route_pl = None
+        self._to_detour_pl = None
+        self._from_detour_pl = None
+
+    @property
+    def all_along(self) -> bool:
+        """Convenience property — reads ``ranking_mode.all_along``."""
+        return self.ranking_mode.all_along
+
+    @all_along.setter
+    def all_along(self, value: bool):
+        self.engine.all_along = value
+
+    @property
+    def minimal_detour(self) -> bool:
+        """Convenience property — reads ``ranking_mode.travel_time``."""
+        return self.ranking_mode.travel_time
+
+    @minimal_detour.setter
+    def minimal_detour(self, value: bool):
+        self.engine.minimal_detour = value
+
+    @property
+    def search_at_position(self) -> tuple[float, float] | None:
+        """Position sent as `at=` to the Search API.
+
+        When *mins_from_pos* > 0 this is the point that many minutes ahead
+        of the origin along the route; otherwise it is the same as
+        ``current_position`` (the car marker location).
+        """
+        return self.future_position or self.current_position
 
     def set_route_start(self, latlon: tuple[float, float]):
-        self.start_position = latlon
+        """Set the route origin marker and trigger route acquisition when complete.
+
+        :param latlon: ``(lat, lon)`` origin position.
+        """
+        self.engine.set_route_start(latlon)
         if self.has_all_route_properties():
-            self.acquisition_task = asyncio.create_task(self.draw_route())
+            self.acquisition_task = asyncio.create_task(self.draw_corridor())
 
     def set_route_stop(self, latlon: tuple[float, float]):
-        self.stop_position = latlon
-        if self.has_all_route_properties():
-            self.acquisition_task = asyncio.create_task(self.draw_route())
+        """Set the route destination marker and trigger route acquisition when complete.
 
-    def set_route_at(self, latlon: tuple[float, float]):
-        self.at_position = latlon
-        if self.geojson_w is not None:
-            self.draw_at()
+        :param latlon: ``(lat, lon)`` destination position.
+        """
+        self.engine.set_route_stop(latlon)
+        if self.has_all_route_properties():
+            self.acquisition_task = asyncio.create_task(self.draw_corridor())
+
+    def set_current_position(self, latlon: tuple[float, float] | None = None):
+        """Set the current car position on the route.
+
+        :param latlon: ``(lat, lon)`` current position.
+        """
+        self.engine.set_current_position(latlon or self.map_instance.center)
+        self.clear_detour_routes()
+        self._apply_mins_from_pos()
+
+    def set_mins_from_pos(self, mins: int | None):
+        """Set X minutes ahead of the origin position as the new search centre."""
+        self.engine.set_mins_from_pos(mins)
+        self._apply_mins_from_pos()
+
+    def _apply_mins_from_pos(self, draw: bool = True):
+        """Update ``future_position`` from ``current_position`` + ``mins_from_pos``.
+
+        The API search centre (``search_at_position``) is shifted ahead.
+        When *draw* is False the marker is not redrawn (used during initial
+        route rendering).
+        """
+        self.clear_detour_routes()
+        if draw and (self.geojson_w is not None or self.route_pl is not None):
+            self.draw_current_position()
+            self.draw_future_position()
 
     def set_route_width(self, width: int | None):
-        self.width = width
-        if self.has_all_route_properties():
-            self.acquisition_task = asyncio.create_task(self.draw_route())
+        """Set corridor width (meters) used for route geometry and rerender it.
 
-    def set_all_along_option(self, value: bool):
-        self.all_along = value
+        :param width: Corridor width in meters; ``None`` keeps/defaults width.
+        """
+        self.engine.set_route_width(width)
+        if not self.has_all_route_properties():
+            return
+        if self._current_waypoints is not None:
+            self.modify_corridor_width()
+        else:
+            self.acquisition_task = asyncio.create_task(self.draw_corridor())
 
-    def get_all_along_option(self) -> bool:
-        return self.all_along
+    def modify_corridor_width(self):
+        # Change the width of an already drawn route
+        cache_key = (
+            "route",
+            self.start_position[0],
+            self.start_position[1],
+            self.stop_position[0],
+            self.stop_position[1],
+        )
+        if cache_key in self._route_cache:
+            self.build_flexpolyline(self._route_cache[cache_key]["flexpolyline_raw"], self._current_waypoints)
+        self.acquisition_task = asyncio.create_task(self._render_route_widgets(self._current_waypoints))
+
+    def set_travel_time_option(self, value: bool):
+        self.minimal_detour = value
+        if self._current_waypoints is not None:
+            self.acquisition_task = asyncio.create_task(self._render_route_widgets(self._current_waypoints))
+        elif self.has_all_route_properties() and self.route_flexpolyline is not None:
+            self.acquisition_task = asyncio.create_task(self.draw_corridor())
 
     def remove_route_widgets(self, *_):
         if self.geojson_w:
             self.map_instance.remove(self.geojson_w)
             self.geojson_w = None
+        if self.route_pl:
+            self.map_instance.remove(self.route_pl)
+            self.route_pl = None
+        self.clear_detour_routes()
         if self.start_w:
             self.map_instance.remove(self.start_w)
             self.start_w = None
@@ -98,110 +236,138 @@ class RouteController:
         if self.at_w:
             self.map_instance.remove(self.at_w)
             self.at_w = None
+        if self.future_position_w:
+            self.map_instance.remove(self.future_position_w)
+            self.future_position_w = None
+
+    def clear_detour_routes(self):
+        """Remove any rendered detour overlays without touching the route."""
+        if self._to_detour_pl:
+            self.map_instance.remove(self._to_detour_pl)
+            self._to_detour_pl = None
+        if self._from_detour_pl:
+            self.map_instance.remove(self._from_detour_pl)
+            self._from_detour_pl = None
 
     def remove_route_attributes(self, *_):
         self.remove_route_widgets(())
         self._init_route_attributes()
+        for cb in self._on_removed_callbacks:
+            cb(self)
 
     def get_route_select_options(self) -> dict[str, Callable[[tuple[float, float]], None]]:
         return {
             "route start": self.set_route_start,
             "route stop": self.set_route_stop,
-            "pos on route": self.set_route_at,
+            "pos on route": self.set_current_position,
             "remove route": self.remove_route_attributes,
         }
 
     def get_route_checkbox_options(self) -> dict[str, tuple[Callable[[], bool], Callable[[bool], None]]]:
         return {
-            "all along": (self.get_all_along_option, self.set_all_along_option),
+            "all along": (lambda: self.all_along, lambda v: setattr(self, "all_along", v)),
+            "travel time": (lambda: self.minimal_detour, lambda v: self.set_travel_time_option(v)),
         }
 
-    @staticmethod
-    async def build_corridor(
-        points: list[tuple[float | Any, float | Any, float | Any] | tuple[float | Any, float | Any]], width: int
-    ) -> Polygon:
-        line = LineString([(lon, lat) for lat, lon in points])
-
-        aoi = AreaOfInterest(
-            west_lon_degree=line.centroid.x,
-            south_lat_degree=line.centroid.y,
-            east_lon_degree=line.centroid.x,
-            north_lat_degree=line.centroid.y,
+    def build_mins_from_pos_text_w(self):
+        mins_w = Text(
+            description="min from pos:",
+            placeholder="minutes",
+            value=str(self.mins_from_pos) if self.mins_from_pos is not None else "",
+            continuous_update=False,
+            layout=Layout(width="155px"),
+            style={"description_width": "85px"},
         )
 
-        infos = query_utm_crs_info(
-            datum_name="WGS 84",
-            area_of_interest=aoi,
-        )
+        def on_mins_change(change: Bunch):
+            try:
+                mins = int(change["new"]) if change["new"].strip() else None
+            except ValueError:
+                mins = None
+            self.set_mins_from_pos(mins)
 
-        if not infos:
-            raise RuntimeError("No UTM CRS found for this location")
+        mins_w.observe(on_mins_change, names="value")
+        return mins_w
 
-        utm_crs = CRS.from_epsg(infos[0].code)
-        to_utm = Transformer.from_crs("EPSG:4326", utm_crs, always_xy=True).transform
-        to_wgs84 = Transformer.from_crs(utm_crs, "EPSG:4326", always_xy=True).transform
-        line_utm = transform(to_utm, line)
-        buffer_utm = line_utm.buffer(width)
-        buffer_wgs84 = transform(to_wgs84, buffer_utm)
-        return buffer_wgs84
-
-    def build_width_text_w(self, on_change: Callable[[], None] | None = None):
+    def build_width_text_w(self):
         width_w = Text(
             description="width:",
-            placeholder="(meters)",
-            value=str(self.width) if self.width is not None else None,
+            placeholder="meters",
+            value=str(self.width) if self.width is not None else "",
             continuous_update=False,
-            layout=Layout(
-                width="100px",  # applies to the input field
-                # align_self="flex-start",
-                # border="1px solid red",
-            ),
-            style={"description_width": "initial"},
+            layout=Layout(width="155px"),
+            style={"description_width": "85px"},
         )
 
-        def on_width_change(_):
+        def on_width_change(change: Bunch):
             try:
-                width = int(width_w.value) if width_w.value else None
+                width = int(change["new"]) if change["new"].strip() else None
             except ValueError:
                 width = None
             self.set_route_width(width)
-            if on_change:
-                on_change()
 
         width_w.observe(on_width_change, names="value")
         return width_w
 
-    def get_widgets(self, on_change: Callable[[], None] | None = None):
-        return [self.build_width_text_w(on_change)]
+    def get_text_widgets(self):
+        return [self.build_width_text_w(), self.build_mins_from_pos_text_w()]
 
-    async def draw_route(self):
-        routing_url = self.routing_api_tpl.format(
-            start_lat=self.start_position[0],
-            start_lon=self.start_position[1],
-            stop_lat=self.stop_position[0],
-            stop_lon=self.stop_position[1],
-        )
+    def on_drawn(self, callback: Callable[["RouteController"], None]) -> None:
+        """Register *callback* to be called each time a route is fully drawn.
 
-        if IS_BROWSER_RUNTIME:
-            token = await self.credentials.atoken
-        else:
-            token = self.credentials.token
-        headers = {"Authorization": f"Bearer {token}"}
+        The callback receives this ``RouteController`` instance so it can
+        inspect ``flexpolyline``, ``waypoints_count``, ``start_position``, etc.
+        Multiple callbacks may be registered; they are called in registration order.
 
-        async with HTTPSession() as session:
-            async with session.get(routing_url, headers=headers) as get_response:
-                get_response.raise_for_status()
-                route = await get_response.json()
+        Example::
 
-        route_flexpolyline = route["routes"][0]["sections"][0]["polyline"]
-        waypoints = decode(route_flexpolyline)
-        self.build_flexpolyline(route_flexpolyline, waypoints)
-        self.waypoints_count = len(waypoints)
-        corridor = await RouteController.build_corridor(waypoints, self.width)
-        route_geojson = mapping(cast(ShapelyPolygon, corridor))
+            def my_handler(route):
+                print(f"Route ready: {route.waypoints_count} waypoints")
 
+            controller.on_drawn(my_handler)
+        """
+        self._on_drawn_callbacks.append(callback)
+
+    def on_removed(self, callback: Callable[["RouteController"], None]) -> None:
+        """Register *callback* to be called when a route is removed."""
+        self._on_removed_callbacks.append(callback)
+
+    async def draw_corridor(self):
+        try:
+            cached = await self.update_route_attributes()
+
+            # Recompute current_position (may shift by mins_from_pos) before the map widgets
+            # are rendered so draw_current_position() places the marker at the correct spot.
+
+            if self.current_position is None:
+                self.engine.set_current_position(self.start_position)
+            else:
+                self.engine.set_current_position(self.current_position)
+            self._apply_mins_from_pos(draw=False)
+
+            await self._render_route_widgets(cached["waypoints"])
+
+            for cb in self._on_drawn_callbacks:
+                cb(self)
+
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        finally:
+            self.has_route = True
+
+    async def update_route_attributes(self) -> dict:
+        cached = await self.engine.update_route_attributes()
+        return cached
+
+    async def _render_route_widgets(self, waypoints: list):
+        """Rebuild map widgets from *waypoints* using the current options.
+
+        No API call is made — this is purely a visual update.  It is safe to
+        call any time ``minimal_detour`` or ``width`` changes.
+        """
         self.remove_route_widgets()
-        self.geojson_w = GeoJSON(data=route_geojson, style={"color": "blue", "fillOpacity": 0.25})
         self.start_w = Marker(
             location=waypoints[0],
             popup=HTML("<b>Start</b>"),
@@ -216,125 +382,121 @@ class RouteController:
             draggable=False,
         )
         self.stop_w.icon.color = "blue"
-
         self.map_instance.add(self.start_w)
         self.map_instance.add(self.stop_w)
-        self.map_instance.add(self.geojson_w)
-        self.draw_at()
-        # Yield to the event loop so the pending comm messages (route GeoJSON,
-        # start/stop markers) are flushed to the front-end before the caller
-        # continues.
-        await asyncio.sleep(0)
 
-        # Fit the map to the union of the route corridor and any already-displayed
+        # Move the origin of the car to the start
+        self.set_current_position(waypoints[0])
+        self.draw_current_position()
+        self.draw_future_position()
+        # Yield to the event loop so the pending comm messages are flushed
+        # to the front-end before the caller continues.
+        await asyncio.sleep(0)
+        bounds = await self.get_route_bounds(waypoints)
+
+        bbox = await self.get_visible_bounds(*bounds)
+        asyncio.create_task(self.map_instance.fit_bounds(bbox))
+
+    async def get_route_bounds(self, waypoints: list) -> tuple[float, float, float, float]:
+        if self.ranking_mode.travel_time:
+            # Render the raw route polyline (no corridor buffer).
+            self.route_pl = Polyline(locations=waypoints, color="blue", weight=3, fill=False)
+            self.map_instance.add(self.route_pl)
+            lats = [p[0] for p in waypoints]
+            lons = [p[1] for p in waypoints]
+            c_south, c_north = min(lats), max(lats)
+            c_west, c_east = min(lons), max(lons)
+        else:
+            corridor = await build_corridor(waypoints, self.width)
+            route_geojson = mapping(cast(ShapelyPolygon, corridor))
+            self.geojson_w = GeoJSON(data=route_geojson, style={"color": "blue", "fillOpacity": 0.25})
+            self.map_instance.add(self.geojson_w)
+            c_west, c_south, c_east, c_north = corridor.bounds
+        return c_east, c_north, c_south, c_west
+
+    async def get_visible_bounds(
+        self,
+        c_east: Any,
+        c_north: Any,
+        c_south: Any,
+        c_west: Any,
+    ) -> tuple[tuple[float | Any, float | Any], tuple[float | Any, float | Any]]:
+        # Fit the map to the union of the route and any already-displayed
         # search results so that the full context remains visible.
-        c_west, c_south, c_east, c_north = corridor.bounds
         collection = getattr(self.map_instance, "collection", None)
         if collection is not None:
-            lats, lngs = [], []
+            lats_r, lngs_r = [], []
             for feature in collection.data.get("features", []):
                 coords = feature.get("geometry", {}).get("coordinates")
                 if coords and len(coords) >= 2:
-                    lngs.append(coords[0])
-                    lats.append(coords[1])
-            if lats:
-                c_south = min(c_south, min(lats))
-                c_north = max(c_north, max(lats))
-                c_west = min(c_west, min(lngs))
-                c_east = max(c_east, max(lngs))
+                    lngs_r.append(coords[0])
+                    lats_r.append(coords[1])
+            if lats_r:
+                c_south = min(c_south, min(lats_r))
+                c_north = max(c_north, max(lats_r))
+                c_west = min(c_west, min(lngs_r))
+                c_east = max(c_east, max(lngs_r))
         h = c_north - c_south
         w = c_east - c_west
         bbox = ((c_south - h / 8, c_west - w / 8), (c_north + h / 8, c_east + w / 8))
-        asyncio.create_task(self.map_instance.fit_bounds(bbox))
+        return bbox
 
-    @staticmethod
-    def _perpendicular_distance(
-        point: tuple[float, float], segment: tuple[tuple[float, float], tuple[float, float]]
-    ) -> float:
-        # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
-        p1, p2 = segment
-        if p1 == p2:
-            return math.dist(point, p1)
+    def draw_detour_routes(self, route_from: str, route_to: str):
+        """Render a green polyline from ``current_position`` → result and a purple
+        one from result → ``stop_position``, replacing any previously shown
+        detour routes.
+        """
 
-        num = abs((p2[1] - p1[1]) * point[0] - (p2[0] - p1[0]) * point[1] + p2[0] * p1[1] - p2[1] * p1[0])
-        den = math.hypot(p2[1] - p1[1], p2[0] - p1[0])
-        return num / den
+        self.clear_detour_routes()
 
-    @staticmethod
-    def douglas_peucker(points, epsilon):
-        # https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm
-        if len(points) <= 2:
-            return points
-
-        start, end = points[0], points[-1]
-
-        # Find the point with the maximum perpendicular distance to the line
-        max_dist = 0.0
-        index = 0
-        for i, point in enumerate(points[1:-1], start=1):
-            dist = RouteController._perpendicular_distance(point, (start, end))
-            if dist > max_dist:
-                index = i
-                max_dist = dist
-
-        # If the max distance is greater than epsilon, recursively simplify
-        if max_dist > epsilon:
-            left = RouteController.douglas_peucker(points[: index + 1], epsilon)
-            right = RouteController.douglas_peucker(points[index:], epsilon)
-            return left[:-1] + right
-        else:
-            return [start, end]
-
-    @staticmethod
-    def simplify(points: list[tuple[float, float]], max_points: int, iterations: int = 25):
-        xs = [p[0] for p in points]
-        ys = [p[1] for p in points]
-        bbox_scale = max(max(xs) - min(xs), max(ys) - min(ys))
-
-        eps_low, eps_high = 0.0, bbox_scale
-        best = points
-
-        # binary search for the best epsilon that gives us a simplified route with at most max_points
-        for _ in range(iterations):
-            eps = (eps_low + eps_high) / 2
-            simplified = RouteController.douglas_peucker(points, eps)
-
-            if len(simplified) <= max_points:
-                best = simplified
-                eps_high = eps
-            else:
-                eps_low = eps
-
-        return best
+        waypoints_to = decode(route_to)
+        waypoints_from = decode(route_from)
+        self._to_detour_pl = Polyline(locations=waypoints_to, color="green", weight=2, fill=False)
+        self._from_detour_pl = Polyline(locations=waypoints_from, color="purple", weight=2, fill=False)
+        self.map_instance.add(self._to_detour_pl)
+        self.map_instance.add(self._from_detour_pl)
 
     def build_flexpolyline(self, flexpolyline: str, waypoints: list[tuple[float, float]]):
-        if len(waypoints) > RouteController.max_waypoints_count:
-            simplified_waypoints = RouteController.simplify(waypoints, RouteController.max_waypoints_count)
-            flexpolyline = encode(simplified_waypoints)
-        self.flexpolyline = f"{flexpolyline};w={self.width}"
+        self.engine.build_flexpolyline(flexpolyline, waypoints)
 
-    def draw_at(self):
-        if self.at_position is None:
-            self.at_position = self.map_instance.center
+    def draw_current_position(self):
         if self.at_w is not None:
             self.map_instance.remove(self.at_w)
-        # html = "<img = src='https://raw.githubusercontent.com/heremaps/here-icons/master/icons/travel-transport-tracking/SVG/driving_solid_24px.svg'/>"
 
         self.at_w = Marker(
-            location=self.at_position,
+            location=self.current_position,
             popup=HTML("<b>at</b>"),
-            # icon=AwesomeIcon(color="red", name="car"),
-            # icon=DivIcon(
-            #    html='<i class="fa fa-car fa-3x" style="color: red;"></i>',
-            #    icon_size=[30, 30], # Adjust the bounding box
-            #    icon_anchor=[15, 30] # Anchor the bottom tip to the coordinates
-            # ),
             icon=AwesomeIcon(name="car", marker_color="blue", icon_color="white"),
-            # icon=DivIcon(html=html),
             draggable=False,
         )
         self.at_w.icon.extra_classes = "fa-2x"
         self.map_instance.add(self.at_w)
+
+    def draw_future_position(self):
+        """Place (or remove) a semi-transparent car marker at the future position.
+
+        The marker is shown when ``future_position`` is set (i.e. *mins_from_pos* > 0)
+        and removed otherwise.
+        """
+        if self.future_position_w is not None:
+            try:
+                self.map_instance.remove(self.future_position_w)
+            except Exception:
+                pass
+            self.future_position_w = None
+
+        if self.future_position is None:
+            return
+
+        self.future_position_w = Marker(
+            location=self.future_position,
+            popup=HTML(f"<b>in {self.mins_from_pos} min</b>"),
+            icon=AwesomeIcon(name="car", marker_color="blue", icon_color="white"),
+            opacity=0.4,
+            draggable=False,
+        )
+        self.future_position_w.icon.extra_classes = "fa-2x"
+        self.map_instance.add(self.future_position_w)
 
     def has_any_route_property(self) -> bool:
         return self.start_position is not None or self.stop_position is not None or self.width is not None

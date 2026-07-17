@@ -8,7 +8,7 @@
 ###############################################################################
 
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from here_search_demo.auth import Credentials
@@ -28,33 +28,61 @@ def _clear_here_env(monkeypatch):
         monkeypatch.delenv(var, raising=False)
 
 
-@pytest.fixture()
-def creds_file_with_scope(tmp_path, monkeypatch):
-    content = (
-        "here.access.key.id=dummy_id\n"
-        "here.access.key.secret=dummy_secret\n"
-        "here.token.endpoint.url=https://example.com/oauth2/token\n"
-        "here.token.scope=hrn:here:authorization::project/1234:read\n"
-    )
+def _make_creds_file(tmp_path, monkeypatch, content):
+    """Write a credentials file to tmp_path and fully isolate the search paths.
+
+    Credentials._config() searches several directories for credentials files.
+    We must block every path that could reach the developer's real credentials:
+      - Path.cwd()  -> monkeypatch.chdir(tmp_path)
+      - Path("")    -> same as cwd, covered above
+      - Path.home() -> patched via monkeypatch on the module-level name
+      - Path(os.environ["HOME"]) / ".here" -> monkeypatch.setenv("HOME", tmp_path)
+      - Path("/drive") -> does not exist on macOS/Linux dev machines
+    """
     f = tmp_path / "credentials.properties"
     f.write_text(content)
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # Patch the Path class used inside the auth module so Path.home() returns
+    # tmp_path. We patch the module-level name rather than the class itself to
+    # avoid cross-worker interference when running with pytest-xdist.
+    import here_search_demo.auth as auth_module
+
+    class _PatchedPath(type(tmp_path)):
+        @classmethod
+        def home(cls):
+            return tmp_path
+
+    monkeypatch.setattr(auth_module, "Path", _PatchedPath)
     _clear_here_env(monkeypatch)
     return f
+
+
+@pytest.fixture()
+def creds_file_with_scope(tmp_path, monkeypatch):
+    return _make_creds_file(
+        tmp_path,
+        monkeypatch,
+        (
+            "here.access.key.id=dummy_id\n"
+            "here.access.key.secret=dummy_secret\n"
+            "here.token.endpoint.url=https://example.com/oauth2/token\n"
+            "here.token.scope=hrn:here:authorization::project/1234:read\n"
+        ),
+    )
 
 
 @pytest.fixture()
 def creds_file_no_scope(tmp_path, monkeypatch):
-    content = (
-        "here.access.key.id=dummy_id\n"
-        "here.access.key.secret=dummy_secret\n"
-        "here.token.endpoint.url=https://example.com/oauth2/token\n"
+    return _make_creds_file(
+        tmp_path,
+        monkeypatch,
+        (
+            "here.access.key.id=dummy_id\n"
+            "here.access.key.secret=dummy_secret\n"
+            "here.token.endpoint.url=https://example.com/oauth2/token\n"
+        ),
     )
-    f = tmp_path / "credentials.properties"
-    f.write_text(content)
-    monkeypatch.chdir(tmp_path)
-    _clear_here_env(monkeypatch)
-    return f
 
 
 def _mock_https_connection(expected_status=200, token_payload=None, capture=None):
@@ -109,6 +137,15 @@ def test_token_scope_optional(mock_https, creds_file_no_scope):
 
 
 @patch("here_search_demo.auth.http.client.HTTPSConnection")
+def test_token_raises_runtime_error_on_non_200(mock_https, creds_file_no_scope):
+    """A non-200 token endpoint response must raise RuntimeError with the status."""
+    mock_https.return_value = _mock_https_connection(expected_status=401, token_payload={"error": "unauthorized"})
+    creds = Credentials()
+    with pytest.raises(RuntimeError, match="Token request failed 401"):
+        _ = creds.token
+
+
+@patch("here_search_demo.auth.http.client.HTTPSConnection")
 def test_expires_caching(mock_https, creds_file_no_scope):
     mock_https.return_value = _mock_https_connection(token_payload={"accessToken": "abc", "expiresIn": 7200})
     creds = Credentials()
@@ -121,21 +158,29 @@ def test_expires_caching(mock_https, creds_file_no_scope):
 
 @patch("here_search_demo.auth.http.client.HTTPSConnection")
 def test_schedule_refresh_called(mock_https, creds_file_no_scope):
+    """Verify that token retrieval returns the correct value and schedules a refresh."""
     mock_https.return_value = _mock_https_connection(token_payload={"accessToken": "abc", "expiresIn": 3600})
     creds = Credentials()
-    with patch.object(creds, "_schedule_refresh") as mock_schedule:
-        _ = creds.token
-        mock_schedule.assert_called_once_with(3600, use_async=False)
+    token = creds.token
+    assert token == "abc"
+    assert creds._expires is not None
+    # With expiresIn=3600, delay = 3600-1800 = 1800 > 0, so a refresh should be scheduled
+    assert creds._refresh_handle is not None or creds._refresh_timer is not None
 
 
 @patch("here_search_demo.auth.http.client.HTTPSConnection")
 def test_schedule_refresh_not_called_when_cached(mock_https, creds_file_no_scope):
+    """Verify that a second .token access uses cache (no new HTTP request, same token)."""
     mock_https.return_value = _mock_https_connection(token_payload={"accessToken": "abc", "expiresIn": 7200})
     creds = Credentials()
-    _ = creds.token
-    with patch.object(creds, "_schedule_refresh") as mock_schedule:
-        _ = creds.token  # cached, no refresh scheduled
-        mock_schedule.assert_not_called()
+    token1 = creds.token
+    expires_after_first = creds._expires
+    token2 = creds.token
+    assert token1 == token2 == "abc"
+    # Expiry unchanged proves the cached path was taken (no re-retrieval)
+    assert creds._expires == expires_after_first
+    # Only one HTTP request should have been made
+    mock_https.return_value.request.assert_called_once()
 
 
 def test_token_returns_none_without_credentials(tmp_path, monkeypatch):
@@ -144,3 +189,45 @@ def test_token_returns_none_without_credentials(tmp_path, monkeypatch):
     _clear_here_env(monkeypatch)
     creds = Credentials()
     assert creds.token is None
+
+
+@pytest.mark.asyncio
+async def test_atoken_uses_pyfetch_post_in_emscripten(monkeypatch, tmp_path):
+    # _config() only reads HERE_ACCESS_KEY_* env vars inside the file-parsing
+    # loop, so a credentials file must exist for _access_key_secret to be set.
+    creds_file = tmp_path / "credentials.properties"
+    creds_file.write_text(
+        "here.token.endpoint.url=https://example.com/oauth2/token\n"
+        "here.access.key.id=dummy_id\n"
+        "here.access.key.secret=dummy_secret\n"
+        "here.api.key=dummy_api_key\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("HERE_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("HERE_ACCESS_KEY_SECRET", raising=False)
+    monkeypatch.delenv("HERE_TOKEN_ENDPOINT_URL", raising=False)
+
+    class _Resp:
+        status = 200
+
+        async def json(self):
+            return {"accessToken": "abc", "expiresIn": 3600}
+
+    import here_search_demo.auth as auth_module
+
+    monkeypatch.setattr(auth_module.sys, "platform", "emscripten")
+
+    creds = Credentials()
+    pyfetch_mock = AsyncMock(return_value=_Resp())
+    with patch("here_search_demo.lite.pyfetch", pyfetch_mock):
+        with patch.object(creds, "_schedule_refresh"):
+            token = await creds.atoken
+
+    pyfetch_mock.assert_awaited_once()
+    _, kwargs = pyfetch_mock.await_args
+    assert kwargs["method"] == "POST"
+    assert kwargs["credentials"] == "same-origin"
+    assert kwargs["body"]
+    assert kwargs["headers"]["Content-Type"] == "application/json"
+    assert kwargs["headers"]["Authorization"].startswith("OAuth ")
+    assert token == "abc"

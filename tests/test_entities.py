@@ -35,6 +35,18 @@ def test_request_key():
     assert request.key == "urlp1v1p2v2"
 
 
+def test_request_key_includes_data():
+    # The route polyline and corridor width are carried in the POST body ``data``.
+    # Two requests differing only by width must yield different cache keys so a
+    # width change triggers a fresh search instead of returning the stale result.
+    common = dict(endpoint=Endpoint.DISCOVER, base_url="url", params={"q": "cafe"})
+    narrow = Request(data="route=poly;w=100", **common)
+    wide = Request(data="route=poly;w=500", **common)
+
+    assert narrow.key != wide.key
+    assert narrow.key == "urlqcaferoute=poly;w=100"
+
+
 def test_request_full():
     request = Request(
         endpoint=Endpoint.AUTOSUGGEST,
@@ -46,36 +58,40 @@ def test_request_full():
 
 
 def test_response_titles():
-    assert Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={"items": []}).titles == []
+    assert Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={"items": []}, x_headers={}).titles == []
     assert Response(
         req=Request(endpoint=Endpoint.AUTOSUGGEST),
         data={"items": [{"title": "title1"}]},
+        x_headers={},
     ).titles == ["title1"]
     assert Response(
         req=Request(endpoint=Endpoint.AUTOSUGGEST),
         data={"items": [{"title": "title1"}, {"title": "title2"}]},
+        x_headers={},
     ).titles == ["title1", "title2"]
-    assert Response(req=Request(endpoint=Endpoint.LOOKUP), data={"title": "title1"}).titles == ["title1"]
+    assert Response(req=Request(endpoint=Endpoint.LOOKUP), data={"title": "title1"}, x_headers={}).titles == ["title1"]
     with pytest.raises(KeyError):
-        titles = Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={"items": [{}]}).titles
+        titles = Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={"items": [{}]}, x_headers={}).titles
     with pytest.raises(KeyError):
-        titles = Response(req=Request(endpoint=Endpoint.LOOKUP), data={}).titles
+        titles = Response(req=Request(endpoint=Endpoint.LOOKUP), data={}, x_headers={}).titles
         assert titles == []
 
 
 def test_response_terms():
-    assert Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={}).terms == []
-    assert Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={"queryTerms": []}).terms == []
+    assert Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={}, x_headers={}).terms == []
+    assert Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={"queryTerms": []}, x_headers={}).terms == []
     assert Response(
         req=Request(endpoint=Endpoint.AUTOSUGGEST),
         data={"queryTerms": [{"term": "term1"}]},
+        x_headers={},
     ).terms == ["term1"]
     assert Response(
         req=Request(endpoint=Endpoint.AUTOSUGGEST),
         data={"queryTerms": [{"term": "term1"}, {"term": "term2"}]},
+        x_headers={},
     ).terms == ["term1", "term2"]
     with pytest.raises(KeyError):
-        titles = Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={"queryTerms": [{}]}).terms
+        titles = Response(req=Request(endpoint=Endpoint.AUTOSUGGEST), data={"queryTerms": [{}]}, x_headers={}).terms
         assert titles == []
 
 

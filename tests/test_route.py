@@ -13,7 +13,11 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 from flexpolyline import encode as fp_encode
 
+from here_search_demo.route_engine import RouteEngine
 from here_search_demo.widgets.route import RouteController
+from here_search_demo.widgets.route_geometry import (
+    simplify_polyline,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -50,10 +54,12 @@ def controller(mock_map, mock_credentials):
 def test_initial_state(controller):
     assert controller.start_position is None
     assert controller.stop_position is None
-    assert controller.at_position is None
+    assert controller.current_position is None
     assert controller.width == 100
     assert controller.all_along is False
-    assert controller.flexpolyline is None
+    assert controller.minimal_detour is False
+    assert controller.route_summary_length is None
+    assert controller.search_flexpolyline is None
     assert controller.waypoints_count is None
     assert controller.geojson_w is None
     assert controller.start_w is None
@@ -104,6 +110,14 @@ def test_set_route_start_does_not_draw_without_stop(controller):
     assert controller.acquisition_task is None
 
 
+def test_set_route_start_delegates_to_engine_setter(controller):
+    with patch.object(controller.engine, "set_route_start", wraps=controller.engine.set_route_start) as mock_set:
+        controller.set_route_start((48.8, 2.3))
+    mock_set.assert_called_once_with((48.8, 2.3))
+    assert controller.engine.start_position == (48.8, 2.3)
+    assert controller.start_position == (48.8, 2.3)
+
+
 def test_set_route_stop_does_not_draw_without_start(controller):
     controller.set_route_stop((51.5, 0.1))
     assert controller.stop_position == (51.5, 0.1)
@@ -112,8 +126,8 @@ def test_set_route_stop_does_not_draw_without_start(controller):
 
 @pytest.mark.asyncio
 async def test_set_route_start_triggers_draw_when_complete(controller):
-    controller.stop_position = (51.5, 0.1)
-    with patch.object(controller, "draw_route", new_callable=AsyncMock) as mock_draw:
+    controller.set_route_stop((51.5, 0.1))
+    with patch.object(controller, "draw_corridor", new_callable=AsyncMock) as mock_draw:
         controller.set_route_start((48.8, 2.3))
         assert controller.acquisition_task is not None
         await controller.acquisition_task
@@ -122,8 +136,8 @@ async def test_set_route_start_triggers_draw_when_complete(controller):
 
 @pytest.mark.asyncio
 async def test_set_route_stop_triggers_draw_when_complete(controller):
-    controller.start_position = (48.8, 2.3)
-    with patch.object(controller, "draw_route", new_callable=AsyncMock) as mock_draw:
+    controller.set_route_start((48.8, 2.3))
+    with patch.object(controller, "draw_corridor", new_callable=AsyncMock) as mock_draw:
         controller.set_route_stop((51.5, 0.1))
         assert controller.acquisition_task is not None
         await controller.acquisition_task
@@ -132,13 +146,50 @@ async def test_set_route_stop_triggers_draw_when_complete(controller):
 
 @pytest.mark.asyncio
 async def test_set_route_width_triggers_draw_when_complete(controller):
-    controller.start_position = (48.8, 2.3)
-    controller.stop_position = (51.5, 0.1)
-    with patch.object(controller, "draw_route", new_callable=AsyncMock) as mock_draw:
+    controller.set_route_start((48.8, 2.3))
+    controller.set_route_stop((51.5, 0.1))
+    with patch.object(controller, "draw_corridor", new_callable=AsyncMock) as mock_draw:
         controller.set_route_width(200)
         assert controller.width == 200
         await controller.acquisition_task
         mock_draw.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_set_route_width_modifies_corridor_without_refetching_when_drawn(controller):
+    """When a route is already drawn, changing the width redraws the corridor
+    (keeping results) instead of fetching the route again via draw_corridor."""
+    controller.set_route_start((48.8, 2.3))
+    controller.set_route_stop((51.5, 0.1))
+    controller._current_waypoints = [(48.8, 2.3), (51.5, 0.1)]
+
+    with (
+        patch.object(controller, "draw_corridor", new_callable=AsyncMock) as mock_draw,
+        patch.object(controller, "_render_route_widgets", new_callable=AsyncMock) as mock_render,
+    ):
+        controller.set_route_width(250)
+        assert controller.width == 250
+        await controller.acquisition_task
+        mock_draw.assert_not_awaited()
+        mock_render.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_modify_corridor_width_rebuilds_search_flexpolyline_from_cache(controller):
+    """modify_corridor_width rebuilds the search polyline from the cached raw
+    route so a subsequent search reflects the current geometry."""
+    controller.set_route_start((48.8, 2.3))
+    controller.set_route_stop((48.9, 2.4))
+    pts = [(48.8, 2.3), (48.9, 2.4)]
+    raw = fp_encode(pts)
+    controller._current_waypoints = pts
+    controller._route_cache[("route", 48.8, 2.3, 48.9, 2.4)] = {"flexpolyline_raw": raw, "waypoints": pts}
+
+    with patch.object(controller, "_render_route_widgets", new_callable=AsyncMock):
+        controller.modify_corridor_width()
+        await controller.acquisition_task
+
+    assert controller.search_flexpolyline == raw
 
 
 # ---------------------------------------------------------------------------
@@ -147,22 +198,32 @@ async def test_set_route_width_triggers_draw_when_complete(controller):
 
 
 def test_set_route_at_stores_position(controller):
-    controller.set_route_at((49.0, 2.5))
-    assert controller.at_position == (49.0, 2.5)
+    controller.set_current_position((49.0, 2.5))
+    assert controller.current_position == (49.0, 2.5)
 
 
-def test_set_route_at_calls_draw_at_when_geojson_present(controller):
+def test_set_route_at_delegates_to_engine_setter(controller):
+    with patch.object(
+        controller.engine, "set_current_position", wraps=controller.engine.set_current_position
+    ) as mock_set:
+        controller.set_current_position((49.0, 2.5))
+    mock_set.assert_called_once_with((49.0, 2.5))
+    assert controller.engine.current_position == (49.0, 2.5)
+    assert controller.current_position == (49.0, 2.5)
+
+
+def test_set_route_at_calls_draw_current_position_when_geojson_present(controller):
     controller.geojson_w = MagicMock()
-    with patch.object(controller, "draw_at") as mock_draw_at:
-        controller.set_route_at((49.0, 2.5))
-        mock_draw_at.assert_called_once()
+    with patch.object(controller, "draw_current_position") as mock_draw_current_position:
+        controller.set_current_position((49.0, 2.5))
+        mock_draw_current_position.assert_called_once()
 
 
-def test_set_route_at_skips_draw_at_without_geojson(controller):
+def test_set_route_at_skips_draw_current_position_without_geojson(controller):
     controller.geojson_w = None
-    with patch.object(controller, "draw_at") as mock_draw_at:
-        controller.set_route_at((49.0, 2.5))
-        mock_draw_at.assert_not_called()
+    with patch.object(controller, "draw_current_position") as mock_draw_current_position:
+        controller.set_current_position((49.0, 2.5))
+        mock_draw_current_position.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -171,12 +232,12 @@ def test_set_route_at_skips_draw_at_without_geojson(controller):
 
 
 def test_all_along_default_is_false(controller):
-    assert controller.get_all_along_option() is False
+    assert controller.all_along is False
 
 
 def test_set_all_along_option(controller):
-    controller.set_all_along_option(True)
-    assert controller.get_all_along_option() is True
+    controller.all_along = True
+    assert controller.all_along is True
 
 
 # ---------------------------------------------------------------------------
@@ -207,15 +268,25 @@ def test_remove_route_widgets_is_idempotent_when_empty(controller, mock_map):
 def test_remove_route_attributes_resets_state(controller):
     controller.start_position = (48.8, 2.3)
     controller.stop_position = (51.5, 0.1)
-    controller.flexpolyline = "abc;w=100"
+    controller.search_flexpolyline = "abc"
+    controller.width = 100
     controller.waypoints_count = 42
 
     controller.remove_route_attributes()
 
     assert controller.start_position is None
     assert controller.stop_position is None
-    assert controller.flexpolyline is None
+    assert controller.search_flexpolyline is None
     assert controller.waypoints_count is None
+
+
+def test_remove_route_attributes_triggers_removed_callbacks(controller):
+    called = []
+    controller.on_removed(lambda route: called.append(route))
+
+    controller.remove_route_attributes()
+
+    assert called == [controller]
 
 
 # ---------------------------------------------------------------------------
@@ -237,55 +308,13 @@ def test_get_route_checkbox_options_keys(controller):
     assert get_fn() is True
 
 
-# ---------------------------------------------------------------------------
-# _perpendicular_distance
-# ---------------------------------------------------------------------------
-
-
-def test_perpendicular_distance_point_on_segment():
-    dist = RouteController._perpendicular_distance((1, 0), ((0, 0), (2, 0)))
-    assert dist == pytest.approx(0.0)
-
-
-def test_perpendicular_distance_perpendicular():
-    dist = RouteController._perpendicular_distance((0, 1), ((0, 0), (1, 0)))
-    assert dist == pytest.approx(1.0)
-
-
-def test_perpendicular_distance_degenerate_segment():
-    """When p1 == p2 fall back to Euclidean distance."""
-    dist = RouteController._perpendicular_distance((3, 4), ((0, 0), (0, 0)))
-    assert dist == pytest.approx(5.0)
-
-
-# ---------------------------------------------------------------------------
-# douglas_peucker
-# ---------------------------------------------------------------------------
-
-
-def test_douglas_peucker_returns_endpoints_for_two_points():
-    points = [(0, 0), (1, 1)]
-    assert RouteController.douglas_peucker(points, 0.1) == points
-
-
-def test_douglas_peucker_collinear_points_simplified():
-    # Perfectly collinear: middle points should be removed for any epsilon > 0
-    points = [(0, 0), (1, 0), (2, 0), (3, 0)]
-    result = RouteController.douglas_peucker(points, 0.01)
-    assert result == [(0, 0), (3, 0)]
-
-
-def test_douglas_peucker_keeps_significant_deviation():
-    # A spike at (1, 10) should survive a tight epsilon
-    points = [(0, 0), (1, 10), (2, 0)]
-    result = RouteController.douglas_peucker(points, 0.1)
-    assert (1, 10) in result
-
-
-def test_douglas_peucker_epsilon_zero_keeps_all():
-    points = [(0, 0), (1, 0.001), (2, 0)]
-    result = RouteController.douglas_peucker(points, 0.0)
-    assert len(result) == len(points)
+def test_get_route_checkbox_options_minimal_detour(controller):
+    options = controller.get_route_checkbox_options()
+    assert "travel time" in options
+    get_fn, set_fn = options["travel time"]
+    assert get_fn() is False
+    set_fn(True)
+    assert get_fn() is True
 
 
 # ---------------------------------------------------------------------------
@@ -296,20 +325,20 @@ def test_douglas_peucker_epsilon_zero_keeps_all():
 def test_simplify_reduces_to_max_points():
     # A large straight line — should collapse to 2 points
     points = [(float(i), 0.0) for i in range(500)]
-    result = RouteController.simplify(points, max_points=10)
+    result = simplify_polyline(points, max_points=10)
     assert len(result) <= 10
 
 
 def test_simplify_preserves_endpoints():
     points = [(float(i), float(i % 5)) for i in range(100)]
-    result = RouteController.simplify(points, max_points=20)
+    result = simplify_polyline(points, max_points=20)
     assert result[0] == points[0]
     assert result[-1] == points[-1]
 
 
 def test_simplify_returns_original_when_below_max():
     points = [(0.0, 0.0), (1.0, 1.0), (2.0, 0.0)]
-    result = RouteController.simplify(points, max_points=50)
+    result = simplify_polyline(points, max_points=50)
     assert result == points
 
 
@@ -322,25 +351,22 @@ def test_build_flexpolyline_short_route(controller):
     points = [(48.8, 2.3), (48.9, 2.4)]
 
     raw = fp_encode(points)
-    controller.width = 100
     controller.build_flexpolyline(raw, points)
-    assert controller.flexpolyline == f"{raw};w=100"
+    assert controller.search_flexpolyline == raw
 
 
 def test_build_flexpolyline_long_route_is_simplified(controller):
     """When waypoints exceed max_waypoints_count the polyline is re-encoded."""
-    points = [(float(i) * 0.0001, float(i) * 0.0001) for i in range(RouteController.max_waypoints_count + 10)]
+    points = [(float(i) * 0.0001, float(i) * 0.0001) for i in range(RouteEngine.max_waypoints_count + 10)]
 
     raw = fp_encode(points)
-    controller.width = 50
     controller.build_flexpolyline(raw, points)
     # The stored polyline must differ from the original (it was simplified)
-    assert controller.flexpolyline != f"{raw};w=50"
-    assert controller.flexpolyline.endswith(";w=50")
+    assert controller.search_flexpolyline != raw
 
 
 # ---------------------------------------------------------------------------
-# draw_route (integration-style with mocked HTTP)
+# draw_corridor (integration-style with mocked HTTP)
 # ---------------------------------------------------------------------------
 
 
@@ -355,7 +381,7 @@ def route_response():
                 "sections": [
                     {
                         "polyline": fp_encode(waypoints),
-                        "summary": {},
+                        "summary": {"length": 12345},
                     }
                 ]
             }
@@ -364,7 +390,7 @@ def route_response():
 
 
 @pytest.mark.asyncio
-async def test_draw_route_calls_map_add(controller, mock_map, route_response):
+async def test_draw_corridor_calls_map_add(controller, mock_map, route_response):
     mock_response = AsyncMock()
     mock_response.raise_for_status = Mock()
     mock_response.json = AsyncMock(return_value=route_response)
@@ -380,15 +406,15 @@ async def test_draw_route_calls_map_add(controller, mock_map, route_response):
     mock_http_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_http_ctx.__aexit__ = AsyncMock(return_value=None)
 
-    controller.start_position = (48.8, 2.3)
-    controller.stop_position = (48.9, 2.4)
+    controller.engine.set_route_start((48.8, 2.3))
+    controller.engine.set_route_stop((48.9, 2.4))
 
     with (
-        patch("here_search_demo.widgets.route.HTTPSession", return_value=mock_http_ctx),
-        patch("here_search_demo.widgets.route.IS_BROWSER_RUNTIME", False),
+        patch("here_search_demo.route_engine.HTTPSession", return_value=mock_http_ctx),
+        patch("here_search_demo.route_engine.IS_BROWSER_RUNTIME", False),
         patch.object(controller.map_instance, "fit_bounds", new_callable=AsyncMock),
     ):
-        await controller.draw_route()
+        await controller.draw_corridor()
 
     # start, stop and geojson markers must have been added
     assert mock_map.add.call_count >= 3
@@ -396,11 +422,16 @@ async def test_draw_route_calls_map_add(controller, mock_map, route_response):
     assert controller.start_w is not None
     assert controller.stop_w is not None
     assert controller.waypoints_count == 3
-    assert controller.flexpolyline is not None
+    assert controller.search_flexpolyline is not None
+    assert controller.route_summary_length == 12345
+    assert controller.current_position == (48.8, 2.3)
 
 
 @pytest.mark.asyncio
-async def test_draw_route_schedules_fit_bounds(controller, mock_map, route_response):
+async def test_draw_corridor_counts_routing_api_calls(mock_map, mock_credentials, route_response):
+    calls = []
+    controller = RouteController(mock_map, mock_credentials, routing_api_call_handler=lambda: calls.append("routing"))
+
     mock_response = AsyncMock()
     mock_response.raise_for_status = Mock()
     mock_response.json = AsyncMock(return_value=route_response)
@@ -416,17 +447,48 @@ async def test_draw_route_schedules_fit_bounds(controller, mock_map, route_respo
     mock_http_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_http_ctx.__aexit__ = AsyncMock(return_value=None)
 
-    controller.start_position = (48.8, 2.3)
-    controller.stop_position = (48.9, 2.4)
+    controller.engine.set_route_start((48.8, 2.3))
+    controller.engine.set_route_stop((48.9, 2.4))
+
+    with (
+        patch("here_search_demo.route_engine.HTTPSession", return_value=mock_http_ctx),
+        patch("here_search_demo.route_engine.IS_BROWSER_RUNTIME", False),
+        patch.object(controller.map_instance, "fit_bounds", new_callable=AsyncMock),
+    ):
+        await controller.draw_corridor()
+        await controller.draw_corridor()  # cached route: no additional routing request
+
+    assert calls == ["routing"]
+
+
+@pytest.mark.asyncio
+async def test_draw_corridor_schedules_fit_bounds(controller, mock_map, route_response):
+    mock_response = AsyncMock()
+    mock_response.raise_for_status = Mock()
+    mock_response.json = AsyncMock(return_value=route_response)
+
+    mock_session_ctx = MagicMock()
+    mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    mock_session = MagicMock()
+    mock_session.get = Mock(return_value=mock_session_ctx)
+
+    mock_http_ctx = MagicMock()
+    mock_http_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_http_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    controller.engine.set_route_start((48.8, 2.3))
+    controller.engine.set_route_stop((48.9, 2.4))
 
     fit_bounds_mock = AsyncMock()
     controller.map_instance.fit_bounds = fit_bounds_mock
 
     with (
-        patch("here_search_demo.widgets.route.HTTPSession", return_value=mock_http_ctx),
-        patch("here_search_demo.widgets.route.IS_BROWSER_RUNTIME", False),
+        patch("here_search_demo.route_engine.HTTPSession", return_value=mock_http_ctx),
+        patch("here_search_demo.route_engine.IS_BROWSER_RUNTIME", False),
     ):
-        await controller.draw_route()
+        await controller.draw_corridor()
         # Let the scheduled fit_bounds task run
         await asyncio.sleep(0)
 
@@ -438,7 +500,7 @@ async def test_draw_route_schedules_fit_bounds(controller, mock_map, route_respo
 
 
 @pytest.mark.asyncio
-async def test_draw_route_merges_existing_collection_bbox(controller, mock_map, route_response):
+async def test_draw_corridor_merges_existing_collection_bbox(controller, mock_map, route_response):
     """The fit bbox should also encompass existing map result features."""
     mock_response = AsyncMock()
     mock_response.raise_for_status = Mock()
@@ -455,8 +517,8 @@ async def test_draw_route_merges_existing_collection_bbox(controller, mock_map, 
     mock_http_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_http_ctx.__aexit__ = AsyncMock(return_value=None)
 
-    controller.start_position = (48.8, 2.3)
-    controller.stop_position = (48.9, 2.4)
+    controller.engine.set_route_start((48.8, 2.3))
+    controller.engine.set_route_stop((48.9, 2.4))
 
     # Simulate a result feature far south of the route
     far_south_lat, far_south_lng = 47.0, 2.0
@@ -468,10 +530,10 @@ async def test_draw_route_merges_existing_collection_bbox(controller, mock_map, 
     controller.map_instance.fit_bounds = fit_bounds_mock
 
     with (
-        patch("here_search_demo.widgets.route.HTTPSession", return_value=mock_http_ctx),
-        patch("here_search_demo.widgets.route.IS_BROWSER_RUNTIME", False),
+        patch("here_search_demo.route_engine.HTTPSession", return_value=mock_http_ctx),
+        patch("here_search_demo.route_engine.IS_BROWSER_RUNTIME", False),
     ):
-        await controller.draw_route()
+        await controller.draw_corridor()
         await asyncio.sleep(0)
 
     fit_bounds_mock.assert_awaited_once()

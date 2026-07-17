@@ -18,6 +18,7 @@ class Endpoint(IntEnum):
     LOOKUP = 4
     BROWSE = 5
     REVGEOCODE = 6
+    SIGNALS = 7
 
 
 @dataclass

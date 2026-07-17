@@ -9,9 +9,8 @@
 
 import asyncio
 import traceback
-from dataclasses import dataclass
-from time import perf_counter_ns
-from typing import Callable, Mapping, Tuple
+from dataclasses import dataclass, replace
+from typing import Callable, Mapping, Protocol, Tuple, runtime_checkable
 
 from here_search_demo import __version__
 from here_search_demo.api import API
@@ -23,10 +22,11 @@ from here_search_demo.entity.endpoint import (
     LookupConfig,
     NoConfig,
 )
-from here_search_demo.entity.intent import SearchIntent
+from here_search_demo.entity.intent import ActionIntent, SearchIntent
 from here_search_demo.entity.request import RequestContext
 from here_search_demo.entity.response import LocationSuggestionItem, QuerySuggestionItem, Response
 from here_search_demo.event import (
+    ActionSearchEvent,
     DetailsSearchEvent,
     DetailsSuggestionEvent,
     EmptySearchEvent,
@@ -41,29 +41,34 @@ from here_search_demo.user import DefaultUser, UserProfile
 
 
 @dataclass(frozen=True)
-class Route:
+class Triage:
     event_type: type[SearchEvent]
-    config_factory: Callable[["OneBoxSimple"], EndpointConfig | LookupConfig | NoConfig | None]
-    handler_factory: Callable[["OneBoxSimple"], Callable[[SearchIntent, Response], None]]
+    config_factory: Callable[["OneBoxCore"], EndpointConfig | LookupConfig | NoConfig | None]
+    handler_factory: Callable[["OneBoxCore"], Callable[[SearchIntent, Response], None]]
 
 
-ROUTES: Mapping[str, Route] = {
-    "transient_text": Route(
+TRIAGES: Mapping[str, Triage] = {
+    "transient_text": Triage(
         event_type=PartialTextSearchEvent,
         config_factory=lambda ob: AutosuggestConfig(limit=ob.autosuggest_backend_limit, terms_limit=ob.terms_limit),
         handler_factory=lambda ob: ob.handle_suggestion_list,
     ),
-    "submitted_text": Route(
+    "submitted_text": Triage(
         event_type=TextSearchEvent,
         config_factory=lambda ob: DiscoverConfig(limit=ob.discover_backend_limit),
         handler_factory=lambda ob: ob.handle_result_list,
     ),
-    "taxonomy": Route(
+    "taxonomy": Triage(
         event_type=PlaceTaxonomySearchEvent,
         config_factory=lambda ob: BrowseConfig(limit=ob.browse_backend_limit),
         handler_factory=lambda ob: ob.handle_result_list,
     ),
-    "empty": Route(
+    "action": Triage(
+        event_type=ActionSearchEvent,
+        config_factory=lambda ob: NoConfig(),
+        handler_factory=lambda ob: ob.handle_action,
+    ),
+    "empty": Triage(
         event_type=EmptySearchEvent,
         config_factory=lambda ob: None,
         handler_factory=lambda ob: ob.handle_empty_text_submission,
@@ -71,14 +76,34 @@ ROUTES: Mapping[str, Route] = {
 }
 
 
-class OneBoxSimple:
+class OneBoxCore:
+    """Core async controller for one-box search workflows.
+
+    ``OneBoxCore`` consumes :class:`~here_search_demo.entity.intent.SearchIntent`
+    objects from ``queue``, maps them to typed search events, executes API calls,
+    and dispatches responses to dedicated handlers.
+
+    Subclasses typically override presentation hooks such as
+    :meth:`handle_suggestion_list`, :meth:`handle_result_list`, and
+    :meth:`handle_result_details` while reusing the routing/transport pipeline.
+
+    :param api: API adapter. Defaults to :class:`here_search_demo.api.API`.
+    :param queue: Intent queue consumed by ``run()``.
+    :param search_center: Default ``(lat, lon)`` context used by requests.
+    :param language: Preferred language code for requests.
+    :param results_limit: Number of results to expose to UI handlers.
+    :param suggestions_limit: Number of autosuggest items to expose.
+    :param terms_limit: Number of term suggestions to expose.
+    :param max_transient_keep: Maximum queued transient-text intents retained.
+    """
+
     default_results_limit = 20
     default_suggestions_limit = 20
     default_terms_limit = 3
     default_search_center = 52.51604, 13.37691
     default_max_transient_keep = 1
     default_language = "en"
-    default_headers = {"User-Agent": f"here-search-notebook-{__version__}"}
+    default_headers = {"User-Agent": f"here-search-demo-{__version__}"}
 
     def __init__(
         self,
@@ -90,7 +115,6 @@ class OneBoxSimple:
         suggestions_limit: int | None = None,
         terms_limit: int | None = None,
         max_transient_keep: int | None = None,
-        **kwargs,
     ):
         self.task = None
         self.api = api or API()
@@ -107,12 +131,12 @@ class OneBoxSimple:
         self.queue = queue or asyncio.Queue()
         self.max_transient_keep = max_transient_keep or self.default_max_transient_keep
         self.more_details_for_suggestion = self.api.lookup_has_more_details
-        self.latencies = []
-        self.headers = OneBoxSimple.default_headers
+        self.headers = OneBoxCore.default_headers
         self.x_headers = None
         self._running: bool = False
+        self._postprocess_callbacks: list[Callable] = []
 
-    def build_event_and_route(
+    def triage_intent(
         self, intent: SearchIntent, context: RequestContext
     ) -> tuple[
         SearchEvent,
@@ -121,7 +145,7 @@ class OneBoxSimple:
     ]:
         """Resolve an intent into a SearchEvent, handler and config.
 
-        Keeps routing declarative via ROUTES for most kinds; only the
+        Keeps routing declarative via TRIAGES for most kinds; only the
         inherently irregular "details" case is handled specially.
         """
 
@@ -143,13 +167,13 @@ class OneBoxSimple:
             return event, handler, config
 
         try:
-            route = ROUTES[intent.kind]
+            triage = TRIAGES[intent.kind]
         except KeyError as exc:
             raise KeyError(f"Unsupported intent kind: {intent.kind}") from exc
 
-        event = route.event_type.from_intent(context=context, intent=intent)
-        config = route.config_factory(self)
-        handler = route.handler_factory(self)
+        event = triage.event_type.from_intent(context=context, intent=intent)
+        config = triage.config_factory(self)
+        handler = triage.handler_factory(self)
         return event, handler, config
 
     async def handle_search_event(self, session: HTTPSession) -> tuple[SearchIntent, SearchEvent, Response]:
@@ -161,7 +185,8 @@ class OneBoxSimple:
         intent, event, handler, config = await self.wait_for_search_event()
         # In normal operation wait_for_search_event never returns (None,...)
         # because the sentinel is only used by the long-running loop.
-        assert intent is not None and event is not None and handler is not None
+        if intent is None or event is None or handler is None:
+            raise RuntimeError("wait_for_search_event returned sentinel values in handle_search_event")
         resp = await event.get_response(api=self.api, config=config, session=session)
         self._handle_search_response(intent, handler, resp)
         return intent, event, resp
@@ -181,13 +206,19 @@ class OneBoxSimple:
                     if intent is None:
                         break
 
-                    t0 = perf_counter_ns()
-                    resp = await event.get_response(api=self.api, config=config, session=session)
-                    t1 = perf_counter_ns()
-                    self._handle_search_response(intent, handler, resp)
-                    t2 = perf_counter_ns()
+                    is_transient = intent.kind == "transient_text"
 
-                    self.latencies.append((intent.kind, t0 - intent.time, t1 - t0, t2 - t1, intent.materialization))
+                    try:
+                        resp = await event.get_response(api=self.api, config=config, session=session)
+                    except asyncio.CancelledError:
+                        raise
+
+                    if is_transient and self._has_pending_newer_transient(intent):
+                        self.queue.task_done()
+                        continue
+
+                    self._handle_search_response(intent, handler, resp)
+
                     # Run any post-processing hooks before marking the task as done,
                     # so await app.stop() only completes after UI handlers finish.
                     await self.search_event_postprocess(intent, event, resp, session)
@@ -206,6 +237,17 @@ class OneBoxSimple:
     ) -> None:
         handler(intent, resp)  # pragma: no cover
 
+    def _has_pending_newer_transient(self, intent: SearchIntent) -> bool:
+        pending = getattr(self.queue, "_queue", None)
+        if pending is None:
+            return False
+        for queued_intent in pending:
+            if getattr(queued_intent, "kind", None) != "transient_text":
+                continue
+            if getattr(queued_intent, "time", 0) > intent.time:
+                return True
+        return False
+
     async def wait_for_search_event(
         self,
     ) -> tuple[
@@ -214,7 +256,7 @@ class OneBoxSimple:
         Callable[[SearchIntent, Response], None],
         EndpointConfig | LookupConfig | NoConfig | None,
     ]:
-        """Wait for the next intent, and resolve it via build_event_and_route."""
+        """Wait for the next intent, and resolve it via triage_intent."""
         intent: SearchIntent = await self.queue.get()
 
         if intent.kind == "__stop__":
@@ -246,7 +288,7 @@ class OneBoxSimple:
                 self.queue.task_done()
 
         context = self._get_context()
-        event, handler, config = self.build_event_and_route(intent=intent, context=context)
+        event, handler, config = self.triage_intent(intent=intent, context=context)
         return intent, event, handler, config
 
     def _get_context(self) -> RequestContext:
@@ -274,13 +316,55 @@ class OneBoxSimple:
     async def search_event_postprocess(
         self, intent: SearchIntent, event: SearchEvent, resp: Response, session: HTTPSession
     ) -> None:
-        pass  # pragma: no cover
+        """Run all registered postprocess callbacks in registration order."""
+        for cb in list(self._postprocess_callbacks):
+            await cb(intent, event, resp, session)
 
-    def run(self, handle_search_events: Callable | None = None) -> "OneBoxSimple":
+    def add_postprocess(
+        self,
+        callback: Callable,
+    ) -> None:
+        """Register an async *callback(intent, event, resp, session)* to be called
+        after every processed search event.
+
+        Multiple callbacks are called in registration order.  Use
+        ``remove_postprocess`` to deregister.
+
+        Example::
+
+            results_ready = asyncio.Event()
+
+            async def wait_for_results(intent, event, resp, session):
+                if intent.kind in ("submitted_text", "taxonomy"):
+                    results_ready.set()
+
+            app.add_postprocess(wait_for_results)
+            app.buttons_box_w.buttons[0].click()
+            await results_ready.wait()
+            app.remove_postprocess(wait_for_results)
+        """
+        self._postprocess_callbacks.append(callback)
+
+    def remove_postprocess(self, callback: Callable) -> None:
+        """Remove a previously registered postprocess *callback* (no-op if absent)."""
+        try:
+            self._postprocess_callbacks.remove(callback)
+        except ValueError:
+            pass
+
+    def run(self, handle_search_events: Callable | None = None) -> "OneBoxCore":
+        """Start the background consumer task and return ``self``.
+
+        :param handle_search_events: Optional coroutine factory replacing the
+            default event loop handler.
+        :return: Running app instance.
+        :rtype: OneBoxCore
+        """
         self._running = True
         coro = (handle_search_events or self.handle_search_events)()
         self.task = asyncio.ensure_future(coro)
-        self.task.add_done_callback(OneBoxSimple._done_handler)
+        self.task.add_done_callback(OneBoxCore._done_handler)
+        return self
 
     async def stop(self):
         """Wait until queue is empty and background task has finished.
@@ -315,8 +399,9 @@ class OneBoxSimple:
     def handle_suggestion_list(self, intent: SearchIntent, response: Response) -> None:
         """
         Typically
-          - called in OneBoxSimple.handle_search_event()
-          - associated with OneBoxSimple.PartialTextSearchEvent via self.intent_routes
+          - called in OneBoxCore.handle_search_event()
+          - associated with OneBoxCore.PartialTextSearchEvent via self.intent_routes
+
         :param intent: Response intent
         :param response: Response instance
         :return: None
@@ -326,8 +411,9 @@ class OneBoxSimple:
     def handle_result_list(self, intent: SearchIntent, response: Response) -> None:
         """
         Typically
-          - called in OneBoxSimple.handle_search_event()
-          - associated with OneBoxSimple.TextSearchEvent and OneBoxSimple.PlaceTaxonomySearchEvent via self.intent_routes
+          - called in OneBoxCore.handle_search_event()
+          - associated with OneBoxCore.TextSearchEvent and OneBoxCore.PlaceTaxonomySearchEvent via self.intent_routes
+
         :param intent: Response intent
         :param response: Response instance
         :return: None
@@ -337,8 +423,9 @@ class OneBoxSimple:
     def handle_result_details(self, intent: SearchIntent, response: Response) -> None:
         """
         Typically
-          - called in OneBoxSimple.handle_search_event()
-          - associated with OneBoxSimple.DetailsSearchEvent via self.intent_routes
+          - called in OneBoxCore.handle_search_event()
+          - associated with OneBoxCore.DetailsSearchEvent via self.intent_routes
+
         :param intent: Response intent
         :param response: Response instance
         :return: None
@@ -348,86 +435,118 @@ class OneBoxSimple:
     def handle_empty_text_submission(self, intent: SearchIntent, response: Response) -> None:
         """
         Typically
-          - called in OneBoxSimple.handle_search_event()
-          - associated with OneBoxSimple.EmptySearchEvent via self.intent_routes
+          - called in OneBoxCore.handle_search_event()
+          - associated with OneBoxCore.EmptySearchEvent via self.intent_routes
+
         :param intent: Response intent
         :param response: Response instance
         :return: None
         """
         pass
 
+    def handle_action(self, intent: ActionIntent, response: Response) -> None:
+        """
+        Called after an ActionSearchEvent has sent its signal for a
+        LocationResponseItem click.  No lookup was performed; ``response``
+        will be ``None``.
+        """
+        pass
 
-class OneBoxBase(OneBoxSimple):
+
+@runtime_checkable
+class SearchHead(Protocol):
+    """Protocol documenting the response-rendering contract for a search head.
+
+    Any class that overrides these methods can act as a rendering head on top of
+    :class:`OneBoxCore`.  ``OneBoxCore`` itself satisfies this protocol via its
+    built-in no-op stubs, so structural subtyping requires no explicit registration.
+
+    Override these methods to send results to a different medium (map widgets,
+    terminal, REST API response, …).
+    """
+
+    def handle_suggestion_list(self, intent: SearchIntent, response: Response) -> None: ...
+    def handle_result_list(self, intent: SearchIntent, response: Response) -> None: ...
+    def handle_result_details(self, intent: SearchIntent, response: Response) -> None: ...
+    def handle_empty_text_submission(self, intent: SearchIntent, response: Response) -> None: ...
+    def handle_action(self, intent: ActionIntent, response: Response) -> None: ...
+    async def search_events_preprocess(self, session: HTTPSession) -> None: ...
+
+
+class UserProfileMixin:
+    """Composable mixin that binds a :class:`~here_search_demo.user.UserProfile` to any
+    :class:`OneBoxCore` subclass.
+
+    Adds personalization (language adaptation, user identity in context) as a side
+    concern, independent of any rendering head.  Use cooperative multiple inheritance::
+
+        class MyApp(UserProfileMixin, OneBoxCore):
+            ...
+
+    MRO: ``MyApp → UserProfileMixin → OneBoxCore``
+
+    :param user_profile: Optional profile; defaults to :class:`~here_search_demo.user.DefaultUser`.
+    :param kwargs: Forwarded to :class:`OneBoxCore`.
+    """
+
     def __init__(
         self,
         user_profile: UserProfile | None = None,
-        api: API | None = None,
-        results_limit: int | None = None,
-        suggestions_limit: int | None = None,
-        terms_limit: int | None = None,
-        extra_api_params: dict | None = None,
-        initial_query: str | None = None,
         **kwargs,
     ):
         self.user_profile = user_profile or DefaultUser()
         super().__init__(
-            api=api,
             search_center=(
                 self.user_profile.current_latitude,
                 self.user_profile.current_longitude,
             ),
             language=self.user_profile.preferred_language,
-            results_limit=results_limit,
-            suggestions_limit=suggestions_limit,
-            terms_limit=terms_limit,
             **kwargs,
         )
-
-        self.extra_api_params = extra_api_params or {}
-        self.initial_query = initial_query
-
         self.preferred_language = self.get_preferred_language()
 
     async def handle_search_event(self, session: HTTPSession) -> Tuple[SearchIntent, SearchEvent, Response]:
         """Process a single search event and adapt language if needed.
 
-        This overrides :meth:`OneBoxSimple.handle_search_event` to add
-        language adaptation based on the response. The event is first
-        resolved and handled by the base implementation; if the event
-        represents a full text or taxonomy search, :meth:`adapt_language`
-        is then called to update ``preferred_language`` using the
-        response content.
-
-        Parameters
-        ----------
-        session:
-            An :class:`HTTPSession` used to perform the backend request.
-
-        Returns
-        -------
-        (intent, event, response):
-            The intent dequeued from the queue, the corresponding
-            :class:`SearchEvent` instance, and the :class:`Response`
-            returned by the API.
+        Overrides :meth:`OneBoxCore.handle_search_event` to call :meth:`adapt_language`
+        after full-text or taxonomy searches.
         """
         intent, event, resp = await super().handle_search_event(session)
         if isinstance(event, TextSearchEvent) or isinstance(event, PlaceTaxonomySearchEvent):
             await self.adapt_language(resp)
         return intent, event, resp
 
-    def get_preferred_language(self, country_code: str | None = None):
+    def get_preferred_language(self, country_code: str | None = None) -> str | None:
         if country_code:
             return self.user_profile.get_preferred_country_language(country_code)
         else:
             return self.user_profile.get_current_language()
 
-    async def adapt_language(self, resp):
-        country_codes = {item["address"]["countryCode"] for item in resp.data["items"]}
-        preferred_languages = {self.get_preferred_language(country_code) for country_code in country_codes}
-        if len(preferred_languages) == 1 and preferred_languages != {None}:
-            language = preferred_languages.pop()
-            if language != self.preferred_language:
-                self.preferred_language = language
+    @staticmethod
+    def _extract_country_code(resp) -> str | None:
+        """Return the single country code present across all response items, or None.
+
+        Returns None when items have no countryCode, when countryCode values are
+        mixed across items, or when the items list is empty.
+        """
+        codes = {item.get("address", {}).get("countryCode") for item in resp.data.get("items", [])} - {None}
+        return codes.pop() if len(codes) == 1 else None
+
+    async def adapt_language(self, resp) -> None:
+        country_code = self._extract_country_code(resp)
+        if country_code is None:
+            return
+        language = self.get_preferred_language(country_code)
+        if language and language != self.preferred_language:
+            self.preferred_language = language
 
     def set_search_center(self, latlon: tuple[float, float]) -> None:
         self.search_center = latlon
+
+    def _get_context(self) -> RequestContext:
+        ctx = super()._get_context()
+        return replace(
+            ctx,
+            share_experience=self.user_profile.share_experience,
+            user_id=self.user_profile.id if self.user_profile.share_experience else None,
+        )

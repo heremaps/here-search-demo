@@ -1,0 +1,21 @@
+/* Furo layout tuning:
+   - widen content on pages where the right TOC pane is hidden
+   - keep embeds responsive */
+@media (min-width: 82em) {
+    .page.no-right-toc .main {
+        justify-content: center;
+    }
+
+    .page.no-right-toc .content {
+        /* Keep a visible right gutter roughly matching the left visual gap. */
+        width: min(70em, calc(100vw - 24rem));
+        max-width: 70em;
+        padding-left: 3rem;
+        padding-right: 3rem;
+    }
+}
+
+iframe {
+    width: 100%;
+    max-width: 100%;
+}

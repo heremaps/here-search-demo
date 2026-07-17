@@ -1,0 +1,30 @@
+.leaflet-container,
+.leaflet-grab,
+.leaflet-dragging {
+    cursor: crosshair !important;
+}
+
+.leaflet-marker-pane .leaflet-div-icon {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+}
+
+.here-search-demo-label {
+    margin-left: 12px;
+    white-space: nowrap;
+    font-size: 15px;
+    line-height: 1.2;
+    color: #111;
+    text-shadow: 0 0 3px rgba(255, 255, 255, 0.9), 0 0 6px rgba(255, 255, 255, 0.75);
+}
+
+.here-search-demo-label-title {
+    font-weight: 700;
+}
+
+.here-search-demo-label-line {
+    font-weight: 400;
+    font-size: 13px;
+}

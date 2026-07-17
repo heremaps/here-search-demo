@@ -45,8 +45,7 @@ def test_http_response_error_is_exception():
 def mock_js_response():
     resp = MagicMock()
     resp.status = 200
-    resp.text = AsyncMock(return_value="hello")
-    resp.json = AsyncMock(return_value={"key": "value"})
+    resp.text = AsyncMock(return_value='{"key": "value"}')
     return resp
 
 
@@ -63,7 +62,7 @@ def test_browser_fetch_response_status(mock_js_response):
 @pytest.mark.asyncio
 async def test_browser_fetch_response_text(mock_js_response):
     r = _BrowserFetchResponse("https://example.com/", mock_js_response)
-    assert await r.text() == "hello"
+    assert await r.text() == '{"key": "value"}'
 
 
 @pytest.mark.asyncio
@@ -99,16 +98,20 @@ async def test_browser_pyfetch_sets_headers():
     fake_js_resp = MagicMock()
     fake_js_resp.status = 204
 
+    # Use separate objects for init and headers to verify the real code path
     init_obj = MagicMock()
+    headers_obj = MagicMock()
     mock_js = MagicMock()
-    mock_js.Object.new.return_value = init_obj
+    mock_js.Object.new.side_effect = [init_obj, headers_obj]
     mock_js.fetch = AsyncMock(return_value=fake_js_resp)
 
     with patch.object(lite, "js", mock_js):
         await lite._browser_pyfetch("https://example.com/", headers={"Authorization": "Bearer tok"})
 
-    # headers object was created and assigned
-    assert mock_js.Object.new.call_count >= 2
+    # Verify the header value was set on the headers JS object
+    assert headers_obj.Authorization == "Bearer tok"
+    # Verify headers object was assigned to init
+    assert init_obj.headers is headers_obj
 
 
 @pytest.mark.asyncio

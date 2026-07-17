@@ -25,6 +25,18 @@ from typing import Any
 
 
 class Credentials:
+    """Credential and token provider for HERE API requests.
+
+    The class resolves credentials from environment variables and/or local
+    credentials files, then exposes either an API key or OAuth access token.
+    Token values are cached and refreshed before expiration.
+
+    Environment variable precedence for API key:
+    ``HERE_ACCESS_KEY_ID`` + ``HERE_ACCESS_KEY_SECRET`` > ``HERE_API_KEY`` > ``API_KEY``.
+
+    :ivar str default_auth_url: Default OAuth token endpoint.
+    """
+
     default_auth_url = "https://account.api.here.com/oauth2/token"
 
     def __init__(self):
@@ -41,6 +53,14 @@ class Credentials:
 
     @property
     async def atoken(self) -> dict:
+        """Return an OAuth access token using the async transport.
+
+        This path is intended for browser runtimes (Pyodide/JupyterLite).
+        The token is cached in memory and refreshed when close to expiry.
+
+        :return: OAuth access token, or ``None`` when OAuth credentials are unavailable.
+        :rtype: str | None
+        """
         if not self._access_key_secret:
             return None
         now = datetime.now(timezone.utc)
@@ -55,6 +75,14 @@ class Credentials:
 
     @property
     def token(self) -> str | None:
+        """Return an OAuth access token using the synchronous transport.
+
+        This path is intended for standard CPython runtimes.
+        The token is cached in memory and refreshed when close to expiry.
+
+        :return: OAuth access token, or ``None`` when OAuth credentials are unavailable.
+        :rtype: str | None
+        """
         if not self._access_key_secret:
             return None
         now = datetime.now(timezone.utc)
@@ -87,7 +115,7 @@ class Credentials:
         """
         # 1) Try to load a credentials file if present
         config = ConfigParser()
-        filenames = ["credentials.properties", "credentials.properties.txt", ".credentials.properties"]
+        filenames = ["credentials.properties.txt", "credentials.properties", ".credentials.properties"]
         search_dirs = [
             Path("/drive"),  # JupyterLite default root directory for artifacts
             Path.cwd(),  # Current working directory
@@ -98,40 +126,49 @@ class Credentials:
         if Path.cwd().parts[-1] == "notebooks":
             search_dirs.append(Path.cwd().parents[0])
         paths = [d / fname for d in search_dirs for fname in filenames]
-        file_config = None
         for path in paths:
             if path.exists():
                 with path.open() as f:
                     config.read_string("[DEFAULT]\n" + f.read())
                 file_config = dict(config["DEFAULT"])
-                break
 
-        # 2) Resolve values with priority: env > file, and for URL: env > file > default
-        url = (
-            os.getenv("HERE_TOKEN_ENDPOINT_URL")
-            or (file_config.get("here.token.endpoint.url") if file_config else None)
-            or self.default_auth_url
-        )
-        access_key_id = os.getenv("HERE_ACCESS_KEY_ID") or (
-            file_config.get("here.access.key.id") if file_config else None
-        )
-        access_key_secret = os.getenv("HERE_ACCESS_KEY_SECRET") or (
-            file_config.get("here.access.key.secret") if file_config else None
-        )
-        scope = os.getenv("HERE_TOKEN_SCOPE") or (file_config.get("here.token.scope") if file_config else None)
+                # 2) Resolve values with priority: env > file, and for URL: env > file > default
+                url = (
+                    os.getenv("HERE_TOKEN_ENDPOINT_URL")
+                    or (file_config.get("here.token.endpoint.url") if file_config else None)
+                    or self.default_auth_url
+                )
+                access_key_id = os.getenv("HERE_ACCESS_KEY_ID") or (
+                    file_config.get("here.access.key.id") if file_config else None
+                )
+                if access_key_id == "...":
+                    continue
+                access_key_secret = os.getenv("HERE_ACCESS_KEY_SECRET") or (
+                    file_config.get("here.access.key.secret") if file_config else None
+                )
+                if access_key_secret == "...":
+                    continue
+                scope = os.getenv("HERE_TOKEN_SCOPE") or (file_config.get("here.token.scope") if file_config else None)
 
-        self._api_key = (
-            os.getenv("API_KEY")
-            or os.getenv("HERE_API_KEY")
-            or ((file_config.get("apikey") or file_config.get("here.api.key")) if file_config else None)
-        )
+                api_key = (
+                    os.getenv("API_KEY")
+                    or os.getenv("HERE_API_KEY")
+                    or ((file_config.get("apikey") or file_config.get("here.api.key")) if file_config else None)
+                )
+                if api_key == "...":
+                    continue
 
-        # 3) set the necessary variable if we have all of the mandatory ones
-        if url and access_key_id and access_key_secret:
-            self._url = url
-            self._access_key_id = access_key_id
-            self._access_key_secret = access_key_secret
-            self._scope = scope
+                # 3) API key and OAuth credentials are independent.
+                #    OAuth token retrieval only requires URL + access key pair.
+                #    API key, when present, is still recorded alongside them.
+                if api_key:
+                    self._api_key = api_key
+                if url and access_key_id and access_key_secret:
+                    self._url = url
+                    self._access_key_id = access_key_id
+                    self._access_key_secret = access_key_secret
+                    self._scope = scope
+                    break
 
     def _signature(self, url: str):
         oauth_nonce = uuid.uuid4().hex
@@ -192,7 +229,7 @@ class Credentials:
         try:
             loop = asyncio.get_running_loop()
             if use_async:
-                self._refresh_handle = loop.call_later(delay, lambda: asyncio.ensure_future(self.atoken()))
+                self._refresh_handle = loop.call_later(delay, lambda: asyncio.ensure_future(self.atoken))
             else:
                 self._refresh_handle = loop.call_later(
                     delay,
@@ -210,8 +247,7 @@ class Credentials:
         if sys.platform != "emscripten":
             raise RuntimeError("Async token only supported in Pyodide/emscripten.")
 
-        from js import fetch
-        from pyodide.ffi import to_js
+        from .lite import pyfetch
 
         auth_header, body = self._build_auth_and_body()
 
@@ -219,13 +255,14 @@ class Credentials:
         # body_json = JSON.stringify(to_js(body))
         body_json = json.dumps(body)
 
-        options = {
-            "method": "POST",
-            "headers": {"Content-Type": "application/json", "Authorization": auth_header},
-            "body": body_json,
-        }
-        resp = await fetch(self._url, to_js(options))
-        if not resp.ok:
+        resp = await pyfetch(
+            self._url,
+            method="POST",
+            headers={"Content-Type": "application/json", "Authorization": auth_header},
+            body=body_json,
+            credentials="same-origin",
+        )
+        if not 200 <= resp.status < 300:
             text = await resp.text()
             raise RuntimeError(f"Token request failed {resp.status}: {text}")
 

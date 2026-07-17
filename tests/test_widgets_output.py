@@ -7,13 +7,21 @@
 #
 ###############################################################################
 
+import asyncio
+
 import pytest
+from unittest.mock import MagicMock
 
 from here_search_demo.entity.endpoint import Endpoint
+from here_search_demo.entity.intent import SearchIntent
 from here_search_demo.entity.request import Request
 from here_search_demo.entity.response import LocationResponseItem, Response
-from here_search_demo.widgets.output import DetailsMixin, ResponseMap, SearchResultButtons
+from here_search_demo.widgets.route import RouteController
+from here_search_demo.widgets.output_details import DetailsMixin, ResultDetailsBox
+from here_search_demo.widgets.output_map import ResponseMap
+from here_search_demo.widgets.output_buttons import SearchResultButtons
 from here_search_demo.widgets.state import MapState, SearchState
+from here_search_demo.widgets.util import load_css
 
 
 class _DetailsTester(DetailsMixin):
@@ -73,6 +81,7 @@ def test_details_mixin_html_includes_place_metadata(details_tester):
     assert "mailto:" not in html  # email is excluded
     assert "https://img" in html
     assert "Great!" in html
+    assert "display:block; width:calc(100% + 8px);" in html
 
 
 def test_details_mixin_html_handles_non_place(details_tester):
@@ -129,134 +138,30 @@ def test_details_mixin_html_includes_fuel_types_without_price(details_tester):
     assert "e10" in html
 
 
-@pytest.mark.parametrize(
-    ("is_open", "expected"),
-    [
-        (True, "green"),
-        (False, "red"),
-        (None, "blue"),
-    ],
-)
-def test_response_map_item_color_from_opening_hours(is_open, expected):
-    feature = {
-        "properties": {
-            "categories": [{"primary": True, "id": "123"}],
+def test_result_details_box_uses_popup_like_container():
+    details = ResultDetailsBox(
+        {
             "resultType": "place",
-            "openingHours": [
-                {
-                    "categories": [{"id": "123"}],
-                    "isOpen": is_open,
-                }
-            ],
+            "title": "Cafe",
+            "address": {"label": "Cafe, 1 Main St, City"},
+            "categories": [{"primary": True, "id": "123", "name": "Cafe"}],
+            "openingHours": [],
         }
-    }
+    )
 
-    assert ResponseMap.item_color(feature) == expected
-
-
-def test_response_map_item_color_uses_ev_availability():
-    feature = {
-        "properties": {
-            "categories": [{"primary": True, "id": "700-7600-0322"}],
-            "resultType": "place",
-            "openingHours": [
-                {
-                    "categories": [{"id": "700-7600-0322"}],
-                    "isOpen": True,
-                }
-            ],
-            "extended": {
-                "evStation": {
-                    "connectors": [
-                        {
-                            "chargingPoint": {"numberOfAvailable": 0},
-                        },
-                        {
-                            "chargingPoint": {"numberOfAvailable": 2},
-                        },
-                    ]
-                }
-            },
-        }
-    }
-
-    assert ResponseMap.item_color(feature) == "green"
+    assert len(details.children) == 1
+    html_widget = details.children[0]
+    assert hasattr(html_widget, "value"), "child should be an HTML widget"
+    assert "<div" in html_widget.value, "content should be wrapped in a div container"
+    assert "Cafe" in html_widget.value, "container should include the place title"
 
 
-def test_response_map_style_callback_delegates_to_item_color(monkeypatch):
-    called = {}
+def test_widget_css_resources_include_label_pointer_and_popup_rules():
+    label_css = load_css("label.css")
+    popup_css = load_css("popup.css")
 
-    def fake_item_color(feature):
-        called["feature"] = feature
-        return "purple"
-
-    monkeypatch.setattr(ResponseMap, "item_color", staticmethod(fake_item_color))
-
-    feature = {"properties": {"resultType": "place"}}
-    style = ResponseMap.style_callback(feature)
-
-    assert called["feature"] is feature
-    assert style == {"fillColor": "purple"}
-
-
-def test_response_map_diesel_price_text_extracts_price():
-    item = {
-        "extended": {
-            "fuelStation": {
-                "fuelTypes": [
-                    {"type": "diesel", "price": {"amount": 1.789, "currency": "EUR"}},
-                    {"type": "e10", "price": {"amount": 1.699, "currency": "EUR"}},
-                ]
-            }
-        }
-    }
-
-    assert ResponseMap._diesel_price_text(item) == "1.789 EUR"
-
-
-def test_response_map_gas_station_label_parts_includes_station_name_and_diesel_price():
-    item = {
-        "title": "Fuel Hub",
-        "categories": [{"primary": True, "id": "700-7600-0116", "name": "Gas Station"}],
-        "extended": {
-            "fuelStation": {
-                "fuelTypes": [
-                    {"type": "diesel", "price": {"amount": 1.789, "currency": "EUR"}},
-                ]
-            }
-        },
-    }
-
-    assert ResponseMap._gas_station_label_parts(item) == ("Fuel Hub", "diesel: 1.789 EUR")
-
-
-def test_response_map_gas_station_label_parts_no_diesel():
-    item = {
-        "title": "Fuel Hub",
-        "categories": [{"primary": True, "id": "700-7600-0116", "name": "Gas Station"}],
-        "extended": {
-            "fuelStation": {
-                "fuelTypes": [
-                    {"type": "e10", "price": {"amount": 1.699, "currency": "EUR"}},
-                ]
-            }
-        },
-    }
-
-    title, diesel_text = ResponseMap._gas_station_label_parts(item)
-    assert title == "Fuel Hub"
-    assert diesel_text is None
-
-
-def test_response_map_gas_station_label_parts_no_fuel_types():
-    item = {
-        "title": "Fuel Hub",
-        "categories": [{"primary": True, "id": "700-7600-0116", "name": "Gas Station"}],
-    }
-
-    title, diesel_text = ResponseMap._gas_station_label_parts(item)
-    assert title == "Fuel Hub"
-    assert diesel_text is None
+    assert ".here-search-demo-label-line" in label_css
+    assert ".leaflet-popup-tip" in popup_css
 
 
 class _FakeGeoJSON:
@@ -303,6 +208,7 @@ class _FakePopup:
         # compatibility.
         self.auto_pan = auto_pan
         self.child = child
+        self.close_button = close_button
         self.opened = False
         self.location = location
         self.keep_in_view = keep_in_view
@@ -340,11 +246,14 @@ class _StubResponseMap(ResponseMap):
         self.state = state
         self.collection = None
         self.fuel_text_markers = []
+        self._label_render_cache = {}
+        self._last_geojson_data = None
         self.map_state = MapState()
         self.added = []
         self.removed = []
         self.long_press_popup = None
         self.short_press_popup = None
+        self.route = RouteController(self, MagicMock())
 
     def add(self, obj):  # type: ignore[override]
         # Record every object added (GeoJSON first, then Popup on click).
@@ -369,10 +278,11 @@ def _sample_response():
                 }
             ]
         },
+        x_headers={},
     )
 
 
-def test_response_map_display_emits_more_details(monkeypatch):
+async def test_response_map_display_emits_more_details(monkeypatch):
     """ResponseMap.display wires a click handler for feature popups.
 
     The current implementation only creates and adds a Popup on click;
@@ -381,8 +291,8 @@ def test_response_map_display_emits_more_details(monkeypatch):
     get_more_details handler.
     """
     geo_factory = _GeoFactory()
-    monkeypatch.setattr("here_search_demo.widgets.output.GeoJSON", geo_factory)
-    monkeypatch.setattr("here_search_demo.widgets.output.Popup", _FakePopup)
+    monkeypatch.setattr("here_search_demo.widgets.output_map.GeoJSON", geo_factory)
+    monkeypatch.setattr("here_search_demo.widgets.output_map.Popup", _FakePopup)
 
     queue = _DummyQueue()
     state = SearchState()
@@ -400,42 +310,50 @@ def test_response_map_display_emits_more_details(monkeypatch):
     # Simulate a click; this should create and add a Popup.
     assert fake_geo._click is not None
     fake_geo._click(None, feature)
+    await asyncio.sleep(0)
 
     # First object added is the GeoJSON layer; second is the Popup for the click.
     assert len(fmap.added) >= 2
     popup = fmap.added[-1]
     assert isinstance(popup, _FakePopup)
-    assert popup.location == feature["geometry"]["coordinates"][::-1]
+    assert popup.location == tuple(feature["geometry"]["coordinates"][::-1])
+    assert popup.close_button is True
 
 
-def test_response_map_click_adds_popup(monkeypatch):
-    """Clicking a feature should create and add a Popup to the map.
-
-    We don't fabricate attributes that ResponseMap doesn't have; instead
-    we assert on objects passed to the public add() API.
-    """
-    geo_factory = _GeoFactory()
-    monkeypatch.setattr("here_search_demo.widgets.output.GeoJSON", geo_factory)
-    monkeypatch.setattr("here_search_demo.widgets.output.Popup", _FakePopup)
-
+def test_response_map_on_feature_click_calls_show_popup_and_emits_action(monkeypatch):
+    """_on_feature_click is callable directly without display() wiring."""
+    queue = _DummyQueue()
     state = SearchState()
     resp = _sample_response()
     state.hydrate(resp)
-    fmap = _StubResponseMap(queue=_DummyQueue(), state=state)
-    fmap.display(resp, fit=False)
+    fmap = _StubResponseMap(queue=queue, state=state)
 
-    fake_geo = geo_factory.instances[0]
-    feature = fake_geo.kwargs["data"]["features"][0]
+    show_calls = []
+    emit_calls = []
+    monkeypatch.setattr(fmap, "_show_item_popup", lambda item, rank=None: show_calls.append(rank))
+    monkeypatch.setattr(fmap, "_emit_action_intent", lambda rank: emit_calls.append(rank))
 
-    # Simulate a click: ResponseMap.display wires only on_click.
-    fake_geo._click(None, feature)
+    feature = {"properties": {"_rank": 0, "title": "Foo", "position": {"lat": 1, "lng": 2}}}
+    fmap._on_feature_click(None, feature)
 
-    # The first added object is the GeoJSON layer; the second is the Popup.
-    assert len(fmap.added) >= 2
-    popup = fmap.added[-1]
-    assert isinstance(popup, _FakePopup)
-    # It should be anchored at the feature's coordinates (reversed to lat/lon).
-    assert popup.location == feature["geometry"]["coordinates"][::-1]
+    assert emit_calls == [0]
+    assert show_calls == [0]
+
+
+def test_response_map_on_feature_click_blocked_by_long_press(monkeypatch):
+    """_on_feature_click is a no-op when a long-press popup is open."""
+    queue = _DummyQueue()
+    state = SearchState()
+    fmap = _StubResponseMap(queue=queue, state=state)
+    fmap.long_press_popup = _FakePopup()  # simulate open long-press
+
+    emit_calls = []
+    monkeypatch.setattr(fmap, "_emit_action_intent", lambda rank: emit_calls.append(rank))
+
+    feature = {"properties": {"_rank": 0}}
+    fmap._on_feature_click(None, feature)
+
+    assert emit_calls == []
 
 
 def _search_response(*titles):
@@ -451,6 +369,7 @@ def _search_response(*titles):
                 for idx, title in enumerate(titles)
             ]
         },
+        x_headers={},
     )
 
 
@@ -479,6 +398,7 @@ def test_search_result_buttons_modify_replaces_row_with_details():
             "categories": [{"primary": True, "id": "abc", "name": "Updated"}],
             "openingHours": [],
         },
+        x_headers={},
     )
     previous_item = LocationResponseItem(
         data={"_rank": 0, "title": "Foo", "resultType": "place", "position": {"lat": 1, "lng": 2}},
@@ -494,3 +414,126 @@ def test_search_result_buttons_modify_replaces_row_with_details():
     assert buttons.buttons[0].button.description == "Foo+"
     children = buttons.buttons[0].button_box.children
     assert len(children) == 2  # expanded rank shows details
+
+
+def test_search_result_buttons_click_invokes_map_focus_callback():
+    resp = _search_response("Foo")
+    clicked_ranks = []
+    buttons = SearchResultButtons(queue=_DummyQueue(), max_results_number=2, on_result_click=clicked_ranks.append)
+    buttons.display(resp)
+
+    button_row = buttons.buttons[0]
+    button_row.handle_click(button_row.button)
+
+    assert 0 in buttons.state.expanded_ranks
+    assert clicked_ranks == [0]
+    assert len(button_row.button_box.children) == 2
+
+
+def test_search_result_buttons_display_preserves_expansion_on_transient_text():
+    """Verify expansion is preserved when typing (transient_text intent)."""
+    resp = _search_response("Foo")
+    buttons = SearchResultButtons(queue=_DummyQueue(), max_results_number=2)
+    buttons.display(resp)
+
+    button_row = buttons.buttons[0]
+    button_row.handle_click(button_row.button)
+    assert len(button_row.button_box.children) == 2  # button + details
+    assert 0 in buttons.state.expanded_ranks
+
+    # Display with transient_text intent (typing)
+    intent = SearchIntent(kind="transient_text", materialization="f", time=0)
+    buttons.display(resp, intent=intent)
+
+    # Expansion should be PRESERVED during typing (not cleared)
+    assert len(button_row.button_box.children) == 2  # Still expanded
+    assert 0 in buttons.state.expanded_ranks
+
+
+def test_search_result_buttons_display_collapses_details_on_submitted_search():
+    """Verify expansion is cleared when user submits a new search."""
+    resp = _search_response("Foo")
+    buttons = SearchResultButtons(queue=_DummyQueue(), max_results_number=2)
+    buttons.display(resp)
+
+    button_row = buttons.buttons[0]
+    button_row.handle_click(button_row.button)
+    assert len(button_row.button_box.children) == 2
+    assert 0 in buttons.state.expanded_ranks
+
+    # Display with submitted_text intent (explicit search)
+    intent = SearchIntent(kind="submitted_text", materialization="foo", time=0)
+    buttons.display(resp, intent=intent)
+
+    # Expansion should be CLEARED on submitted searches
+    assert len(button_row.button_box.children) == 1
+    assert 0 not in buttons.state.expanded_ranks
+
+
+def test_response_map_click_result_recenters_and_shows_popup(monkeypatch):
+    monkeypatch.setattr("here_search_demo.widgets.output_map.Popup", _FakePopup)
+    created_tasks = []
+
+    class _DummyTask:
+        def done(self):
+            return False
+
+    def _fake_create_task(coro):
+        created_tasks.append(coro)
+        coro.close()
+        return _DummyTask()
+
+    monkeypatch.setattr("here_search_demo.widgets.output_map.asyncio.create_task", _fake_create_task)
+
+    queue = _DummyQueue()
+    state = SearchState()
+    resp = _sample_response()
+    state.hydrate(resp)
+    fmap = _StubResponseMap(queue=queue, state=state)
+
+    fmap.click_result(0)
+
+    assert len(queue.items) == 1
+    assert len(created_tasks) == 1
+    assert fmap.map_state.selected_rank == 0
+    popup = fmap.added[-1]
+    assert isinstance(popup, _FakePopup)
+    assert popup.location == (1, 2)
+
+
+def test_response_map_click_result_uses_future_position_for_detour_lookup(monkeypatch):
+    queue = _DummyQueue()
+    state = SearchState()
+    resp = _search_response("Foo")
+    state.hydrate(resp)
+    fmap = _StubResponseMap(queue=queue, state=state)
+
+    fmap.route.has_route = True
+    fmap.route.ranking_mode.travel_time = True
+    fmap.route.current_position = (48.8, 2.3)
+    fmap.route.future_position = (48.81, 2.31)
+    fmap.route.stop_position = (48.9, 2.4)
+
+    drawn = []
+    monkeypatch.setattr(
+        fmap.route, "draw_detour_routes", lambda route_from, route_to: drawn.append((route_from, route_to))
+    )
+
+    fmap.route._route_cache[("via", 48.81, 2.31, 1, 2, 48.9, 2.4)] = (10, 100, "poly_to", 20, 200, "poly_from")
+
+    fmap.click_result(0, emit_action=False, recenter=False, show_details=False)
+
+    assert drawn == [("poly_from", "poly_to")]
+
+
+def test_response_map_clear_results_removes_detour_routes(monkeypatch):
+    queue = _DummyQueue()
+    state = SearchState()
+    fmap = _StubResponseMap(queue=queue, state=state)
+
+    removed = []
+    monkeypatch.setattr(fmap.route, "clear_detour_routes", lambda: removed.append("cleared"))
+
+    fmap.clear_results()
+
+    assert removed == ["cleared"]

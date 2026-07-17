@@ -14,7 +14,7 @@ import pytest
 
 from here_search_demo.api import API
 from here_search_demo.auth import Credentials
-from here_search_demo.base import OneBoxSimple
+from here_search_demo.base import OneBoxCore
 from here_search_demo.entity.endpoint import AutosuggestConfig, BrowseConfig, DiscoverConfig, Endpoint, LookupConfig
 from here_search_demo.entity.intent import SearchIntent
 from here_search_demo.entity.place import PlaceTaxonomyItem
@@ -27,7 +27,7 @@ from here_search_demo.event import (
     PlaceTaxonomySearchEvent,
     TextSearchEvent,
 )
-from here_search_demo.widgets.input import PlaceTaxonomyButton
+from here_search_demo.widgets.input_text import PlaceTaxonomyButton
 
 
 @pytest.fixture
@@ -97,6 +97,19 @@ def context(lat_lon):
 
 
 @pytest.fixture
+def context_opted_in(lat_lon):
+    """RequestContext with share_experience=True and a X-User-ID header."""
+    return RequestContext(
+        latitude=lat_lon[0],
+        longitude=lat_lon[1],
+        language="language",
+        share_experience=True,
+        user_id="test-user-id",
+        x_headers={"X-Correlation-ID": "test-corr-id"},
+    )
+
+
+@pytest.fixture
 def autosuggest_request(context, instant_query_text, x_headers):
     return Request(
         endpoint=Endpoint.AUTOSUGGEST,
@@ -124,11 +137,11 @@ def autosuggest_href_request(context, x_headers):
 @pytest.fixture
 def autosuggest_response(autosuggest_request):
     data = [
-        {"resultType": "place"},
+        {"resultType": "place", "id": "here:pds:place:test-id"},
         {"resultType": "chainQuery"},
         {"resultType": "categoryQuery"},
     ]
-    return Response(req=autosuggest_request, data={"items": data})
+    return Response(req=autosuggest_request, data={"items": data}, x_headers={"X-Correlation-ID": "corr-test"})
 
 
 @pytest.fixture
@@ -175,7 +188,7 @@ def discover_browse_response(discover_request):
         {"resultType": "street"},
         {"resultType": "location"},
     ]
-    return Response(req=discover_request, data={"items": data})
+    return Response(req=discover_request, data={"items": data}, x_headers={})
 
 
 @pytest.fixture
@@ -283,6 +296,13 @@ def more_details_intent(location_response_item):
 
 
 @pytest.fixture
+def action_intent(location_response_item):
+    from here_search_demo.entity.intent import ActionIntent
+
+    return ActionIntent(materialization=location_response_item, time=0.0)
+
+
+@pytest.fixture
 def no_intent():
     return SearchIntent(kind="empty", materialization=None, time=0.0)
 
@@ -309,6 +329,13 @@ def taxonomy_search_event(place_taxonomy_item, context) -> PlaceTaxonomySearchEv
 @pytest.fixture
 def details_search_event(location_response_item, context) -> DetailsSearchEvent:
     return DetailsSearchEvent(item=location_response_item, context=context)
+
+
+@pytest.fixture
+def action_search_event(location_response_item, context_opted_in):
+    from here_search_demo.event import ActionSearchEvent
+
+    return ActionSearchEvent(item=location_response_item, context=context_opted_in)
 
 
 @pytest.fixture
@@ -352,7 +379,7 @@ def app():
     environ.pop("HERE_ACCESS_KEY_SECRET", None)
     environ.pop("HERE_API_KEY", None)
     environ.pop("HERE_TOKEN_ENDPOINT_URL", None)
-    return OneBoxSimple()
+    return OneBoxCore()
 
 
 #########################################################
