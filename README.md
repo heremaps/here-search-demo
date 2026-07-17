@@ -5,7 +5,7 @@
 
 # HERE Search demo
 
-Package version: `0.25.3`
+Package version: `0.35.1`
 
 A set of widgets and notebooks demonstrating 
 - the use of [HERE Geocoding & Search][4] endpoints `/autosuggest`,  `/discover`, `/browse`, `/lookup` and `/signals`. 
