@@ -1,6 +1,26 @@
+###############################################################################
+#
+# Copyright (c) 2023 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 # Minimal Sphinx configuration for Markdown support and Furo theme
 import os
 import sys
+import warnings
+
+# sphinx-autodoc-typehints is pinned to ==3.6.1 (highest available in the ELM
+# index); that version calls a Sphinx API deprecated for removal in Sphinx 10,
+# emitting a RemovedInSphinx10Warning once per documented object. It is harmless
+# on the current Sphinx 9.x line, so silence the noise until a newer
+# sphinx-autodoc-typehints becomes available.
+warnings.filterwarnings(
+    "ignore",
+    message=r".*_RstSnippetParser\.set_application.*is deprecated.*",
+)
 
 sys.path.insert(0, os.path.abspath("../src"))
 from here_search_demo import __version__

@@ -16,7 +16,7 @@ Most-used elements:
 5. `RouteController.set_route_width(...)`
 
 For the complete reference, see [API Reference](../reference/api_reference.md).
-For route architecture details, see [Route engine and widget controller architecture](../reference/route_engine.md).
+For route architecture details, see [Route engine and widget controller architecture](../explanation/route_engine.md).
 
 <div style="height: 700px; overflow: hidden; border: 1px solid #ccc; border-radius: 4px;">
   <iframe src="../../notebooks/?path=obm_5_automate.ipynb" loading="lazy" width="100%" height="780px" style="border: 0; margin-top: -70px;"></iframe>

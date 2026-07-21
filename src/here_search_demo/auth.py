@@ -18,6 +18,7 @@ import sys
 import time
 import urllib.parse
 import uuid
+from collections.abc import Mapping
 from configparser import ConfigParser
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -98,6 +99,51 @@ class Credentials:
     @property
     def api_key(self) -> str | None:
         return self._api_key
+
+    @property
+    def active_config(self) -> dict[str, str]:
+        """Return a credentials-loader compatible config when fully available."""
+        config = {
+            "here.token.endpoint.url": self._url or "",
+            "here.access.key.id": self._access_key_id or "",
+            "here.access.key.secret": self._access_key_secret or "",
+            "here.api.key": self._api_key or "",
+        }
+        if any(not value or value == "..." for value in config.values()):
+            return {}
+        return config
+
+    def apply_active_config(self, active_config: Mapping[str, str]) -> None:
+        """Update credentials from a validated credentials-loader config mapping."""
+        file_config = {str(k).lower(): str(v) for k, v in active_config.items()}
+        url = file_config.get("here.token.endpoint.url") or self.default_auth_url
+        access_key_id = file_config.get("here.access.key.id")
+        access_key_secret = file_config.get("here.access.key.secret")
+        scope = file_config.get("here.token.scope")
+        api_key = file_config.get("here.api.key") or file_config.get("apikey")
+
+        if api_key and api_key != "...":
+            self._api_key = api_key
+
+        if not (url and access_key_id and access_key_secret):
+            return
+        if access_key_id == "..." or access_key_secret == "...":
+            return
+
+        changed = (
+            self._url != url
+            or self._access_key_id != access_key_id
+            or self._access_key_secret != access_key_secret
+            or self._scope != scope
+        )
+        self._url = url
+        self._access_key_id = access_key_id
+        self._access_key_secret = access_key_secret
+        self._scope = scope
+        if changed:
+            self._cancel_refresh()
+            self._token = None
+            self._expires = None
 
     def _config(self) -> dict:
         """

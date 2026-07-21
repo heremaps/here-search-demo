@@ -1,44 +1,11 @@
-# Developer notes
+---
+hide-toc: true
+---
 
-## Setup a Notebook Python environment
+# Build infrastructure
 
-```shell
-uv pip install -e '.[dev,docs,lab]'
-```
-
-Also install `micromamba`.
-
-To use JupyterLab, you will need a `ipykernel`:
-
-```shell
-prefix=$(python -c "import sys; print(sys.prefix)")
-jupyter kernelspec uninstall search_demo
-python -m ipykernel install --prefix $prefix --name search_demo --display-name "search demo"
-```
-
-## Build the docs
-
-To build the Sphinx docs locally, you need to create the JupyterLite sites first:
-
-```shell
-jupyterlite_build/xeus.sh
-```
-
-And then inject the docs:
-
-```shell
-sphinx-build -b html docs/ workspace/public/docs
-```
-
-The HTML output is written to `workspace/public/docs/index.html`.
-
-To preview it locally:
-
-```shell
-python -m http.server 8000 --directory workspace/public
-```
-
-Then open `http://localhost:8000/docs/`.
+Deeper notes on the browser-runtime build stack (JupyterLite, xeus, Voici), CI
+solver constraints, and Python-version support.
 
 ## JupyterLite
 
@@ -80,19 +47,26 @@ stacks in the browser. Delivery channels:
   The build in `emscripten-forge-dev` is working, so we can use that channel for now.
   Root cause: broken PROJ data bundle → `Transformer.from_crs` fails
 
+## Voici
 
-## Inject a lat/lon using geojs.io
+Voici reuses the same xeus kernel stack, but it builds an app-style dashboard output instead of the full JupyterLite shell.
+It is built by the same script and command path as JupyterLite:
 
+```shell
+jupyterlite_build/xeus.sh
+```
 
-`here-search-demo` facilitates the use of the services from [geojs.io][2] to discover the location behind an IP address.
-The `get_lat_lon` helper is not used in the demo widgets. If you need to inject the geolocation associated with 
-your IP, please check the [GeoJS Terms Of Service][3].
+This sheel script builds:
+- the xeus JupyterLite lab & notebooks site under `workspace/`
+- the xeus Voici app for `notebooks/basic-demo.ipynb` under `workspace/voici/`
 
+By default, JupyterLite uses the [browser storage][1] to store settings and site preferences. 
+It is sometimes helpful to clear in the browser settings the `127.0.0.1` site data to not use a stale state. 
 
-   ```
-   from here_search_demo.util import get_lat_lon
-   latitude, longitude = await get_lat_lon()
-   ```
+Reference: 
+- https://jupyterlite.readthedocs.io/en/stable/
+- https://emscripten-forge.org/blog/
+- https://xeus-python-kernel.readthedocs.io/en/latest/
 
 ## Python 3.14 & 3.15
 
@@ -108,47 +82,4 @@ brew upgrade pyenv
 pyenv install --list | grep 3.15
 ```
 
-## Shell script checks
-
-Use these commands from the repository root for shell script quality checks in `scripts/*.sh`.
-
-Required tools:
-- `shfmt`
-- `shellcheck`
-- `bashate`
-
-Install on macOS:
-
-```shell
-brew install shfmt shellcheck
-uv tool install bashate
-```
-
-Auto-fix formatting, then run linters:
-
-```shell
-shfmt -w jupyterlite_build/*.sh && shellcheck jupyterlite_build/*.sh && bashate -i E002,E003,E006 jupyterlite_build/*.sh
-```
-
-Check-only mode (no formatting changes):
-
-```shell
-shellcheck jupyterlite_build/*.sh && shfmt -d jupyterlite_build/*.sh && bashate -i E002,E003,E006 jupyterlite_build/*.sh
-```
-
-## Update the package
-
-
-1. Create a release branch from `main`, for example `git checkout -b release/<version>`.
-2. Make the code/doc/notebook changes that the new release requires (bug fixes, dependency updates, README notes, etc.), then commit and push those updates so they land on the release branch.
-3. Run `bumpver update --set-version <version>` on that branch. The command will update `pyproject.toml`, `README.md`, `src/here_search_demo/__init__.py`, create the version commit, tag it, and push to the remote.
-4. Open a PR from your release branch.
-5. Ensure the PR’s `test.yml` jobs finish green and that Codecov still reports data for the repo (https://app.codecov.io/gh/heremaps/here-search-demo).
-6. After the PR merges into `main`, use “Draft a new release” in GitHub and select the tag created by bumpver.
-7. Publishing the release triggers the PyPI workflow and uploads the `here-search-demo-notebooks.zip` asset automatically.
-
-
-
 [1]: https://jupyterlite.readthedocs.io/en/latest/howto/configure/storage.html
-[2]: https://www.geojs.io/
-[3]: https://www.geojs.io/tos/

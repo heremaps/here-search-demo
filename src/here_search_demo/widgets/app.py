@@ -14,9 +14,9 @@ from ipyleaflet import WidgetControl
 from IPython.display import display
 from ipywidgets import HBox, Label, VBox
 
-from here_search_demo.api import API
-from here_search_demo.auth import Credentials
-from here_search_demo.api_options import (
+from ..api import API
+from ..auth import Credentials
+from ..api_options import (
     APIOptions,
     recommendPlaces,
     tripadvisorDetails,
@@ -25,16 +25,16 @@ from here_search_demo.api_options import (
     default_options_config,
     build_api_options,
 )
-from here_search_demo.base import OneBoxCore, UserProfileMixin
-from here_search_demo.detour import DetourRanker
-from here_search_demo.entity.endpoint import Endpoint
-from here_search_demo.entity.intent import SearchIntent
-from here_search_demo.entity.place import PlaceTaxonomyExample
-from here_search_demo.entity.request import RequestContext
-from here_search_demo.entity.response import QuerySuggestionItem, Response
-from here_search_demo.user import UserProfile
-from here_search_demo.widgets.state import SearchState
-
+from ..base import OneBoxCore, UserProfileMixin
+from ..detour import DetourRanker
+from ..entity.endpoint import Endpoint
+from ..entity.intent import SearchIntent
+from ..entity.place import PlaceTaxonomyExample
+from ..entity.request import RequestContext
+from ..entity.response import QuerySuggestionItem, Response
+from .state import SearchState
+from ..user import UserProfile
+from .credentials import CredentialsLoader
 from .input_text import PlaceTaxonomyButtons, SubmittableTextBox, TermsButtons
 from .output_map import ResponseMap
 from .output_buttons import SearchResultButtons
@@ -97,6 +97,7 @@ class OneBoxMap(UserProfileMixin, OneBoxCore):
     buttons_box_w: PlaceTaxonomyButtons
     result_buttons_w: SearchResultButtons
     search_center_label_w: Label
+    credentials_properties: CredentialsLoader
     search_api_calls: int
     routing_api_calls: int
     _root: VBox
@@ -257,10 +258,25 @@ class OneBoxMap(UserProfileMixin, OneBoxCore):
             ([self.buttons_box_w] if self.buttons_box_w else [])
             + [self.query_box_w, self.query_terms_w, self.result_buttons_w, self.search_center_label_w],
         )
+        self.search_box = search_box
+        # Keep the search widgets hidden until valid credentials (an api_key and a
+        # retrievable OAuth token) have been confirmed.
+        self.search_box.layout.display = "none"
 
         # App widgets composition
         widget_control_left = WidgetControl(widget=search_box, position="topleft", transparent_bg=False)
         self.map_w.add(widget_control_left)
+
+        self.credentials_properties = CredentialsLoader()
+        initial_active_config = self.credentials.active_config
+        if initial_active_config:
+            self.credentials_properties.active_config = initial_active_config
+        self.credentials_properties.observe(self._on_credentials_properties_change, names="active_config")
+        self._apply_credentials_properties(self.credentials_properties.active_config)
+        # Cover the case where credentials were already loaded (env/file) so that
+        # _apply_credentials_properties short-circuited on an empty config.
+        self._schedule_search_box_visibility()
+        self.map_w.add(WidgetControl(widget=self.credentials_properties, position="topright", transparent_bg=False))
 
         if on_map or self.map_only:
             if self.result_json_w is not None:
@@ -294,6 +310,48 @@ class OneBoxMap(UserProfileMixin, OneBoxCore):
     def _increment_routing_api_calls(self, calls: int = 1) -> None:
         self.routing_api_calls += max(0, calls)
         self._update_search_center_label()
+
+    def _on_credentials_properties_change(self, change: dict) -> None:
+        if change.get("name") != "active_config":
+            return
+        self._apply_credentials_properties(change.get("new") or {})
+
+    def _apply_credentials_properties(self, properties: dict) -> None:
+        if not properties:
+            return
+        self.credentials.apply_active_config(properties)
+        self.map_w.refresh_base_layer()
+        self._schedule_search_box_visibility()
+
+    def _set_search_box_visible(self, visible: bool) -> None:
+        self.search_box.layout.display = "" if visible else "none"
+
+    async def _credentials_are_valid(self) -> bool:
+        """Return True when an api_key is set and an OAuth token can be retrieved."""
+        if not self.credentials.api_key:
+            return False
+        try:
+            return bool(await self.credentials.atoken)
+        except Exception:
+            self.logger.debug("Token retrieval failed; hiding search box", exc_info=True)
+            return False
+
+    async def _update_search_box_visibility(self) -> None:
+        self._set_search_box_visible(await self._credentials_are_valid())
+
+    def _schedule_search_box_visibility(self) -> None:
+        """Re-evaluate search box visibility on the running event loop.
+
+        The token check is a network call that is async in the browser runtime,
+        so it is scheduled as a task. When no event loop is running (e.g. plain
+        construction in tests), the check is skipped and the box keeps its
+        current (hidden) state to avoid blocking network calls.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(self._update_search_box_visibility())
 
     def triage_intent(self, intent, context):
         if self._recommendations:

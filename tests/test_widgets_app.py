@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 from ipywidgets import Label
 
+from here_search_demo.auth import Credentials
 from here_search_demo.entity.endpoint import Endpoint
 from here_search_demo.entity.intent import SearchIntent
 from here_search_demo.entity.request import Request
@@ -147,3 +148,92 @@ def test_oneboxmap_change_mins_from_pos_clears_results():
     assert app.result_buttons_w._inner_box.children == ()
     assert app._last_result_resp is None
     assert app._last_result_intent is None
+
+
+def test_oneboxmap_credentials_loader_updates_credentials_and_map_layer():
+    app = OneBoxMap(map_only=True, on_map=True)
+
+    app.credentials_properties.active_config = {
+        "here.token.endpoint.url": "https://account.api.here.com/oauth2/token",
+        "here.access.key.id": "id_123",
+        "here.access.key.secret": "secret_456",
+        "here.api.key": "api_key_789",
+    }
+
+    assert app.credentials.api_key == "api_key_789"
+    assert app.credentials._access_key_id == "id_123"
+    assert app.credentials._access_key_secret == "secret_456"
+    assert "apiKey=api_key_789" in app.map_w.base_layer.url
+
+
+def test_oneboxmap_seeds_credentials_loader_from_credentials():
+    creds = Credentials()
+    creds.apply_active_config(
+        {
+            "here.token.endpoint.url": "https://account.api.here.com/oauth2/token",
+            "here.access.key.id": "id_file",
+            "here.access.key.secret": "secret_file",
+            "here.api.key": "api_key_file",
+        }
+    )
+    app = OneBoxMap(map_only=True, on_map=True, credentials=creds)
+
+    assert app.credentials_properties.active_config["here.access.key.id"] == "id_file"
+    assert app.credentials_properties.active_config["here.access.key.secret"] == "secret_file"
+    assert app.credentials_properties.active_config["here.api.key"] == "api_key_file"
+
+
+def test_oneboxmap_search_box_hidden_without_credentials():
+    app = OneBoxMap(map_only=True, on_map=True)
+
+    assert app.search_box.layout.display == "none"
+
+
+async def test_oneboxmap_search_box_shown_when_token_retrievable():
+    app = OneBoxMap(map_only=True, on_map=True)
+
+    async def _token():
+        return "tok"
+
+    creds = MagicMock()
+    creds.api_key = "api_key"
+    creds.atoken = _token()
+    app.credentials = creds
+
+    await app._update_search_box_visibility()
+
+    assert app.search_box.layout.display == ""
+
+
+async def test_oneboxmap_search_box_hidden_when_no_api_key():
+    app = OneBoxMap(map_only=True, on_map=True)
+    app.search_box.layout.display = ""  # pretend it was previously shown
+
+    async def _token():
+        return "tok"
+
+    creds = MagicMock()
+    creds.api_key = None
+    creds.atoken = _token()
+    app.credentials = creds
+
+    await app._update_search_box_visibility()
+
+    assert app.search_box.layout.display == "none"
+
+
+async def test_oneboxmap_search_box_hidden_when_token_retrieval_fails():
+    app = OneBoxMap(map_only=True, on_map=True)
+    app.search_box.layout.display = ""  # pretend it was previously shown
+
+    async def _token():
+        raise RuntimeError("boom")
+
+    creds = MagicMock()
+    creds.api_key = "api_key"
+    creds.atoken = _token()
+    app.credentials = creds
+
+    await app._update_search_box_visibility()
+
+    assert app.search_box.layout.display == "none"

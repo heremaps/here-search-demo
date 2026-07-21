@@ -69,7 +69,8 @@ class PartialTextSearchEvent(SearchEvent):
 
     @classmethod
     def from_intent(cls, context: RequestContext, intent: SearchIntent) -> "PartialTextSearchEvent":
-        assert intent.kind == "transient_text"
+        if intent.kind != "transient_text":
+            raise UnsupportedSearchEvent(f"{cls.__name__} requires intent.kind='transient_text', got '{intent.kind}'")
         return cls(context=context, query_text=str(intent.materialization or ""))
 
 
@@ -100,7 +101,8 @@ class TextSearchEvent(SearchEvent):
 
     @classmethod
     def from_intent(cls, context: RequestContext, intent: SearchIntent) -> "TextSearchEvent":
-        assert intent.kind == "submitted_text"
+        if intent.kind != "submitted_text":
+            raise UnsupportedSearchEvent(f"{cls.__name__} requires intent.kind='submitted_text', got '{intent.kind}'")
         return cls(context=context, query_text=str(intent.materialization or ""))
 
 
@@ -140,8 +142,13 @@ class DetailsSearchEvent(SearchEvent):
 
     @classmethod
     def from_intent(cls, context: RequestContext, intent: SearchIntent) -> "DetailsSearchEvent":
-        assert intent.kind == "details"
-        assert intent.materialization.data["resultType"] not in ("categoryQuery", "chainQuery")
+        if intent.kind != "details":
+            raise UnsupportedSearchEvent(f"{cls.__name__} requires intent.kind='details', got '{intent.kind}'")
+        result_type = intent.materialization.data.get("resultType")
+        if result_type in ("categoryQuery", "chainQuery"):
+            raise UnsupportedSearchEvent(
+                f"{cls.__name__} requires a lookup-backed details item, got resultType='{result_type}'"
+            )
         return cls(context=context, item=intent.materialization)
 
 
@@ -224,8 +231,13 @@ class FollowUpSearchEvent(SearchEvent):
 
     @classmethod
     def from_intent(cls, context: RequestContext, intent: SearchIntent) -> "FollowUpSearchEvent":
-        assert intent.kind == "details"
-        assert intent.materialization.data["resultType"] in ("categoryQuery", "chainQuery")
+        if intent.kind != "details":
+            raise UnsupportedSearchEvent(f"{cls.__name__} requires intent.kind='details', got '{intent.kind}'")
+        result_type = intent.materialization.data.get("resultType")
+        if result_type not in ("categoryQuery", "chainQuery"):
+            raise UnsupportedSearchEvent(
+                f"{cls.__name__} requires resultType in ('categoryQuery', 'chainQuery'), got '{result_type}'"
+            )
         return cls(context=context, item=intent.materialization)
 
 
@@ -238,7 +250,8 @@ class EmptySearchEvent(SearchEvent):
 
     @classmethod
     def from_intent(cls, context: RequestContext | None, intent: SearchIntent) -> "EmptySearchEvent":
-        assert intent.kind == "empty"
+        if intent.kind != "empty":
+            raise UnsupportedSearchEvent(f"{cls.__name__} requires intent.kind='empty', got '{intent.kind}'")
         return cls()
 
 
@@ -267,7 +280,8 @@ class PlaceTaxonomySearchEvent(SearchEvent):
 
     @classmethod
     def from_intent(cls, context: RequestContext, intent: SearchIntent) -> "PlaceTaxonomySearchEvent":
-        assert intent.kind == "taxonomy"
+        if intent.kind != "taxonomy":
+            raise UnsupportedSearchEvent(f"{cls.__name__} requires intent.kind='taxonomy', got '{intent.kind}'")
         return cls(context=context, item=intent.materialization)
 
 
@@ -308,7 +322,8 @@ class ActionSearchEvent(SearchEvent):
 
     @classmethod
     def from_intent(cls, context: RequestContext, intent: ActionIntent) -> "ActionSearchEvent":
-        assert intent.kind == "action"
+        if intent.kind != "action":
+            raise UnsupportedSearchEvent(f"{cls.__name__} requires intent.kind='action', got '{intent.kind}'")
         return cls(context=context, item=intent.materialization)
 
 

@@ -29,9 +29,9 @@ from ipyleaflet import (
 from ipywidgets import HTML, Button, Checkbox, HBox, Layout, Select, ToggleButtons, VBox, Widget
 from traitlets.utils.bunch import Bunch
 
-from here_search_demo.auth import Credentials
-from here_search_demo.widgets.route import RouteController
-from here_search_demo.widgets.util import style_html
+from ..auth import Credentials
+from .route import RouteController
+from .util import style_html
 
 
 class PositionMap(Map):
@@ -67,13 +67,9 @@ class PositionMap(Map):
         # Create HERE tile layers with different styles
         tile_opacity = tile_opacity or PositionMap.default_tile_opacity
         lang = preferred_language or "en"
-
-        # Helper function to generate HERE tile URL
-        def here_url(style: str) -> str:
-            return (
-                f"https://maps.hereapi.com/v3/base/mc/{{z}}/{{x}}/{{y}}/png"
-                f"?style={style}&ppi=400&size=512&apiKey={credentials.api_key}&lang={lang}"
-            )
+        self._credentials = credentials
+        self._preferred_language = lang
+        self._base_layer_style = "lite.day"
 
         # Initialize map without basemap - we'll add the layer manually
         Map.__init__(
@@ -96,8 +92,8 @@ class PositionMap(Map):
 
         # Create single tile layer (default = lite.day)
         self.base_layer = TileLayer(
-            url=here_url("lite.day"),
-            attribution="© HERE 2026",
+            url=self._base_layer_url(self._base_layer_style),
+            attribution=self._base_layer_attribution(),
             opacity=tile_opacity if tile_opacity != PositionMap.max_tile_opacity else 1.0,
         )
         self.add(self.base_layer)
@@ -105,7 +101,7 @@ class PositionMap(Map):
         # Create toggle widget for switching between Lite and Satellite
         layer_toggle = ToggleButtons(
             options=[("L", "lite.day"), ("S", "satellite.day")],
-            value="lite.day",
+            value=self._base_layer_style,
             layout=Layout(width="fit-content"),
             style={"button_width": "30px"},
         )
@@ -113,7 +109,7 @@ class PositionMap(Map):
         # Update layer URL when toggle changes
         def update_layer_style(change):
             if change["name"] == "value":
-                self.base_layer.url = here_url(change["new"])
+                self.set_base_layer_style(change["new"])
 
         layer_toggle.observe(update_layer_style)
 
@@ -122,11 +118,17 @@ class PositionMap(Map):
             [layer_toggle], layout=Layout(width="fit-content", padding="0px", margin="0px", border="none")
         )
 
-        # Add toggle as a widget control
-        self.add(WidgetControl(widget=toggle_container, position="topright"))
-        self.add(ScaleControl(position="bottomright"))
-        self.add(FullScreenControl(position="bottomright"))
-        self.add(ZoomControl(position="bottomright"))
+        # Add toggle as a widget control. Track the bottom-right controls so
+        # their stacking order can be restored after the attribution control is
+        # recreated (see :meth:`_replace_base_layer`).
+        self._bottom_right_controls = [
+            ScaleControl(position="bottomright"),
+            WidgetControl(widget=toggle_container, position="bottomright"),
+            FullScreenControl(position="bottomright"),
+            ZoomControl(position="bottomright"),
+        ]
+        for control in self._bottom_right_controls:
+            self.add(control)
         self.bind_position_handler(self.set_center)
         if position_handler:
             self.bind_position_handler(position_handler)
@@ -201,6 +203,77 @@ class PositionMap(Map):
 
     def set_center(self, latlon: tuple[float, float]):
         self.center = latlon
+
+    def _here_url(self, style: str) -> str:
+        return (
+            f"https://maps.hereapi.com/v3/base/mc/{{z}}/{{x}}/{{y}}/png"
+            f"?style={style}&ppi=400&size=512&apiKey={self._credentials.api_key}&lang={self._preferred_language}"
+        )
+
+    def _here_attribution(self) -> str:
+        return "© HERE 2026"
+
+    def _positron_url(self, style: str) -> str:
+        return "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+
+    def _positron_attribution(self) -> str:
+        return "© OpenStreetMap contributors, © CARTO"
+
+    def _base_layer_url(self, style: str) -> str:
+        """Return the HERE tile URL when an API key is available, else Positron."""
+        if self._credentials.api_key:
+            return self._here_url(style)
+        return self._positron_url(style)
+
+    def _base_layer_attribution(self) -> str:
+        """Return the HERE attribution when an API key is available, else Positron."""
+        if self._credentials.api_key:
+            return self._here_attribution()
+        return self._positron_attribution()
+
+    def set_base_layer_style(self, style: str) -> None:
+        self._base_layer_style = style
+        self._replace_base_layer()
+
+    def refresh_base_layer(self) -> None:
+        self._replace_base_layer()
+
+    def _replace_base_layer(self) -> None:
+        """Rebuild the base tile layer so the attribution control is refreshed.
+
+        Mutating the ``url`` / ``attribution`` traits of an existing
+        :class:`~ipyleaflet.TileLayer` reloads the tiles but does not refresh
+        Leaflet's attribution control, which only reacts to layer add/remove.
+        Moreover the attribution control accumulates strings by reference count
+        and does not reliably drop a removed layer's attribution, so we also
+        recreate the control to rebuild the attribution from the current layers.
+        """
+        old_layer = self.base_layer
+        opacity = old_layer.opacity
+        self.base_layer = TileLayer(
+            url=self._base_layer_url(self._base_layer_style),
+            attribution=self._base_layer_attribution(),
+            opacity=opacity,
+        )
+        self.add(self.base_layer)
+        self.remove(old_layer)
+        if self.attribution_control:
+            self.attribution_control = False
+            self.attribution_control = True
+            self._restore_bottom_right_order()
+
+    def _restore_bottom_right_order(self) -> None:
+        """Re-stack the bottom-right controls above the attribution control.
+
+        Leaflet inserts each newly added control at the *top* of a bottom
+        corner, so recreating the attribution control leaves it above the
+        other bottom-right controls. Removing and re-adding those controls in
+        their original order pushes them back above the attribution control.
+        """
+        for control in self._bottom_right_controls:
+            if control in self.controls:
+                self.remove(control)
+            self.add(control)
 
     async def recenter(self, lat: float, lng: float):
         """Pan the map to (lat, lng) without changing the zoom level."""
