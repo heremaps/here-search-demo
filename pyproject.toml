@@ -35,6 +35,7 @@ classifiers = [
 ]
 dependencies = [
     "aiohttp",
+    "anywidget",
     "flexpolyline",
     "ipyleaflet",
     "ipywidgets",
@@ -98,6 +99,7 @@ xeus_build = [
   "jupyterlite-core",
   "jupyterlab_server",
   "jupyterlite-xeus",
+  "voici-core",
   "libarchive-c",
 ]
 

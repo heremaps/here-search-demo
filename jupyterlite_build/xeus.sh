@@ -91,4 +91,7 @@ echo "Notebook UI:"
 echo "http://localhost:8000/tree/"
 echo "http://localhost:8000/notebooks/index.html?path=demo.ipynb"
 echo ""
+echo "Voici app:"
+echo "http://localhost:8000/voici/render/basic-demo.html"
+echo ""
 

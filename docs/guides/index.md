@@ -10,6 +10,5 @@ Task-focused guides for specific behavior in the demo app.
 :maxdepth: 1
 
 route_search.md
-actions.md
-vicinity_titles.md
+signals.md
 ```

@@ -23,6 +23,15 @@ This page centralizes the public API surface used by the demo and notebooks.
    :show-inheritance:
 ```
 
+### here_search_demo.widgets.credentials
+
+```{eval-rst}
+.. automodule:: here_search_demo.widgets.credentials
+   :members:
+   :undoc-members:
+   :show-inheritance:
+```
+
 ### here_search_demo.api_options
 
 ```{eval-rst}

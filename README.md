@@ -1,6 +1,7 @@
 [![Python package][6]][7]
 [![codecov][8]][9]
-[![jupyterLite-badge][10]][3]
+[![jupyterLite-badge][jupyterLite-badge]][3]
+[![voici-badge][voici-badge]][3c]
 
 
 # HERE Search demo
@@ -23,13 +24,14 @@ A set of widgets and notebooks demonstrating
   </tr>
 </table>
 
-Requirements: [HERE credentials][1] (both API key and Oauth2 key/secret) and a Python environment. Note that HERE Base Plan [Pricing][5] allows you to get started for free.
+Requirements: [HERE credentials][1] (both API key and OAuth2 key/secret) and a Python environment. Note that HERE Base Plan [Pricing][5] allows you to get started for free.
 
-| I want to...                             | Recommended path                        |
-|:-----------------------------------------|:----------------------------------------|
-| Try online interactive notebooks         | [![jupyterLite-badge][10]][3]           |
-| Use notebooks locally in a Python setup  | [Offline notebooks](#offline-notebooks) |
-| Contribute or run full project workflows | [Contribute](#contribute)               |
+| I want to...                             | Recommended path                             |
+|:-----------------------------------------|:---------------------------------------------|
+| Just use the app                         | [![voici-badge][voici-badge]][3c]            |
+| Try online interactive notebooks         | [![jupyterLite-badge][jupyterLite-badge]][3] |
+| Use notebooks locally in a Python setup  | [Offline notebooks](#offline-notebooks)      |
+| Contribute or run full project workflows | [Contribute](#contribute)                    |
 
 Online documentation with interactive notebooks is available [here][docs].
 
@@ -91,8 +93,9 @@ This project is licensed under the MIT license - see the [LICENSE](./LICENSE) fi
 Note: This MIT-licensed project uses only open-source, community-maintained tools—such as **JupyterLite**, **xeus kernels**, **micromamba**, and packages from **conda-forge** and **emscripten-forge-dev**—and includes no Anaconda-distributed components. Each dependency remains under its own open-source license; see their LICENSE files for details.
 
 [1]: https://docs.here.com/geocoding-and-search/docs/get-credentials-ols
-[2]: https://github.com/heremaps/here-search-demo/blob/main/docs/developer/index.md
+[2]: https://github.com/heremaps/here-search-demo/blob/main/docs/contributing/index.md
 [3]: https://heremaps.github.io/here-search-demo/lab/?path=demo.ipynb
+[3c]: https://heremaps.github.io/here-search-demo/voici/render/basic-demo.html?
 [4]: https://docs.here.com/geocoding-and-search/docs/introduction-to-here-geocoding-search-api-v7
 [5]: https://www.here.com/get-started/pricing
 [routing]: https://docs.here.com/routing/docs/routing-v8-intro
@@ -102,5 +105,6 @@ Note: This MIT-licensed project uses only open-source, community-maintained tool
 [7]: https://github.com/heremaps/here-search-demo/actions/workflows/test.yml
 [8]: https://codecov.io/gh/heremaps/here-search-demo/branch/main/graph/badge.svg?token=MVFCS4BUFN
 [9]: https://codecov.io/gh/heremaps/here-search-demo
-[10]: https://jupyterlite.rtfd.io/en/latest/_static/badge.svg
 [12]: https://github.com/heremaps/here-search-demo/releases/latest/download/here-search-demo-notebooks.zip
+[jupyterLite-badge]: https://jupyterlite.rtfd.io/en/latest/_static/badge.svg
+[voici-badge]: docs/voici-badge.svg
