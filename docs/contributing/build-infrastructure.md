@@ -21,7 +21,6 @@ In order to be able to use the "File->Open" menu of the Notebooks UI, one needs 
 
 ### JupyterLite Xeus notes for CI
 
-- CI runs on GitLab `docker-autoscaler` using `python:3.11` x86_64.
 - Channels currently used are `environment.yml`:
   - `https://conda.anaconda.org/conda-forge`
   - `https://repo.prefix.dev/emscripten-forge-dev`
