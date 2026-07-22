@@ -12,8 +12,8 @@ import os
 import sys
 import warnings
 
-# sphinx-autodoc-typehints is pinned to ==3.6.1 (highest available in the ELM
-# index); that version calls a Sphinx API deprecated for removal in Sphinx 10,
+# sphinx-autodoc-typehints is pinned to ==3.6.1;
+# that version calls a Sphinx API deprecated for removal in Sphinx 10,
 # emitting a RemovedInSphinx10Warning once per documented object. It is harmless
 # on the current Sphinx 9.x line, so silence the noise until a newer
 # sphinx-autodoc-typehints becomes available.

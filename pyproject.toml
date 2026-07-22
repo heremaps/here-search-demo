@@ -57,22 +57,6 @@ lab = [
     "ipykernel",
     "jupyterlab"
 ]
-pyodide_notebook_build = [
-  "jupyter_server",
-  # "notebook",  # Do not add the notebook package
-  "jupyterlab_server",
-  "jupyterlite-core",
-  "jupyterlite-pyodide-kernel",
-  "libarchive-c",
-]
-pyodide_voici_build = [
-    "jupyter_server",
-	"jupyterlite-core==0.7.0",
-	"jupyterlite-pyodide-kernel==0.7.0",
-	"voici-core==0.10.0",
-	"notebook>=7.5.0,<7.6",
-	"libarchive-c"
-]
 dev = [
     "build",
     "bumpver",
@@ -84,11 +68,11 @@ dev = [
     "twine",
     "wheel"
 ]
-docs = [  # Not needed on github for now
+docs = [
     "sphinx",
     "furo",
     "myst-parser",
-    "sphinx-autodoc-typehints==3.6.1",  # highest version available in ELM
+    "sphinx-autodoc-typehints",
     "here-search-demo"
 ]
 
@@ -112,8 +96,7 @@ namespaces = true
 
 [tool.setuptools.package-data]
 "here_search_demo" = [
-    "notebooks/obm_*.ipynb",
-    "notebooks/*demo.ipynb",
+    "notebooks/*",
     "widgets/css/*.css",
 ]
 
@@ -146,7 +129,7 @@ exclude = ["*.ipynb"]
 combine-as-imports = true
 
 [bumpver]
-current_version = "0.36.1"
+current_version = "0.36.2"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
