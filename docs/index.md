@@ -10,7 +10,7 @@ In the demo below, click the top-right 🔑 to upload a HERE `credentials.proper
   <iframe src="../voici/render/basic-demo.html" loading="lazy" width="100%" height="650px" style="border: 0;"></iframe>
 </div>
 
-More options are available in the interactive notebook [demo](tutorials/notebook_demo.md) section.
+More options are available in the interactive notebook [demo](tutorials/index.md) section.
 
 ```{toctree}
 :maxdepth: 2
