@@ -9,9 +9,14 @@
 Package version: `0.36.2`
 
 A set of widgets and notebooks demonstrating 
-- the use of [HERE Geocoding & Search][4] endpoints `/autosuggest`,  `/discover`, `/browse`, `/lookup` and `/signals`. 
+- the use of [HERE Geocoding & Search][4] endpoints. 
 - the integration of [HERE Routing][routing] for search along the route use cases. 
 
+Requirements: [HERE credentials][1] (both API key and OAuth2 key/secret). 
+
+Note that HERE Base Plan [Pricing][5] allows you to get started for free.
+
+Demo documentation with interactive notebooks is available [here][docs].
 
 <table>
   <tr>
@@ -24,16 +29,12 @@ A set of widgets and notebooks demonstrating
   </tr>
 </table>
 
-Requirements: [HERE credentials][1] (both API key and OAuth2 key/secret) and a Python environment. Note that HERE Base Plan [Pricing][5] allows you to get started for free.
-
 | I want to...                             | Recommended path                             |
 |:-----------------------------------------|:---------------------------------------------|
-| Load my creds 🔑and use the app          | [![voici-badge][voici-badge]][3c]            |
+| Load my creds 🔑 and use the app         | [![voici-badge][voici-badge]][3c]            |
 | Try online interactive notebooks         | [![jupyterLite-badge][jupyterLite-badge]][3] |
 | Use notebooks locally in a Python setup  | [Offline notebooks](#offline-notebooks)      |
 | Contribute or run full project workflows | [Contribute](#contribute)                    |
-
-Online documentation with interactive notebooks is available [here][docs].
 
 ## Offline notebooks
 
@@ -68,7 +69,11 @@ Online documentation with interactive notebooks is available [here][docs].
    ```shell
    jupyterlite_build/xeus.sh
    ```
-3b. JupyterLab alternative:
+4. Build the docs page:
+   ```shell
+   sphinx-build -b html docs/ workspace/public/docs
+   ```
+5. JupyterLab alternative:
    ```shell
    prefix=$(python -c "import sys; print(sys.prefix)")
    python -m ipykernel install --prefix $prefix --name search_demo --display-name "search demo"
@@ -77,10 +82,6 @@ Online documentation with interactive notebooks is available [here][docs].
    ```shell
    python -m jupyterlab notebooks
    ``` 
-4. Build the docs page:
-   ```shell
-   sphinx-build -b html docs/ workspace/public/docs
-   ```
 
 (Additional [notes][2])
 
