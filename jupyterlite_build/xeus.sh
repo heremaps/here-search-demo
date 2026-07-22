@@ -29,8 +29,7 @@ rm -rf "$WORKSPACE"
 mkdir -p "$CONTENT_DIR"
 
 printf '%b\n' "${YELLOW}Copy & strip notebooks${NC}"
-cp -r "$NOTEBOOKS_DIR"/obm*.ipynb "$CONTENT_DIR"/
-cp "$NOTEBOOKS_DIR"/demo.ipynb "$CONTENT_DIR"/
+cp "$NOTEBOOKS_DIR"/*.ipynb "$CONTENT_DIR"/
 python -m jupyterlite_build.strip_notebooks \
 	--notebooks-dir "$CONTENT_DIR"
 
