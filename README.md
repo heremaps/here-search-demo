@@ -28,7 +28,7 @@ Requirements: [HERE credentials][1] (both API key and OAuth2 key/secret) and a P
 
 | I want to...                             | Recommended path                             |
 |:-----------------------------------------|:---------------------------------------------|
-| Just use the app                         | [![voici-badge][voici-badge]][3c]            |
+| Load my creds 🔑and use the app          | [![voici-badge][voici-badge]][3c]            |
 | Try online interactive notebooks         | [![jupyterLite-badge][jupyterLite-badge]][3] |
 | Use notebooks locally in a Python setup  | [Offline notebooks](#offline-notebooks)      |
 | Contribute or run full project workflows | [Contribute](#contribute)                    |
