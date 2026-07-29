@@ -6,7 +6,7 @@
 
 # HERE Search demo
 
-Package version: `0.36.4`
+Package version: `0.36.5`
 
 A set of widgets and notebooks demonstrating 
 - the use of [HERE Geocoding & Search][4] endpoints. 
