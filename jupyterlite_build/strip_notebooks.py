@@ -1,6 +1,7 @@
-import json
-from pathlib import Path
 import argparse
+import json
+import sys
+from pathlib import Path
 
 
 def strip_notebook(nb_path: Path):
@@ -42,4 +43,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())
