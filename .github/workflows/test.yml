@@ -34,6 +34,7 @@ jobs:
       - name: Lint
         run: |
           uv cache clean
+          uv --version
           uv run --python 3.13 --extra dev ruff check src tests jupyterlite_build
           uv run --python 3.13 --extra dev ruff format src tests jupyterlite_build --check
 
