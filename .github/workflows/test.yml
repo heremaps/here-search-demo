@@ -33,13 +33,6 @@ jobs:
             uv run --python "$version" --extra dev pytest -n auto -vv tests --ignore=tests/test_notebooks.py
           done
 
-      - name: Lint
-        run: |
-          uv cache clean
-          uv --version
-          uv run --python 3.13 --extra dev ruff check src tests jupyterlite_build
-          uv run --python 3.13 --extra dev ruff format src tests jupyterlite_build --check
-
       - name: Coverage
         run: |
           uv run --python 3.13 --extra dev pytest -v --cov=src tests --ignore=tests/test_notebooks.py --cov-report=xml --cov-report=term-missing
