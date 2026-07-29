@@ -83,7 +83,6 @@ Demo documentation with interactive notebooks is available [here][docs].
    python -m jupyterlab notebooks
    ``` 
 
-(Additional [notes][2])
 
 ## License
 
@@ -107,5 +106,6 @@ Note: This MIT-licensed project uses only open-source, community-maintained tool
 [8]: https://codecov.io/gh/heremaps/here-search-demo/branch/main/graph/badge.svg?token=MVFCS4BUFN
 [9]: https://codecov.io/gh/heremaps/here-search-demo
 [12]: https://github.com/heremaps/here-search-demo/releases/latest/download/here-search-demo-notebooks.zip
+[micromamba]: https://mamba.readthedocs.io/en/latest/index.html
 [jupyterLite-badge]: https://jupyterlite.rtfd.io/en/latest/_static/badge.svg
 [voici-badge]: docs/voici-badge.svg
