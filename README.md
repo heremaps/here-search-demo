@@ -108,4 +108,4 @@ Note: This MIT-licensed project uses only open-source, community-maintained tool
 [12]: https://github.com/heremaps/here-search-demo/releases/latest/download/here-search-demo-notebooks.zip
 [micromamba]: https://mamba.readthedocs.io/en/latest/index.html
 [jupyterLite-badge]: https://jupyterlite.rtfd.io/en/latest/_static/badge.svg
-[voici-badge]: docs/voici-badge.svg
+[voici-badge]: https://raw.githubusercontent.com/heremaps/here-search-demo/main/docs/voici-badge.svg
