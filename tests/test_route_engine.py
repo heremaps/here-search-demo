@@ -137,6 +137,40 @@ async def test_route_engine_uses_injected_retrieve_callable(mock_credentials):
     retrieve.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_route_engine_update_route_attributes_aggregates_multiple_sections(engine):
+    route_response = {
+        "routes": [
+            {
+                "sections": [
+                    {
+                        "polyline": fp_encode([(48.8, 2.3), (48.9, 2.4)]),
+                        "summary": {"length": 1000, "duration": 60},
+                        "spans": [{"offset": 1, "duration": 60}],
+                    },
+                    {
+                        "polyline": fp_encode([(48.9, 2.4), (49.0, 2.5)]),
+                        "summary": {"length": 500, "duration": 30},
+                        "spans": [{"offset": 1, "duration": 30}],
+                    },
+                ]
+            }
+        ]
+    }
+
+    engine.start_position = (48.8, 2.3)
+    engine.stop_position = (49.0, 2.5)
+    engine._retrieve_route = AsyncMock(return_value=route_response)
+
+    result = await engine.update_route_attributes()
+
+    assert result["route_summary_length"] == 1500
+    assert result["waypoints"] == [(48.8, 2.3), (48.9, 2.4), (49.0, 2.5)]
+    assert result["spans"] == [{"offset": 1, "duration": 60}, {"offset": 2, "duration": 30}]
+    assert engine.waypoints_count == 3
+    assert engine.route_flexpolyline == fp_encode([(48.8, 2.3), (48.9, 2.4), (49.0, 2.5)])
+
+
 def test_route_engine_module_is_headless():
     import inspect
 

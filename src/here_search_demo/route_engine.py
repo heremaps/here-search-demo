@@ -148,22 +148,66 @@ class RouteEngine:
             if self.on_routing_request is not None:
                 self.on_routing_request()
 
-            # TODO: Check if we should not take more sections....
-            section = route["routes"][0]["sections"][0]
-            route_flexpolyline = section["polyline"]
-            waypoints = decode(route_flexpolyline)
-            summary = section.get("summary", {})
+            all_sections: list[dict[str, Any]] = []
+            for route_item in route.get("routes", []):
+                all_sections.extend(route_item.get("sections", []))
+            if not all_sections:
+                raise ValueError("Routing response does not contain any route sections")
+
+            previous_point = None
+            waypoints: list[tuple[float, float]] = []
+            section_polylines: list[str] = []
+            spans: list[dict[str, Any]] = []
+            offset_base = 0
+            total_length: int | None = None
+            total_duration: int | None = None
+
+            for section in all_sections:
+                polyline = section.get("polyline")
+                if not polyline:
+                    continue
+                points = decode(polyline)
+                if not points:
+                    continue
+
+                skip_first = 1 if previous_point is not None and points[0] == previous_point else 0
+                section_points = points[skip_first:]
+                if not section_points:
+                    continue
+
+                section_polylines.append(polyline)
+                waypoints.extend(section_points)
+
+                for span in section.get("spans", []):
+                    span_copy = dict(span)
+                    if "offset" in span_copy and span_copy["offset"] is not None:
+                        span_copy["offset"] = offset_base + max(0, int(span_copy["offset"]) - skip_first)
+                    spans.append(span_copy)
+
+                summary = section.get("summary", {})
+                if summary.get("length") is not None:
+                    total_length = (total_length or 0) + int(summary["length"])
+                if summary.get("duration") is not None:
+                    total_duration = (total_duration or 0) + int(summary["duration"])
+
+                offset_base += len(section_points)
+                previous_point = points[-1]
+
+            if not waypoints:
+                raise ValueError("Routing response sections do not contain route polyline points")
+
+            route_flexpolyline = section_polylines[0] if len(section_polylines) == 1 else encode(waypoints)
             self._route_cache[cache_key] = {
                 "flexpolyline_raw": route_flexpolyline,
                 "waypoints": waypoints,
-                "route_summary_length": summary.get("length"),
-                "spans": section.get("spans", []),
+                "route_summary_length": total_length,
+                "spans": spans,
             }
             # Pre-populate the summary key so DetourRanker reuses this fetch
             # when at_pos == start_position (the common default).
             self._route_cache[("summary", start_lat, start_lon, stop_lat, stop_lon)] = (
-                summary.get("duration"),
-                summary.get("length"),
+                total_duration,
+                total_length,
                 route_flexpolyline,
             )
 
