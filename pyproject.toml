@@ -167,7 +167,7 @@ allowed-unresolved-imports = []
 replace-imports-with-any = []
 
 [bumpver]
-current_version = "0.37.1"
+current_version = "0.36.5"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
