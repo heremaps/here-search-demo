@@ -62,7 +62,7 @@ jobs:
 
       - name: Create page
         run: |
-          uv run --active jupyterlite_build/xeus.sh
+          uv run --active ./lite-build.sh
           uv run --active --extra docs sphinx-build -b html docs/ workspace/public/docs
           ls -la
           ls -la workspace

@@ -67,7 +67,7 @@ Demo documentation with interactive notebooks is available [here][docs].
    ```
 3. Build the JupyterLite static page:
    ```shell
-   jupyterlite_build/xeus.sh
+   ./lite-build.sh
    ```
 4. Build the docs page:
    ```shell

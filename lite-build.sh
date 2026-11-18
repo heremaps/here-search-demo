@@ -10,8 +10,7 @@
 
 set -e
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd -P)
+ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 
 WORKSPACE="$ROOT_DIR/workspace"
 XEUS_ROOT_PREFIX="$WORKSPACE/_xeus-prefix-root"

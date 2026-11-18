@@ -30,7 +30,7 @@ In order to be able to use the "File->Open" menu of the Notebooks UI, one needs 
 - `pycparser` is expected to come from conda-forge as a noarch package (`pyh...` build string), while `orjson` is expected 
 from `emscripten-forge-dev` (e.g. wasm build `3.11.3`).
 - If CI fails with `Could not solve for environment specs` mentioning `pycparser` or `xeus-python-shell-lite`, 
-verify the specs send to `micromamba` first. You can use the `--micromamba` option of `create_env.py` (in `xeus.sh`)
+verify the specs send to `micromamba` first. You can use the `--micromamba` option of `jl-forge xeus-env` (called in `lite-build.sh`)
 - Application code remains injectable per commit through:
   - `--XeusAddon.mounts="$ROOT_DIR/src/here_search_demo:/lib/python3.13/site-packages/here_search_demo"`.
 - `emscripten-forge` provides conda-style packages for WebAssembly (`emscripten-wasm32`), enabling Python and scientific 
@@ -53,7 +53,7 @@ Voici reuses the same xeus kernel stack, but it builds an app-style dashboard ou
 It is built by the same script and command path as JupyterLite:
 
 ```shell
-jupyterlite_build/xeus.sh
+lite-build.sh
 ```
 
 This sheel script builds:
@@ -74,7 +74,7 @@ Reference:
 Jupyter Xeus isnot supported by the `emscripten-forge` recipe for Python 3.14 or 3.15 yet.:
 emscripten-forge [recipe](https://github.com/emscripten-forge/recipes/blob/main/recipes/recipes_emscripten/python/recipe.yaml) for python is currently at 3.13.1, not 3.14.
 
-If Xeus support for Python 3.14 is enabled (see recipe), the `--XeusAddon.mounts` option of `jupyterlite_build/xeus.sh` needs 
+If Xeus support for Python 3.14 is enabled (see recipe), the `--XeusAddon.mounts` option of `lite-build.sh` needs 
 to be updated to point to the correct site-packages path.
 
 ```shell
