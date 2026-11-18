@@ -1,3 +1,12 @@
+/******************************************************************************
+ *
+ * Copyright (c) 2026 HERE Europe B.V.
+ *
+ * SPDX-License-Identifier: MIT
+ * License-Filename: LICENSE
+ *
+ *****************************************************************************/
+
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);

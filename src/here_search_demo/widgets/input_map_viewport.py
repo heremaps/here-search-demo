@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2026 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 """Viewport centering, zoom and bounds fitting for the position map."""
 
 import asyncio

@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2026 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass

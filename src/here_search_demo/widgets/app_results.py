@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2026 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 """Suggestion, result list and result details display for the one-box map app."""
 
 import asyncio

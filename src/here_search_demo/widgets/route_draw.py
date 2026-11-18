@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2026 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 """Map drawing and bounds methods of the route controller."""
 
 from typing import Any, cast

@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2026 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 from dataclasses import replace
 from typing import Protocol, Tuple, runtime_checkable
 

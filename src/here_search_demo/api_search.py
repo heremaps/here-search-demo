@@ -1,3 +1,12 @@
+###############################################################################
+#
+# Copyright (c) 2026 HERE Europe B.V.
+#
+# SPDX-License-Identifier: MIT
+# License-Filename: LICENSE
+#
+###############################################################################
+
 """Autosuggest, discover and browse endpoints of the HERE Geocoding & Search API client."""
 
 from collections.abc import Sequence
