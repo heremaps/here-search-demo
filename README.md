@@ -38,7 +38,7 @@ Demo documentation with interactive notebooks is available [here][docs].
 
 ## Offline notebooks
 
-1. Install the package in the virtual environment of your choice (Python 3.13 recommended):
+1. Install the package in the virtual environment of your choice (Python 3.14 recommended):
    ```shell
    pip install 'here-search-demo[lab]'
    ```
