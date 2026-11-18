@@ -132,6 +132,20 @@ class ResponseMap(PositionMap, DetailsMixin, LabelsMixin):
         self.queue.put_nowait(ActionIntent(materialization=response_item, time=time.perf_counter_ns()))
 
     def _show_detour_route(self, item_data: dict) -> None:
+        """Draw the ``at → item → stop`` legs of a reranked (detour) result.
+
+        The legs are read from the ``_detour`` annotation that
+        :class:`~here_search_demo.detour.DetourRanker` attaches to every
+        reranked item, so rendering never depends on re-deriving the routing
+        cache key from the current route state.
+        """
+        detour = item_data.get("_detour") or {}
+        poly_to, poly_from = detour.get("polyline_to"), detour.get("polyline_from")
+        if poly_to and poly_from:
+            self.route.draw_detour_routes(poly_from, poly_to)
+            return
+
+        # Fallback for items displayed without a _detour annotation.
         position = item_data.get("position", {})
         start_position = self.route.search_at_position or self.route.current_position
         if start_position is None:

@@ -9,5 +9,7 @@ hide-toc: true
 
 api_reference.md
 route_math.md
+route_code.md
 map_math.md
+map_code.md
 ```

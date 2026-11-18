@@ -169,8 +169,9 @@ class Credentials:
             Path.home(),  # User home directory
             Path(os.environ.get("HOME", "")) / ".here",  # ~/.here/
         ]
-        if Path.cwd().parts[-1] == "notebooks":
-            search_dirs.append(Path.cwd().parents[0])
+        # Notebooks are grouped in sub-directories (notebooks/route/, ...) while the
+        # credentials file sits at notebooks/ or at the repository root.
+        search_dirs.extend(Path.cwd().parents[:2])
         paths = [d / fname for d in search_dirs for fname in filenames]
         for path in paths:
             if path.exists():

@@ -2,11 +2,11 @@
 hide-toc: true
 ---
 
-# OBM 1 API Notebook
+# Search Client 1
 
-## API quick reference
+## Quick reference
 
-This notebook focuses on direct API calls. Most-used entry points:
+This notebook focuses on Search client calls. Most-used entry points:
 
 1. `API.autosuggest(...)`
 2. `API.discover(...)`
@@ -14,21 +14,24 @@ This notebook focuses on direct API calls. Most-used entry points:
 4. `Response.geojson()`
 5. `Response.req` (request metadata)
 
-For the complete reference, see [API Reference](../reference/api_reference.md).
+For the complete reference, see the [API reference](../reference/api_reference.md).
 
 
-<div style="height: 700px; overflow: hidden; border: 1px solid #ccc; border-radius: 4px;">
-  <iframe
-    id="notebook-frame"
-    src="../../notebooks/?path=obm_1_api.ipynb"
-    width="100%"
-    height="780"
-    style="border: 0; margin-top: -70px;">
-  </iframe>
+<div class="notebook-embed">
+  <iframe id="notebook-frame" src="../../../notebooks/?path=ch_1_api.ipynb" loading="lazy"></iframe>
 </div>
 
+<!-- div style="height: 1950px; overflow: hidden; border: 1px solid #ccc; border-radius: 4px;">
+  <iframe
+    id="notebook-frame"
+    src="../../notebooks/?path=ch_1_api.ipynb"
+    width="100%"
+    height="2030"
+    style="border: 0; margin-top: -70px;">
+  </iframe>
+</div -->
 
-## API methods used in this notebook
+## Methods used in this notebook
 
 ```{eval-rst}
 .. autoclass:: here_search_demo.api.API

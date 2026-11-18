@@ -80,8 +80,13 @@ The base layer URL is built from the API key (`PositionMap._base_layer_url`):
 def _base_layer_url(self, style):
     if self._credentials.api_key:
         return self._here_url(style)   # https://maps.hereapi.com/v3/... &apiKey=...
-    return self._positron_url(style)   # CARTO Positron fallback
+    return self._mapnik_url()          # OpenStreetMap Mapnik fallback
 ```
+
+The no-key fallback uses `xyzservices`' `OpenStreetMap.Mapnik` provider, including
+its linked OpenStreetMap attribution. Interactive use must follow the
+[OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/);
+bulk downloads and offline prefetching are not permitted.
 
 ---
 
@@ -106,7 +111,7 @@ def _apply_credentials_properties(self, properties):
     if not properties:
         return
     self.credentials.apply_active_config(properties)  # update in-memory Credentials
-    self.map_w.refresh_base_layer()                   # re-pick HERE vs Positron tiles
+    self.map_w.refresh_base_layer()                   # re-pick HERE vs Mapnik tiles
     self._schedule_search_box_visibility()            # re-evaluate search box gating
 ```
 
@@ -155,12 +160,12 @@ running (e.g. plain construction in tests) or token retrieval raises, the box st
 |---|---|---|---|---|
 | ✅ | ✅ | HERE tiles | shown | authorized |
 | ✅ | ❌ | HERE tiles | hidden | unauthorized (no valid Bearer token) |
-| ❌ | ✅ | CARTO Positron fallback | hidden | authorized, but UI to trigger them is hidden |
-| ❌ | ❌ | CARTO Positron fallback | hidden | unauthorized |
+| ❌ | ✅ | OpenStreetMap Mapnik fallback | hidden | authorized, but UI to trigger them is hidden |
+| ❌ | ❌ | OpenStreetMap Mapnik fallback | hidden | unauthorized |
 
 Takeaways:
 
-- A **missing API key** never breaks the map — it only downgrades tiles to the Positron
+- A **missing API key** never breaks the map — it only downgrades tiles to the Mapnik
   fallback (and hides the search UI, because gating also requires the API key).
 - **Missing/invalid OAuth2** does not break tile rendering, but it hides the search UI and
   leaves backend requests unauthorized.

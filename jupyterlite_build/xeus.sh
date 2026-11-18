@@ -28,13 +28,18 @@ printf '%b\n' "${YELLOW}Clean workspace for JupyterLite xeus${NC}"
 rm -rf "$WORKSPACE"
 mkdir -p "$CONTENT_DIR"
 
-printf '%b\n' "${YELLOW}Copy & strip notebooks${NC}"
-cp "$NOTEBOOKS_DIR"/*.ipynb "$CONTENT_DIR"/
-python -m jupyterlite_build.strip_notebooks \
-	--notebooks-dir "$CONTENT_DIR"
+printf '%b\n' "${YELLOW}Copy notebooks${NC}"
+mkdir -p "$CONTENT_DIR/route/high_level"
+cp "$NOTEBOOKS_DIR"/ch*.ipynb "$CONTENT_DIR"/
+cp "$NOTEBOOKS_DIR"/demo.ipynb "$CONTENT_DIR"/demo.ipynb
+cp "$NOTEBOOKS_DIR"/basic-demo.ipynb "$CONTENT_DIR"/basic-demo.ipynb
+cp "$NOTEBOOKS_DIR"/route/*.ipynb "$CONTENT_DIR"/route/
+cp "$NOTEBOOKS_DIR"/route/high_level/*.ipynb "$CONTENT_DIR"/route/high_level/
 
 printf '%b\n' "${YELLOW}Create Python environment${NC}"
-python -m venv "$WORKSPACE/venv"
+# uv venv (not python -m venv): a bare `python` can resolve to a standalone
+# build whose ensurepip fails; uv provisions a clean interpreter with pip.
+uv venv "$WORKSPACE/venv"
 # shellcheck source=/dev/null
 source "$WORKSPACE/venv/bin/activate"
 
@@ -42,13 +47,28 @@ printf '%b\n' "${YELLOW}Install build dependencies${NC}"
 export UV_PROJECT_ENVIRONMENT="$WORKSPACE/venv"
 uv sync --only-group xeus_build --no-install-project
 
+printf '%b\n' "${YELLOW}Strip notebooks${NC}"
+# jl-forge notebooks --strip replaces jupyterlite_build.strip_notebooks
+# (clears code-cell outputs/execution counts recursively, in place).
+jl-forge notebooks "$CONTENT_DIR" --strip
+
 printf '%b\n' "${YELLOW}Add credentials${NC}"
+# Jupyter UI on xeus does not render/edit credentials.properties correctly.
+# credentials.properties.txt is OK
 cp "$NOTEBOOKS_DIR"/credentials.properties.txt "$CONTENT_DIR"/
 
 printf '%b\n' "${YELLOW}Build Xeus prefix${NC}"
-python -m jupyterlite_build.xeus.create_env \
+# jl-forge xeus-env replaces jupyterlite_build.xeus.create_env; it uses the same
+# xeus-python runtime, conda-forge + emscripten-forge-dev channels, platform
+# emscripten-wasm32 and env name xeus-kernels, collecting specs from pyproject.
+jl-forge xeus-env \
 	--root-prefix "$XEUS_ROOT_PREFIX" \
 	--pyproject "$ROOT_DIR/pyproject.toml"
+
+# jl-forge xeus-mount derives the in-kernel site-packages path from the Python
+# actually installed in the prefix (no hard-coded python3.13), replacing the
+# former literal --XeusAddon.mounts value.
+MOUNT=$(jl-forge xeus-mount "$ROOT_DIR/src/here_search_demo" --prefix "$XEUS_KERNELS_DIR")
 
 printf '%b\n' "${YELLOW}Build JupyterLite site${NC}"
 pushd "$WORKSPACE" >/dev/null
@@ -57,7 +77,7 @@ jupyter lite build --apps notebooks --apps voici --apps tree --apps edit --apps 
 	--output-dir "$PUBLIC_DIR" \
 	--XeusAddon.prefix="$XEUS_KERNELS_DIR" \
 	--XeusAddon.mount_jupyterlite_content=True \
-	--XeusAddon.mounts="$ROOT_DIR/src/here_search_demo:/lib/python3.13/site-packages/here_search_demo"
+	--XeusAddon.mounts="$MOUNT"
 
 printf '%b\n' "${YELLOW}Reduce site size${NC}"
 (
@@ -93,4 +113,3 @@ echo ""
 echo "Voici app:"
 echo "http://localhost:8000/voici/render/basic-demo.html"
 echo ""
-

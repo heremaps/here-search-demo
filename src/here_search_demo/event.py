@@ -23,6 +23,7 @@ from here_search_demo.entity.place import PlaceTaxonomyItem
 from here_search_demo.entity.request import RequestContext
 from here_search_demo.entity.response import LocationResponseItem, LocationSuggestionItem, Response
 from here_search_demo.http import HTTPSession
+from here_search_demo.stratified_search import corridor_search
 
 
 @dataclass
@@ -82,22 +83,25 @@ class TextSearchEvent(SearchEvent):
 
     query_text: str
 
-    async def get_response(
-        self, api: API, config: DiscoverConfig, session: HTTPSession
-    ) -> Response:  # pragma: no cover
-        # Runtime API transport path; tests in this suite focus on event routing with mocked backends.
-        return await api.discover(
-            session=session,
-            q=self.query_text,
-            latitude=self.context.latitude,
-            longitude=self.context.longitude,
-            polyline=self.context.polyline,
-            width=self.context.width,
-            all_along=self.context.all_along,
-            x_headers=self.context.x_headers,
-            lang=self.context.language,
-            limit=config.limit,
-        )
+    async def get_response(self, api: API, config: DiscoverConfig, session: HTTPSession) -> Response:
+        async def _call(
+            session: HTTPSession, polyline: str | None, latitude: float, longitude: float, limit: int
+        ) -> Response:  # pragma: no cover
+            # Runtime API transport path; tests in this suite focus on event routing with mocked backends.
+            return await api.discover(
+                session=session,
+                q=self.query_text,
+                latitude=latitude,
+                longitude=longitude,
+                polyline=polyline,
+                width=self.context.width,
+                all_along=self.context.all_along,
+                x_headers=self.context.x_headers,
+                lang=self.context.language,
+                limit=limit,
+            )
+
+        return await corridor_search(context=self.context, limit=config.limit, single_call=_call, session=session)
 
     @classmethod
     def from_intent(cls, context: RequestContext, intent: SearchIntent) -> "TextSearchEvent":
@@ -263,20 +267,25 @@ class PlaceTaxonomySearchEvent(SearchEvent):
 
     item: PlaceTaxonomyItem
 
-    async def get_response(self, api: API, config: BrowseConfig, session: HTTPSession) -> Response:  # pragma: no cover
-        # Runtime API transport path; tests in this suite focus on event routing with mocked backends.
-        return await api.browse(
-            session=session,
-            latitude=self.context.latitude,
-            longitude=self.context.longitude,
-            polyline=self.context.polyline,
-            width=self.context.width,
-            all_along=self.context.all_along,
-            x_headers=self.context.x_headers,
-            lang=self.context.language,
-            limit=config.limit,
-            **self.item.mapping,
-        )
+    async def get_response(self, api: API, config: BrowseConfig, session: HTTPSession) -> Response:
+        async def _call(
+            session: HTTPSession, polyline: str | None, latitude: float, longitude: float, limit: int
+        ) -> Response:  # pragma: no cover
+            # Runtime API transport path; tests in this suite focus on event routing with mocked backends.
+            return await api.browse(
+                session=session,
+                latitude=latitude,
+                longitude=longitude,
+                polyline=polyline,
+                width=self.context.width,
+                all_along=self.context.all_along,
+                x_headers=self.context.x_headers,
+                lang=self.context.language,
+                limit=limit,
+                **self.item.mapping,
+            )
+
+        return await corridor_search(context=self.context, limit=config.limit, single_call=_call, session=session)
 
     @classmethod
     def from_intent(cls, context: RequestContext, intent: SearchIntent) -> "PlaceTaxonomySearchEvent":

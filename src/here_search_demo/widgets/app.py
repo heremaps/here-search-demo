@@ -10,41 +10,43 @@
 import asyncio
 import logging
 from collections.abc import Callable
+
 from ipyleaflet import WidgetControl
 from IPython.display import display
 from ipywidgets import HBox, Label, VBox
 
 from ..api import API
-from ..auth import Credentials
 from ..api_options import (
     APIOptions,
-    recommendPlaces,
-    tripadvisorDetails,
+    build_api_options,
+    default_options_config,
     fuelDetails,
     fuelPriceDetails,
-    default_options_config,
-    build_api_options,
+    recommendPlaces,
+    tripadvisorDetails,
 )
+from ..auth import Credentials
 from ..base import OneBoxCore, UserProfileMixin
-from ..detour import DetourRanker
 from ..entity.endpoint import Endpoint
 from ..entity.intent import SearchIntent
 from ..entity.place import PlaceTaxonomyExample
 from ..entity.request import RequestContext
-from ..entity.response import QuerySuggestionItem, Response
-from .state import SearchState
+from ..entity.response import Response
 from ..user import UserProfile
+from .app_controls import OneBoxControlsMixin
+from .app_results import OneBoxResultsMixin
 from .credentials import CredentialsLoader
 from .input_text import PlaceTaxonomyButtons, SubmittableTextBox, TermsButtons
-from .output_map import ResponseMap
 from .output_buttons import SearchResultButtons
-from .output_json import SearchResultJson, SearchResultList
+from .output_json import SearchResultJson
+from .output_map import ResponseMap
+from .state import SearchState
 from .util import TableLogWidget
 
 style_refactor = True
 
 
-class OneBoxMap(UserProfileMixin, OneBoxCore):
+class OneBoxMap(OneBoxControlsMixin, OneBoxResultsMixin, UserProfileMixin, OneBoxCore):
     """Interactive one-box search application with map and result panels.
 
     ``OneBoxMap`` wires text input, taxonomy shortcuts, map rendering and
@@ -311,48 +313,6 @@ class OneBoxMap(UserProfileMixin, OneBoxCore):
         self.routing_api_calls += max(0, calls)
         self._update_search_center_label()
 
-    def _on_credentials_properties_change(self, change: dict) -> None:
-        if change.get("name") != "active_config":
-            return
-        self._apply_credentials_properties(change.get("new") or {})
-
-    def _apply_credentials_properties(self, properties: dict) -> None:
-        if not properties:
-            return
-        self.credentials.apply_active_config(properties)
-        self.map_w.refresh_base_layer()
-        self._schedule_search_box_visibility()
-
-    def _set_search_box_visible(self, visible: bool) -> None:
-        self.search_box.layout.display = "" if visible else "none"
-
-    async def _credentials_are_valid(self) -> bool:
-        """Return True when an api_key is set and an OAuth token can be retrieved."""
-        if not self.credentials.api_key:
-            return False
-        try:
-            return bool(await self.credentials.atoken)
-        except Exception:
-            self.logger.debug("Token retrieval failed; hiding search box", exc_info=True)
-            return False
-
-    async def _update_search_box_visibility(self) -> None:
-        self._set_search_box_visible(await self._credentials_are_valid())
-
-    def _schedule_search_box_visibility(self) -> None:
-        """Re-evaluate search box visibility on the running event loop.
-
-        The token check is a network call that is async in the browser runtime,
-        so it is scheduled as a task. When no event loop is running (e.g. plain
-        construction in tests), the check is skipped and the box keeps its
-        current (hidden) state to avoid blocking network calls.
-        """
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        loop.create_task(self._update_search_box_visibility())
-
     def triage_intent(self, intent, context):
         if self._recommendations:
             if context.polyline:
@@ -375,102 +335,12 @@ class OneBoxMap(UserProfileMixin, OneBoxCore):
             polyline=route.search_flexpolyline,
             width=route.width,
             all_along=route.all_along,
+            route_waypoints=route.current_waypoints,
             language=self.preferred_language,
             x_headers=self.x_headers,
             share_experience=self.user_profile.share_experience,
             user_id=self.user_profile.id if self.user_profile.share_experience else None,
         )
-
-    def _set_minimal_detour_with_refresh(self, value: bool):
-        """Toggle minimal-detour and refresh the result list accordingly."""
-        self._orig_set_minimal_detour(value)
-        if self._last_result_resp is None or self._last_result_intent is None:
-            return
-        if not value:
-            # Turning off: restore original labels without reranking.
-            self._display_result_list(self._last_result_intent, self._last_result_resp, fit=False, clear_query=False)
-        else:
-            # Turning on: re-apply detour ranking when route data is available.
-            route = self.map_w.route
-            if (
-                (
-                    self._last_result_intent.kind in ("submitted_text", "taxonomy")
-                    or (
-                        self._last_result_intent.kind == "details"
-                        and isinstance(self._last_result_intent.materialization, QuerySuggestionItem)
-                    )
-                )
-                and route.ranking_mode.needs_client_rerank
-                and route.start_position is not None
-                and route.stop_position is not None
-                and route.current_position is not None
-                and route.route_summary_length is not None
-            ):
-                self._rerank_task = asyncio.create_task(
-                    self._handle_result_list_with_detour(self._last_result_intent, self._last_result_resp)
-                )
-                route.detour_task = self._rerank_task
-
-    def _set_mins_from_pos_with_clear_results(self, mins: int | None):
-        """Update min-from-pos and clear displayed results so they match the new center."""
-        self._orig_set_mins_from_pos(mins)
-        self._clear_results_on_route_change()
-
-    def _clear_results_on_route_change(self, route=None):
-        self.map_w.clear_results()
-        self.result_buttons_w._inner_box.children = ()
-        self._last_result_resp = None
-        self._last_result_intent = None
-
-    def add_result_postprocess(self) -> None:
-        """Register a built-in postprocess that signals when a result list arrives.
-
-        The callback removes itself automatically after firing once, so calling
-        ``remove_result_postprocess()`` is optional.
-
-        After calling this, ``await app.post_process_tasks`` will block until:
-        - a ``submitted_text`` or ``taxonomy`` response has been fully processed,
-        - any travel-time reranking task has completed, and
-        - the map fit-bounds animation has finished.
-        """
-        self._results_event = asyncio.Event()
-
-        async def _cb(intent, event, resp, session):
-            if intent.kind in ("submitted_text", "taxonomy"):
-                self._results_event.set()
-                self.remove_postprocess(_cb)  # one-shot: deregister after firing
-                self._results_postprocess_cb = None
-
-        self._results_postprocess_cb = _cb
-        self.add_postprocess(_cb)
-
-    def remove_result_postprocess(self) -> None:
-        """Deregister the callback registered by ``add_result_postprocess``."""
-        if self._results_postprocess_cb is not None:
-            self.remove_postprocess(self._results_postprocess_cb)
-            self._results_postprocess_cb = None
-        self._results_event = None
-
-    @property
-    def post_process_tasks(self):
-        """Awaitable that resolves once results are displayed, reranked, and the map fitted.
-
-        Example usage::
-
-            app.add_result_postprocess()
-            app.buttons_box_w.buttons[0].click()
-            await app.post_process_tasks
-            app.remove_result_postprocess()
-        """
-        return self._await_post_process_tasks()
-
-    async def _await_post_process_tasks(self):
-        if self._results_event is not None:
-            await self._results_event.wait()
-        if self._rerank_task is not None:
-            await self._rerank_task
-        if self.map_w._fit_task is not None:
-            await self.map_w._fit_task
 
     def show(self) -> None:
         """Display the application UI in the current notebook.
@@ -490,133 +360,7 @@ class OneBoxMap(UserProfileMixin, OneBoxCore):
         except Exception:
             self._display_id = None
 
-    def _limit_ui_response(self, resp: Response) -> Response:
-        if not self._recommendations:
-            return resp
-        endpoint = getattr(getattr(resp, "req", None), "endpoint", None)
-        if endpoint not in {Endpoint.AUTOSUGGEST, Endpoint.AUTOSUGGEST_HREF, Endpoint.DISCOVER}:
-            return resp
-        limit = SearchResultList.default_max_results_count
-        items = resp.data.get("items")
-        if not isinstance(items, list) or len(items) <= limit:
-            return resp
-        data = {**resp.data, "items": items[:limit]}
-        return Response(req=resp.req, data=data, x_headers=resp.x_headers)
-
-    def handle_suggestion_list(self, intent: SearchIntent, autosuggest_resp: Response):
-        """
-        Display autosuggest_resp in a JSON widget
-        Display autosuggest_resp with intent in SearchResultButtons widget
-        Display results on responseMap
-        Display terms suggestions in TermsButtons widget
-        :param intent: the intent behind the Response instance
-        :param autosuggest_resp: the Response instance to handle
-        :return: None
-        """
-        limited_resp = self._limit_ui_response(autosuggest_resp)
-        self._display_suggestions(limited_resp, intent)
-        self._display_result_map(limited_resp, intent, fit=False)
-        self._display_terms(limited_resp, intent)
-
-    def _display_suggestions(self, autosuggest_resp: Response, intent: SearchIntent) -> None:
-        # Used by handle_suggestion_list
-        limited_resp = self._limit_ui_response(autosuggest_resp)
-        # Hydrate state first so result_json_w can reuse pre-computed _vicinity.
-        self.result_buttons_w.display(limited_resp, intent=intent)
-        if self.result_json_w is not None:
-            self.result_json_w.display(limited_resp)
         # self.display_result_map(autosuggest_resp, update_search_center=False)
-
-    def _display_terms(self, autosuggest_resp: Response, intent: SearchIntent):
-        # Used by handle_suggestion_list
-        terms = {term["term"]: None for term in autosuggest_resp.data.get("queryTerms", [])}
-        self.query_terms_w.set(list(terms.keys()))
-
-    def _display_result_map(self, resp: Response, intent: SearchIntent, fit: bool = False):
-        # Used by handle_suggestion_list
-        self.map_w.display(resp, intent=intent, fit=fit)
-
-    def _focus_result_on_map(self, rank: int) -> None:
-        self.map_w.click_result(rank, emit_action=False, recenter=True, show_details=True)
-
-    def handle_result_list(self, intent: SearchIntent, resp: Response):
-        """
-        Display resp in a JSON widget
-        Display resp with intent in SearchResultButtons widget
-        Display results on responseMap
-        :param intent: the intent behind the Response instance
-        :param resp: the Response instance to handle
-        :return: None
-        """
-        limited_resp = self._limit_ui_response(resp)
-        route = self.map_w.route
-
-        # Always keep the original (non-reranked) response so we can restore
-        # it when the "travel time" checkbox is turned off.
-        self._last_result_resp = limited_resp
-        self._last_result_intent = intent
-
-        if (
-            (
-                intent.kind in ("submitted_text", "taxonomy")
-                or (intent.kind == "details" and isinstance(intent.materialization, QuerySuggestionItem))
-            )
-            and getattr(route, "minimal_detour", False)
-            and route.start_position is not None
-            and route.stop_position is not None
-            and route.current_position is not None
-            and route.route_summary_length is not None
-        ):
-            # Kick off async reranking; display immediately once done.
-            self._rerank_task = asyncio.create_task(self._handle_result_list_with_detour(intent, limited_resp))
-            route.detour_task = self._rerank_task
-        else:
-            self._display_result_list(intent, limited_resp)
-
-    async def _handle_result_list_with_detour(self, intent: SearchIntent, resp: Response):
-        """Rerank *resp* items by minimal excursion distance, then display."""
-        route = self.map_w.route
-        ranker = DetourRanker(
-            credentials=self.credentials,
-            at_pos=route.search_at_position or route.current_position,
-            stop_pos=route.stop_position,
-            on_routing_request=self._increment_routing_api_calls,
-            route_cache=self.map_w.route._route_cache,
-        )
-        try:
-            reranked_resp = await ranker.rerank(
-                resp,
-                all_along=route.all_along,
-                # max_excursion=route.width * 3
-            )
-        except Exception:
-            self.logger.exception("Minimal-detour reranking failed; falling back to original order")
-            reranked_resp = resp
-        self._display_result_list(intent, reranked_resp)
-
-    def _display_result_list(self, intent: SearchIntent, resp: Response, fit: bool = True, clear_query: bool = True):
-        """Perform the actual UI update for a result list response."""
-        # Hydrate state (result_buttons_w) first so result_json_w can reuse _vicinity.
-        self.result_buttons_w.display(resp, intent=intent)
-        if self.result_json_w is not None:
-            self.result_json_w.display(resp)
-        self._display_result_map(resp, intent, fit=fit)
-        if clear_query:
-            self.clear_query_text()
-
-    def handle_result_details(self, intent: SearchIntent, lookup_resp: Response):
-        """
-        Display single lookup Response details in a JSON widget
-        Display result on responseMap
-        Do not touch the SearchResultButtons widget
-        :param intent: the intent behind the Response instance
-        :param lookup_resp: the lookup Response instance to handle
-        :return: None
-        """
-        if self.result_json_w is not None:
-            self.result_json_w.display(lookup_resp)
-        self.result_buttons_w.modify(lookup_resp, intent=intent)
-        self._display_result_map(lookup_resp, intent, fit=True)
 
     def clear_query_text(self):
         self.query_box_w.text_w.value = ""

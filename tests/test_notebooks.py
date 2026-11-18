@@ -58,6 +58,7 @@ pytestmark = [
 EXCLUDED_NOTEBOOKS = {
     "obm_6_profile",  # profiling/interactive notebook: requires live routing + map state
     "obm_4_auth",  # live token retrieval can timeout in CI-like environments
+    "spike_here_map",  # the HERE JS SDK only renders in a browser; nothing to assert headlessly
 }
 
 
@@ -144,6 +145,6 @@ def execute_notebook(nb_path: str, cell_timeout: int = CELL_TIMEOUT) -> bool:
             executed_path.unlink()
 
 
-@pytest.mark.parametrize("notebook_path", search_notebooks(["notebooks"]))
+@pytest.mark.parametrize("notebook_path", search_notebooks(["notebooks", "notebooks/route"]))
 def test_published_notebooks(notebook_path):
     assert execute_notebook(notebook_path), f"Error executing {notebook_path}"
