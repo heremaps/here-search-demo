@@ -8,6 +8,7 @@
 ###############################################################################
 
 import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -16,6 +17,8 @@ from flexpolyline import encode as fp_encode
 from here_search_demo.route_engine import RouteEngine
 from here_search_demo.widgets.route import RouteController
 from here_search_demo.widgets.route_geometry import (
+    elapsed_sec_at_position,
+    position_at_x_sec_ahead,
     simplify_polyline,
 )
 
@@ -343,6 +346,57 @@ def test_simplify_returns_original_when_below_max():
 
 
 # ---------------------------------------------------------------------------
+# spans walk: elapsed_sec_at_position / position_at_x_sec_ahead
+# ---------------------------------------------------------------------------
+
+# A due-east polyline of 5 points, ~1 km apart at the equator, split in two spans:
+# span 0 covers points 0..2 in 100 s, span 1 covers points 2..4 in 300 s.
+_SPAN_WAYPOINTS = [(0.0, 0.0), (0.0, 0.01), (0.0, 0.02), (0.0, 0.03), (0.0, 0.04)]
+_SPANS = [
+    {"offset": 0, "duration": 100, "length": 2226},
+    {"offset": 2, "duration": 300, "length": 2226},
+]
+
+
+@pytest.mark.parametrize(
+    "point_index, expected_sec",
+    [(0, 0.0), (1, 50.0), (2, 100.0), (3, 250.0), (4, 400.0)],
+)
+def test_elapsed_sec_at_each_waypoint(point_index, expected_sec):
+    lat, lon = _SPAN_WAYPOINTS[point_index]
+    assert elapsed_sec_at_position(_SPANS, _SPAN_WAYPOINTS, lat, lon) == pytest.approx(expected_sec)
+
+
+def test_elapsed_sec_sums_to_the_route_duration():
+    total = sum(span["duration"] for span in _SPANS)
+    lat, lon = _SPAN_WAYPOINTS[-1]
+    assert elapsed_sec_at_position(_SPANS, _SPAN_WAYPOINTS, lat, lon) == pytest.approx(total)
+
+
+def test_position_at_x_sec_ahead_round_trips():
+    for target_sec in (0, 50, 100, 250, 399):
+        position = position_at_x_sec_ahead(_SPANS, _SPAN_WAYPOINTS, 0.0, target_sec)
+        measured = elapsed_sec_at_position(_SPANS, _SPAN_WAYPOINTS, *position)
+        # The measurement snaps to the closest waypoint, 50 s apart at most here.
+        assert measured == pytest.approx(target_sec, abs=50.0)
+
+
+def test_position_at_x_sec_ahead_interpolates_inside_a_span():
+    # Half of span 0's duration is half of its length: the middle waypoint.
+    assert position_at_x_sec_ahead(_SPANS, _SPAN_WAYPOINTS, 0.0, 50) == pytest.approx((0.0, 0.01), abs=1e-4)
+
+
+def test_position_at_x_sec_ahead_is_relative_to_elapsed():
+    from_start = position_at_x_sec_ahead(_SPANS, _SPAN_WAYPOINTS, 0.0, 100)
+    from_middle = position_at_x_sec_ahead(_SPANS, _SPAN_WAYPOINTS, 50.0, 50)
+    assert from_start == pytest.approx(from_middle)
+
+
+def test_position_beyond_the_route_returns_the_destination():
+    assert position_at_x_sec_ahead(_SPANS, _SPAN_WAYPOINTS, 0.0, 10_000) == _SPAN_WAYPOINTS[-1]
+
+
+# ---------------------------------------------------------------------------
 # build_flexpolyline
 # ---------------------------------------------------------------------------
 
@@ -389,11 +443,17 @@ def route_response():
     }
 
 
-@pytest.mark.asyncio
-async def test_draw_corridor_calls_map_add(controller, mock_map, route_response):
+def mock_routing_session(route_response: dict):
+    """Return an ``HTTPSession()`` context manager mock serving *route_response*.
+
+    The mocked response mimics what :meth:`RoutingAPI.do_send` consumes: a JSON
+    body read with ``text()`` and a ``Content-Type: application/json`` header.
+    """
     mock_response = AsyncMock()
     mock_response.raise_for_status = Mock()
-    mock_response.json = AsyncMock(return_value=route_response)
+    mock_response.text = AsyncMock(return_value=json.dumps(route_response))
+    mock_response.headers = {"Content-Type": "application/json"}
+    mock_response.url = "https://router.hereapi.com/v8/routes"
 
     mock_session_ctx = MagicMock()
     mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_response)
@@ -405,13 +465,19 @@ async def test_draw_corridor_calls_map_add(controller, mock_map, route_response)
     mock_http_ctx = MagicMock()
     mock_http_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_http_ctx.__aexit__ = AsyncMock(return_value=None)
+    return mock_http_ctx
+
+
+@pytest.mark.asyncio
+async def test_draw_corridor_calls_map_add(controller, mock_map, route_response):
+    mock_http_ctx = mock_routing_session(route_response)
 
     controller.engine.set_route_start((48.8, 2.3))
     controller.engine.set_route_stop((48.9, 2.4))
 
     with (
         patch("here_search_demo.route_engine.HTTPSession", return_value=mock_http_ctx),
-        patch("here_search_demo.route_engine.IS_BROWSER_RUNTIME", False),
+        patch("here_search_demo.routing_api.IS_BROWSER_RUNTIME", False),
         patch.object(controller.map_instance, "fit_bounds", new_callable=AsyncMock),
     ):
         await controller.draw_corridor()
@@ -432,27 +498,14 @@ async def test_draw_corridor_counts_routing_api_calls(mock_map, mock_credentials
     calls = []
     controller = RouteController(mock_map, mock_credentials, routing_api_call_handler=lambda: calls.append("routing"))
 
-    mock_response = AsyncMock()
-    mock_response.raise_for_status = Mock()
-    mock_response.json = AsyncMock(return_value=route_response)
-
-    mock_session_ctx = MagicMock()
-    mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
-
-    mock_session = MagicMock()
-    mock_session.get = Mock(return_value=mock_session_ctx)
-
-    mock_http_ctx = MagicMock()
-    mock_http_ctx.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_http_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_http_ctx = mock_routing_session(route_response)
 
     controller.engine.set_route_start((48.8, 2.3))
     controller.engine.set_route_stop((48.9, 2.4))
 
     with (
         patch("here_search_demo.route_engine.HTTPSession", return_value=mock_http_ctx),
-        patch("here_search_demo.route_engine.IS_BROWSER_RUNTIME", False),
+        patch("here_search_demo.routing_api.IS_BROWSER_RUNTIME", False),
         patch.object(controller.map_instance, "fit_bounds", new_callable=AsyncMock),
     ):
         await controller.draw_corridor()
@@ -463,20 +516,7 @@ async def test_draw_corridor_counts_routing_api_calls(mock_map, mock_credentials
 
 @pytest.mark.asyncio
 async def test_draw_corridor_schedules_fit_bounds(controller, mock_map, route_response):
-    mock_response = AsyncMock()
-    mock_response.raise_for_status = Mock()
-    mock_response.json = AsyncMock(return_value=route_response)
-
-    mock_session_ctx = MagicMock()
-    mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
-
-    mock_session = MagicMock()
-    mock_session.get = Mock(return_value=mock_session_ctx)
-
-    mock_http_ctx = MagicMock()
-    mock_http_ctx.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_http_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_http_ctx = mock_routing_session(route_response)
 
     controller.engine.set_route_start((48.8, 2.3))
     controller.engine.set_route_stop((48.9, 2.4))
@@ -486,7 +526,7 @@ async def test_draw_corridor_schedules_fit_bounds(controller, mock_map, route_re
 
     with (
         patch("here_search_demo.route_engine.HTTPSession", return_value=mock_http_ctx),
-        patch("here_search_demo.route_engine.IS_BROWSER_RUNTIME", False),
+        patch("here_search_demo.routing_api.IS_BROWSER_RUNTIME", False),
     ):
         await controller.draw_corridor()
         # Let the scheduled fit_bounds task run
@@ -502,20 +542,7 @@ async def test_draw_corridor_schedules_fit_bounds(controller, mock_map, route_re
 @pytest.mark.asyncio
 async def test_draw_corridor_merges_existing_collection_bbox(controller, mock_map, route_response):
     """The fit bbox should also encompass existing map result features."""
-    mock_response = AsyncMock()
-    mock_response.raise_for_status = Mock()
-    mock_response.json = AsyncMock(return_value=route_response)
-
-    mock_session_ctx = MagicMock()
-    mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
-
-    mock_session = MagicMock()
-    mock_session.get = Mock(return_value=mock_session_ctx)
-
-    mock_http_ctx = MagicMock()
-    mock_http_ctx.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_http_ctx.__aexit__ = AsyncMock(return_value=None)
+    mock_http_ctx = mock_routing_session(route_response)
 
     controller.engine.set_route_start((48.8, 2.3))
     controller.engine.set_route_stop((48.9, 2.4))
@@ -531,7 +558,7 @@ async def test_draw_corridor_merges_existing_collection_bbox(controller, mock_ma
 
     with (
         patch("here_search_demo.route_engine.HTTPSession", return_value=mock_http_ctx),
-        patch("here_search_demo.route_engine.IS_BROWSER_RUNTIME", False),
+        patch("here_search_demo.routing_api.IS_BROWSER_RUNTIME", False),
     ):
         await controller.draw_corridor()
         await asyncio.sleep(0)

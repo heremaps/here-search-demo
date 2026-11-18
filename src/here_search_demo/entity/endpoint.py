@@ -19,6 +19,7 @@ class Endpoint(IntEnum):
     BROWSE = 5
     REVGEOCODE = 6
     SIGNALS = 7
+    ROUTES = 8  # HERE Routing API v8, see here_search_demo.routing_api
 
 
 @dataclass

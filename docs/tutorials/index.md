@@ -21,10 +21,19 @@ Available documentation sections:
 ```{toctree}
 :maxdepth: 1
 
-notebook_obm_1_api.md
-notebook_obm_2_api.md
-notebook_obm_3_widget.md
-notebook_obm_4_auth.md
-notebook_obm_5_automate.md
+ch_1_api.md
+ch_2_api.md
+ch_3_widget.md
+ch_4_auth.md
+ch_5_automate.md
+route/ch_route_1_api.md
+route/ch_route_2_simplify.md
+route/ch_route_3_ahead.md
+route/ch_route_4_detour.md
+route/ch_route_5_render.md
+route/high-level/ch_hl_route_1_engine.md
+route/high-level/ch_hl_route_2_detour.md
+route/high-level/ch_hl_route_3_render.md
+
 notebook_demo.md
 ```

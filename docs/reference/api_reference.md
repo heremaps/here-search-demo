@@ -93,6 +93,41 @@ This page centralizes the public API surface used by the demo and notebooks.
    :members:
    :show-inheritance:
 
+.. autoclass:: here_search_demo.routing_api.RoutingAPI
+   :members:
+   :show-inheritance:
+
+.. autoclass:: here_search_demo.routing_api.Waypoint
+   :members:
+   :show-inheritance:
+
+.. autoclass:: here_search_demo.routing_api.RouteSection
+   :members:
+   :show-inheritance:
+
+.. autoclass:: here_search_demo.routing_api.RoutingOptions
+   :members:
+   :show-inheritance:
+
+.. autoclass:: here_search_demo.route_engine.RouteEngine
+   :members:
+   :show-inheritance:
+
+.. autoclass:: here_search_demo.ranking.RankingMode
+   :members:
+   :show-inheritance:
+
+.. autoclass:: here_search_demo.detour.DetourRanker
+   :members:
+   :show-inheritance:
+
+.. automodule:: here_search_demo.stratified_search
+   :members: should_stratify, compute_slice_ranges, merge_with_quota_redistribution, corridor_search
+   :show-inheritance:
+
+.. automodule:: here_search_demo.widgets.route_geometry
+   :members: build_corridor, simplify_polyline, elapsed_sec_at_position, position_at_x_sec_ahead, haversine_m
+
 .. autoclass:: here_search_demo.widgets.output_json.SearchResultJson
    :members:
    :show-inheritance:

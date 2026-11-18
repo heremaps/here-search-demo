@@ -29,7 +29,8 @@ from typing import Any
 
 from here_search_demo.auth import Credentials
 from here_search_demo.entity.response import Response
-from here_search_demo.http import HTTPSession, IS_BROWSER_RUNTIME
+from here_search_demo.http import HTTPSession
+from here_search_demo.routing_api import RoutingAPI, Waypoint
 
 logger = logging.getLogger(__name__)
 
@@ -74,15 +75,18 @@ class DetourRanker:
         Used as the origin for routing calculations.
     stop_pos:
         ``(latitude, longitude)`` of the route destination.
+    on_routing_request:
+        Optional callback invoked before each Routing request that is not
+        served by *route_cache*.
+    route_cache:
+        Route cache shared with :class:`~here_search_demo.route_engine.RouteEngine`,
+        so an already fetched ``at → stop`` route is reused as the baseline.
+    routing_api:
+        Optional :class:`~here_search_demo.routing_api.RoutingAPI` instance;
+        one is created from *credentials* when omitted.
     """
 
-    routing_url_tpl = (
-        "https://router.hereapi.com/v8/routes"
-        "?origin={start_lat},{start_lon}"
-        "&destination={stop_lat},{stop_lon}"
-        "&return=summary,polyline"
-        "&transportMode=car"
-    )
+    routing_return_fields = ("summary", "polyline")
 
     def __init__(
         self,
@@ -91,23 +95,14 @@ class DetourRanker:
         stop_pos: tuple[float, float],
         on_routing_request: Callable[[], None] | None = None,
         route_cache: dict | None = None,
+        routing_api: RoutingAPI | None = None,
     ):
         self.credentials = credentials
         self.at_pos = at_pos
         self.stop_pos = stop_pos
         self.on_routing_request = on_routing_request
-        self._route_cache = route_cache or {}
-
-    async def _get_token(self) -> str:
-        if IS_BROWSER_RUNTIME:
-            return await self.credentials.atoken  # pragma: no cover
-        return self.credentials.token
-
-    async def _fetch_route(self, session: HTTPSession, url: str, headers: dict) -> dict:
-        """Make a single GET request to the Routing API and return parsed JSON."""
-        async with session.get(url, headers=headers) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+        self._route_cache = route_cache if route_cache is not None else {}
+        self.routing_api = routing_api or RoutingAPI(credentials=credentials)
 
     async def _get_route_summary(
         self,
@@ -128,22 +123,20 @@ class DetourRanker:
         cached = self._route_cache.get(cache_key)
         if cached:
             return cached
-        url = self.routing_url_tpl.format(
-            start_lat=start_lat,
-            start_lon=start_lon,
-            stop_lat=stop_lat,
-            stop_lon=stop_lon,
-        )
         if self.on_routing_request is not None:
             self.on_routing_request()
-        data = await self._fetch_route(session, url, headers)
-        section = data["routes"][0]["sections"][0]
-        summary = section["summary"]
-        duration = summary["duration"]
-        length = summary["length"]
-        polyline = section["polyline"]
-        self._route_cache[cache_key] = duration, length, polyline
-        return duration, length, polyline
+        response = await self.routing_api.routes(
+            session=session,
+            origin=(start_lat, start_lon),
+            destination=(stop_lat, stop_lon),
+            return_fields=type(self).routing_return_fields,
+            x_headers=headers,
+        )
+        # A direct route can still hold several sections (ferry crossings, ...).
+        section = RoutingAPI.merge_sections(RoutingAPI.sections(response))
+        result = section.duration, section.length, section.polyline
+        self._route_cache[cache_key] = result
+        return result
 
     async def get_route_with_via(
         self,
@@ -169,34 +162,31 @@ class DetourRanker:
         cached = self._route_cache.get(cache_key)
         if cached:
             return cached
-        via_param = f"{via_lat},{via_lon}"
-        if name_hint:
-            # Use semicolon separator for waypoint options
-            via_param += f";nameHint={name_hint}"
-
-        url = (
-            f"{self.routing_url_tpl.format(start_lat=start_lat, start_lon=start_lon, stop_lat=stop_lat, stop_lon=stop_lon)}"
-            f"&via={via_param}"
-        )
 
         if self.on_routing_request is not None:
             self.on_routing_request()
-        data = await self._fetch_route(session, url, headers)
+        response = await self.routing_api.routes(
+            session=session,
+            origin=(start_lat, start_lon),
+            destination=(stop_lat, stop_lon),
+            via=Waypoint(via_lat, via_lon, name_hint),
+            return_fields=type(self).routing_return_fields,
+            x_headers=headers,
+        )
+        # The via waypoint splits the route in two legs, but each leg can span
+        # several sections when the journey changes transport mode (ferry, ...).
+        to_leg, from_leg = RoutingAPI.split_at(RoutingAPI.sections(response), via_lat, via_lon)
+        section_to = RoutingAPI.merge_sections(to_leg)
+        section_from = RoutingAPI.merge_sections(from_leg)
 
-        sections = data["routes"][0]["sections"]
-        # First section: start → via
-        section_to = sections[0]
-        dur_to = section_to["summary"]["duration"]
-        dist_to = section_to["summary"]["length"]
-        poly_to = section_to["polyline"]
-
-        # Second section: via → stop
-        section_from = sections[1]
-        dur_from = section_from["summary"]["duration"]
-        dist_from = section_from["summary"]["length"]
-        poly_from = section_from["polyline"]
-
-        result = dur_to, dist_to, poly_to, dur_from, dist_from, poly_from
+        result = (
+            section_to.duration,
+            section_to.length,
+            section_to.polyline,
+            section_from.duration,
+            section_from.length,
+            section_from.polyline,
+        )
         self._route_cache[cache_key] = result
         return result
 
@@ -214,10 +204,13 @@ class DetourRanker:
         * When *all_along* is ``False`` items are ranked by ``dur_to`` only
           (minimise time to reach the result from the current position;
           the return leg is shown in the label but does not affect order).
+
         Items whose excursion distance exceeds ``max_excursion`` metres are
-        filtered out.  Each surviving item gains three extra keys:
+        filtered out.  Each surviving item gains a ``_detour`` annotation, whose
+        most useful keys are:
 
         * ``_detour["label"]``         – ``<title> (<dur_to>min, <dur_from>min, +<detour_km>km)``
+        * ``_detour["rank_before"]``   – 0-based position of the item in *resp*, before reranking
         * ``_detour["polyline_to"]``   – encoded polyline for the ``at → item`` leg
         * ``_detour["polyline_from"]`` – encoded polyline for the ``item → stop`` leg
 
@@ -262,7 +255,7 @@ class DetourRanker:
                     max_excursion,
                 )
                 continue
-            annotated = self._annotate_item(items[orig_idx], legs, excursion)
+            annotated = self._annotate_item(items[orig_idx], legs, excursion, orig_idx)
             scored_items.append((legs.sort_key(all_along), orig_idx, annotated))
 
         scored_items.sort(key=lambda x: x[0])
@@ -271,7 +264,7 @@ class DetourRanker:
         return Response(req=resp.req, data=reranked_data, x_headers=resp.x_headers)
 
     @staticmethod
-    def _annotate_item(item: dict, legs: _DetourLegs, excursion_m: int) -> dict:
+    def _annotate_item(item: dict, legs: _DetourLegs, excursion_m: int, rank_before: int) -> dict:
         """Return a copy of *item* with a ``_detour`` annotation attached."""
         dur_to_min = int(legs.dur_to / 60)
         dur_from_min = int(legs.dur_from / 60)
@@ -280,6 +273,7 @@ class DetourRanker:
         annotated = dict(item)
         annotated["_detour"] = {
             "label": f"{item.get('title', '')} ({dur_to_min}min, {dur_from_min}min, {excursion_sign}{excursion_km}km)",
+            "rank_before": rank_before,
             "dur_to_sec": legs.dur_to,
             "dur_from_sec": legs.dur_from,
             "dist_to_m": legs.dist_to,
@@ -291,8 +285,8 @@ class DetourRanker:
         return annotated
 
     async def retrieve_detours(self, detours_waypoints: list[tuple[Any, Any, Any]]) -> tuple[tuple[int, int, str], Any]:
-        token = await self._get_token()
-        headers = {"Authorization": f"Bearer {token}"}
+        # Authorization is now handled by RoutingAPI; only X-* headers are forwarded.
+        headers: dict = {}
 
         at_lat, at_lon = self.at_pos
         stop_lat, stop_lon = self.stop_pos

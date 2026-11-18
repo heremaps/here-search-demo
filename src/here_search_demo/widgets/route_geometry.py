@@ -127,8 +127,9 @@ def elapsed_sec_at_position(spans: list, waypoints: list, lat: float, lon: float
     """Return the elapsed seconds from the route start to the waypoint closest to ``(lat, lon)``.
 
     Each span dict must contain ``offset`` (int) and ``duration`` (float, seconds).
-    The span at index *i* covers waypoints from ``spans[i-1]['offset']`` (or 0) up to
-    but excluding ``spans[i]['offset']``.
+    Following the HERE Routing API convention, ``spans[i]['offset']`` is the index of the
+    **first** waypoint of span *i*, so span *i* covers the waypoints up to
+    ``spans[i + 1]['offset']`` (the last waypoint for the last span).
     """
     # Find the closest waypoint by squared Euclidean distance (fast proxy).
     min_dist2 = float("inf")
@@ -140,16 +141,16 @@ def elapsed_sec_at_position(spans: list, waypoints: list, lat: float, lon: float
             closest_idx = i
 
     elapsed = 0.0
-    prev_offset = 0
-    for span in spans:
-        span_end = span["offset"]
+    last_index = len(waypoints) - 1
+    for i, span in enumerate(spans):
+        span_start = span["offset"]
+        span_end = spans[i + 1]["offset"] if i + 1 < len(spans) else last_index
         if closest_idx <= span_end:
-            span_width = span_end - prev_offset
+            span_width = span_end - span_start
             if span_width > 0:
-                elapsed += span["duration"] * (closest_idx - prev_offset) / span_width
+                elapsed += span["duration"] * (closest_idx - span_start) / span_width
             return elapsed
         elapsed += span["duration"]
-        prev_offset = span_end
     return elapsed
 
 
@@ -163,15 +164,16 @@ def position_at_x_sec_ahead(spans: list, waypoints: list, elapsed: float, x_sec:
 
     target = elapsed + x_sec
     acc = 0.0
-    prev_offset = 0
-    for span in spans:
+    last_index = len(waypoints) - 1
+    for i, span in enumerate(spans):
         span_dur = span.get("duration", 0)
         span_len_m = span.get("length", 0)
-        span_end = span["offset"]
         if acc + span_dur > target:
             fraction = (target - acc) / span_dur if span_dur > 0 else 0.0
             target_dist = span_len_m * fraction
-            pts = waypoints[prev_offset : span_end + 1]
+            span_start = span["offset"]
+            span_end = spans[i + 1]["offset"] if i + 1 < len(spans) else last_index
+            pts = waypoints[span_start : span_end + 1]
             if len(pts) < 2:
                 return pts[0] if pts else waypoints[-1]
             cum = 0.0
@@ -185,7 +187,6 @@ def position_at_x_sec_ahead(spans: list, waypoints: list, elapsed: float, x_sec:
                 cum += seg
             return pts[-1]
         acc += span_dur
-        prev_offset = span_end
     return waypoints[-1]
 
 

@@ -35,11 +35,11 @@ python -m ipykernel install --prefix $prefix --name search_demo --display-name "
 ## Build the docs
 
 To build the Sphinx docs locally, you need to create the JupyterLite sites first
-(see [Build infrastructure](build-infrastructure.md) for what `xeus.sh` produces and
+(see [Build infrastructure](build-infrastructure.md) for what `lite-build.sh` produces and
 the channel/CI constraints):
 
 ```shell
-jupyterlite_build/xeus.sh
+./lite-build.sh
 ```
 
 And then inject the docs:
@@ -77,11 +77,11 @@ uv tool install bashate
 Auto-fix formatting, then run linters:
 
 ```shell
-shfmt -w jupyterlite_build/*.sh && shellcheck jupyterlite_build/*.sh && bashate -i E002,E003,E006 jupyterlite_build/*.sh
+shfmt -w lite-build.sh && shellcheck lite-build.sh && bashate -i E002,E003,E006 lite-build.sh
 ```
 
 Check-only mode (no formatting changes):
 
 ```shell
-shellcheck jupyterlite_build/*.sh && shfmt -d jupyterlite_build/*.sh && bashate -i E002,E003,E006 jupyterlite_build/*.sh
+shellcheck lite-build.sh && shfmt -d lite-build.sh && bashate -i E002,E003,E006 lite-build.sh
 ```

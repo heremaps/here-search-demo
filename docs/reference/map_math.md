@@ -5,6 +5,8 @@ hide-toc: true
 # Map math appendix
 
 This page collects the implementation-level equations used by map rendering.
+A [code-snippet version of this page](map_code.md) shows the same logic as it
+is actually implemented.
 
 ## Label collision placement
 
@@ -22,19 +24,9 @@ x = \frac{\lambda+180}{360}\,S
 y = \left(\frac{1}{2} - \frac{1}{4\pi}\ln\frac{1+\sin\varphi}{1-\sin\varphi}\right)S
 ```
 
-Bounding box (icon width $w$, height $h$, anchor $(a_x,a_y)$):
-
-```math
-B=(x-a_x,\ y-a_y,\ x-a_x+w,\ y-a_y+h)
-```
-
-AABB overlap test:
-
-```math
-\text{overlap}(A,B)\iff
-A_{x\min}<B_{x\max}\land A_{x\max}>B_{x\min}\land
-A_{y\min}<B_{y\max}\land A_{y\max}>B_{y\min}
-```
+The bounding box is that pixel position offset by the icon anchor, extended by
+the icon width and height. Two labels collide when their boxes overlap on both
+axes ([axis-aligned bounding box test][mdn-aabb]).
 
 In plain terms, we convert each label to a screen rectangle and place it only
 if that rectangle does not overlap rectangles already placed. This avoids
@@ -42,28 +34,23 @@ labels drawing on top of each other.
 
 ## Fit-bounds zoom computation
 
-Given current zoom $z$, current visible span, and target bounds span:
+The [slippy-map zoom scale law][osm-slippy] halves the visible extent per
+zoom-in step, so the zoom that makes a target extent fit the current visible
+extent is:
 
 ```math
-z_{\lambda}=z+\log_2\!\left(\frac{\Delta\lambda_{\text{visible}}}{\Delta\lambda_{\text{target}}}\right)
+z_{\text{new}}=z+\log_2\!\left(\frac{\Delta_{\text{visible}}}{\Delta_{\text{target}}}\right)
 ```
 
-```math
-z_{\varphi}=z+\log_2\!\left(\frac{\Delta y_{\text{visible}}}{\Delta y_{\text{target}}}\right)
-```
-
-with Mercator latitude:
+applied on both axes, where the latitude axis uses the Mercator ordinate
 
 ```math
 y(\varphi)=\ln\!\tan\!\left(\frac{\pi}{4}+\frac{\varphi}{2}\right)
 ```
 
-Final zoom:
-
-```math
-z_{\text{new}}=\left\lfloor\min(z_{\lambda},z_{\varphi})\right\rfloor,\quad
-z_{\text{new}}\in[z_{\min},z_{\max}]
-```
+because tile rows are spaced uniformly in Mercator space, not in degrees. The
+stricter of the two axis results is taken, truncated to an integer, and clamped
+to the allowed min/max zoom levels.
 
 In plain terms, we compute how much we must zoom out so the target bounds fit
 both horizontally and vertically, then choose the stricter one and clamp it to
@@ -71,19 +58,8 @@ allowed min/max zoom levels.
 
 ### Viewport padding before fitting
 
-Before fitting, bounds are expanded by one eighth of their size on each side:
-
-```math
-h=\varphi_{\max}-\varphi_{\min},\quad
-w=\lambda_{\max}-\lambda_{\min}
-```
-
-```math
-[\varphi_{\min}',\varphi_{\max}']=
-[\varphi_{\min}-h/8,\ \varphi_{\max}+h/8],\quad
-[\lambda_{\min}',\lambda_{\max}']=
-[\lambda_{\min}-w/8,\ \lambda_{\max}+w/8]
-```
+Before fitting, bounds are expanded by one eighth of their height and width on
+each side.
 
 In plain terms, we add a 12.5% visual margin around the content so markers and
 route overlays are not glued to the map edges after auto-fit.

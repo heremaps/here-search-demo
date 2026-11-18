@@ -62,15 +62,52 @@ async def test_detour_ranker_counts_actual_routing_requests():
         },
     ]
 
-    async def fake_fetch_route(session, url, headers):
-        return payloads.pop(0)
+    async def fake_send(session, request):
+        return Response(req=request, data=payloads.pop(0), x_headers={})
 
     session = MagicMock()
-    with patch.object(ranker, "_fetch_route", side_effect=fake_fetch_route):
-        await ranker._get_route_summary(session, 52.0, 13.0, 52.1, 13.1, headers={})
-        await ranker.get_route_with_via(session, 52.0, 13.0, 52.05, 13.05, 52.1, 13.1, headers={})
+    with patch.object(ranker.routing_api, "send", side_effect=fake_send):
+        assert await ranker._get_route_summary(session, 52.0, 13.0, 52.1, 13.1, headers={}) == (60, 1000, "p0")
+        assert await ranker.get_route_with_via(session, 52.0, 13.0, 52.05, 13.05, 52.1, 13.1, headers={}) == (
+            30,
+            500,
+            "p1",
+            45,
+            700,
+            "p2",
+        )
 
     assert calls == ["routing", "routing"]
+
+
+@pytest.mark.asyncio
+async def test_detour_ranker_via_request_carries_name_hint():
+    ranker = _make_ranker()
+    sent = []
+
+    async def fake_send(session, request):
+        sent.append(request)
+        return Response(
+            req=request,
+            data={
+                "routes": [
+                    {
+                        "sections": [
+                            {"summary": {"duration": 30, "length": 500}, "polyline": "p1"},
+                            {"summary": {"duration": 45, "length": 700}, "polyline": "p2"},
+                        ]
+                    }
+                ]
+            },
+            x_headers={},
+        )
+
+    with patch.object(ranker.routing_api, "send", side_effect=fake_send):
+        await ranker.get_route_with_via(
+            MagicMock(), 52.0, 13.0, 52.05, 13.05, 52.1, 13.1, headers={}, name_hint="Main Street"
+        )
+
+    assert sent[0].params["via"] == ["52.05,13.05;nameHint=Main Street"]
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +181,39 @@ async def test_rerank_routing_sorts_by_dur_to_when_not_all_along():
     assert reranked[0]["_detour"]["polyline_from"] == "poly_near_from"
     assert reranked[1]["_detour"]["polyline_to"] == "poly_far_to"
     assert reranked[1]["_detour"]["polyline_from"] == "poly_far_from"
+
+
+@pytest.mark.asyncio
+async def test_rerank_annotates_the_rank_held_before_reranking():
+    """Each item carries its 0-based index in the original response."""
+    ranker = _make_ranker()
+    items = [
+        {"title": "Far", "position": {"lat": 52.3, "lng": 12.5}},
+        {"title": "NoPosition"},  # skipped, but still shifts the ranks of the next items
+        {"title": "Near", "position": {"lat": 52.4, "lng": 12.6}},
+    ]
+    resp = _make_response(items)
+
+    async def fake_get_route_summary(session, start_lat, start_lon, stop_lat, stop_lon, headers):
+        return (0, 200_000, "poly_baseline")
+
+    async def fake_get_route_with_via(
+        session, start_lat, start_lon, via_lat, via_lon, stop_lat, stop_lon, headers, name_hint=None
+    ):
+        if via_lat == 52.3:
+            return (240, 110_000, "poly_far_to", 120, 100_000, "poly_far_from")
+        return (60, 100_000, "poly_near_to", 60, 102_000, "poly_near_from")
+
+    with (
+        patch.object(ranker, "_get_route_summary", side_effect=fake_get_route_summary),
+        patch.object(ranker, "get_route_with_via", side_effect=fake_get_route_with_via),
+        patch("here_search_demo.detour.HTTPSession"),
+    ):
+        result = await ranker.rerank(resp)
+
+    reranked = result.data["items"]
+    assert [item["title"] for item in reranked] == ["Near", "Far"]
+    assert [item["_detour"]["rank_before"] for item in reranked] == [2, 0]
 
 
 @pytest.mark.asyncio

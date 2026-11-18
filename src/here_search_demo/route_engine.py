@@ -14,8 +14,9 @@ from typing import Any, Awaitable, Callable
 from flexpolyline import decode, encode
 
 from here_search_demo.auth import Credentials
-from here_search_demo.http import HTTPSession, IS_BROWSER_RUNTIME
+from here_search_demo.http import HTTPSession
 from here_search_demo.ranking import RankingMode
+from here_search_demo.routing_api import RoutingAPI
 from here_search_demo.widgets.route_geometry import (
     elapsed_sec_at_position,
     position_at_x_sec_ahead,
@@ -28,28 +29,25 @@ class RouteEngine:
 
     This class intentionally has no widget dependencies. It stores route/ranking
     state, computes derived search context, manages route cache, and retrieves
-    route geometry from the HERE Routing API.
+    route geometry through :class:`~here_search_demo.routing_api.RoutingAPI`.
     """
 
-    routing_api_tpl = (
-        "https://router.hereapi.com/v8/routes"
-        "?origin={start_lat},{start_lon}"
-        "&destination={stop_lat},{stop_lon}"
-        "&return=polyline,summary&spans=duration,dynamicSpeedInfo,length"
-        "&transportMode=car"
-    )
+    route_return_fields = ("polyline", "summary")
+    route_spans = ("duration", "dynamicSpeedInfo", "length")
     max_waypoints_count = 2000
 
     def __init__(
         self,
         credentials: Credentials,
         *,
+        routing_api: RoutingAPI | None = None,
         on_routing_request=None,
         route_cache: dict | None = None,
         width: int = 100,
         retrieve_route_fn: Callable[..., Awaitable[Any]] | None = None,
     ) -> None:
         self.credentials = credentials
+        self.routing_api = routing_api or RoutingAPI(credentials=credentials)
         self.on_routing_request = on_routing_request
         self._route_cache = route_cache if route_cache is not None else {}
         self._default_width = width
@@ -91,6 +89,10 @@ class RouteEngine:
     @property
     def search_at_position(self) -> tuple[float, float] | None:
         return self.future_position or self.current_position
+
+    @property
+    def current_waypoints(self) -> list[tuple[float, float]] | None:
+        return self._current_waypoints
 
     def set_route_start(self, latlon: tuple[float, float]) -> None:
         self.start_position = latlon
@@ -181,7 +183,9 @@ class RouteEngine:
                 for span in section.get("spans", []):
                     span_copy = dict(span)
                     if "offset" in span_copy and span_copy["offset"] is not None:
-                        span_copy["offset"] = offset_base + max(0, int(span_copy["offset"]) - skip_first)
+                        # The point dropped as a duplicate stays reachable at
+                        # ``offset_base - skip_first``, so rebase from there.
+                        span_copy["offset"] = max(0, offset_base - skip_first + int(span_copy["offset"]))
                     spans.append(span_copy)
 
                 summary = section.get("summary", {})
@@ -220,23 +224,14 @@ class RouteEngine:
         self.has_route = True
         return cached
 
-    @staticmethod
-    async def retrieve_route(start_position, stop_position, credentials) -> Any:  # pragma: no cover
+    async def retrieve_route(self, start_position, stop_position, credentials=None) -> Any:  # pragma: no cover
         # Runtime HTTP/browser-token path is validated in integration environments; unit tests inject mocks.
-        routing_url = RouteEngine.routing_api_tpl.format(
-            start_lat=start_position[0],
-            start_lon=start_position[1],
-            stop_lat=stop_position[0],
-            stop_lon=stop_position[1],
-        )
-        if IS_BROWSER_RUNTIME:
-            token = await credentials.atoken
-        else:
-            token = credentials.token
-        headers = {"Authorization": f"Bearer {token}"}
-
         async with HTTPSession() as session:
-            async with session.get(routing_url, headers=headers) as get_response:
-                get_response.raise_for_status()
-                route = await get_response.json()
-        return route
+            response = await self.routing_api.routes(
+                session=session,
+                origin=start_position,
+                destination=stop_position,
+                return_fields=type(self).route_return_fields,
+                spans=type(self).route_spans,
+            )
+        return response.data

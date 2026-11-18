@@ -49,9 +49,12 @@ class Request:
     def full(self):
         """Return full request URL including encoded query string.
 
+        Multi-valued parameters (for instance the Routing API repeated ``via``)
+        are encoded as repeated key/value pairs.
+
         :return: full request URL
         """
-        return f"{self.base_url}?{urlencode(self.params)}"
+        return f"{self.base_url}?{urlencode(self.params, doseq=True)}"
 
 
 @dataclass
@@ -63,6 +66,9 @@ class RequestContext:
     :ivar language: preferred language
     :ivar polyline: optional route polyline
     :ivar all_along: whether to apply all-along routing mode
+    :ivar route_waypoints: full decoded route geometry, used by
+        :func:`~here_search_demo.stratified_search.corridor_search` to slice the remaining
+        route when stratifying all-along results
     :ivar x_headers: optional request-scoped ``X-*`` headers
     :ivar share_experience: whether user opted into experience sharing
     :ivar user_id: optional user id for signaling endpoints
@@ -74,6 +80,7 @@ class RequestContext:
     polyline: str | None = None
     width: int | None = None
     all_along: bool | None = None
+    route_waypoints: list[tuple[float, float]] | None = None
     x_headers: dict | None = None
     share_experience: bool = False
     user_id: str | None = None

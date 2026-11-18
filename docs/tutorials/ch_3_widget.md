@@ -2,9 +2,9 @@
 hide-toc: true
 ---
 
-# OBM 3 Widget Notebook
+# Widgets
 
-## API quick reference
+## Quick reference
 
 This notebook focuses on UI building blocks and their interaction flow.
 Most-used elements:
@@ -15,13 +15,13 @@ Most-used elements:
 4. `ResponseMap`
 5. `OneBoxCore.run()`
 
-For the complete reference, see [API Reference](../reference/api_reference.md).
+For the complete reference, see the [API reference](../reference/api_reference.md).
 
-<div style="height: 700px; overflow: hidden; border: 1px solid #ccc; border-radius: 4px;">
-  <iframe src="../../notebooks/?path=obm_3_widget.ipynb" loading="lazy" width="100%" height="780px" style="border: 0; margin-top: -70px;"></iframe>
+<div class="notebook-embed">
+  <iframe src="../../../notebooks?path=ch_3_widget.ipynb" loading="lazy"></iframe>
 </div>
 
-## API methods used in this notebook
+## Methods used in this notebook
 
 ```{eval-rst}
 .. autoclass:: here_search_demo.widgets.input_text.SubmittableText

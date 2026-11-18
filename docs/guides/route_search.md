@@ -9,6 +9,20 @@ reranking results by actual driving time using the HERE Routing API.
 This page explains how to set up a route, choose a ranking mode, and read
 the result button titles.
 
+For a hands-on, code-level walkthrough of the same feature, see the notebooks
+[RouteEngine](../tutorials/route/high-level/ch_hl_route_1_engine.md),
+[DetourRanker](../tutorials/route/high-level/ch_hl_route_2_detour.md) and
+[Detour Map](../tutorials/route/high-level/ch_hl_route_3_render.md) pages.
+
+To add the same feature to an application built on its own route, ranking and map classes,
+see [Routing Client](../tutorials/route/ch_route_1_api.md),
+[Detour Re-ranking](../tutorials/route/ch_route_4_detour.md) and
+[Detours Rendering](../tutorials/route/ch_route_5_render.md), which build it on
+the `RoutingAPI` client alone, plus
+[Polyline Simplification](../tutorials/route/ch_route_2_simplify.md) and
+[Ahead On The Route](../tutorials/route/ch_route_3_ahead.md) for the corridor
+polyline budget and the *minutes from position* setting.
+
 ---
 
 ## Setting up a route
@@ -35,7 +49,8 @@ corridor.  Changing the value re-draws the corridor immediately; the new
 width takes effect on the next search submission.
 
 For the exact simplification equations, see the
-[Route math appendix](../reference/route_math.md).
+[Route math appendix](../reference/route_math.md) or its
+[code counterpart](../reference/route_code.md).
 
 ### min from pos
 
@@ -71,8 +86,9 @@ same route as the new search centre.
 5. When a new route is drawn any active **min from pos** offset is
    automatically reapplied.
 
-For the exact interpolation equations, see the
-[Route math appendix](../reference/route_math.md).
+For how the anchor time and the future position are computed, see the
+[Route math appendix](../reference/route_math.md) or its
+[code counterpart](../reference/route_code.md).
 
 > **Example:** You are at kilometre 0 of your route.  You set **pos on route**
 > there and type `45` in **min from pos**.  The search centre jumps to the
@@ -101,6 +117,32 @@ be combined.
 When **all along** is on the Search API itself ranks results by how far out
 of the way they are, cheaply and without extra network calls.
 
+#### Spreading results across the whole remaining route
+
+A single `ranking=excursionDistance` call can still bunch every result near
+one end of a long trip, since real-world place density is rarely uniform
+along a route. Whenever the **remaining** route — from your current position
+to the destination, not the full start-to-stop route — is long enough
+relative to the number of requested results (more than 1&nbsp;km of
+remaining route per result), the app instead splits that remaining route
+into up to 20 equal-length slices, searches each slice's corridor in
+parallel, and merges the results: one pick per slice first, then any slice
+that came back empty has its slot redistributed to whichever other slice has
+the next-best backup candidate.
+
+![Route-stratified POI selection with an empty slice](../sliced_route.jpg)
+
+In the example above, slice 5 returned no restaurants. Its slot is handed to
+a slice that returned more than one candidate, so the final 10 results still
+spread across the whole Berlin → Hamburg corridor instead of clustering near
+one end.
+
+For short remaining routes, or when there is no route at all, this is a
+no-op: exactly one corridor search is made, same as before. For the exact
+threshold and the redistribution algorithm, see the
+[Route math appendix](../reference/route_math.md) or its
+[code counterpart](../reference/route_code.md).
+
 ### Travel time
 
 | State | Client post-processing | Sort key |
@@ -124,8 +166,9 @@ The sort key depends on **all along**:
 | ☐ off | `dur_to` — minimise time to *reach* the result from your current position |
 | ☑ on  | `dur_to + dur_from` — minimise total round-trip time back to your destination |
 
-For formal reranking equations, see the
-[Route math appendix](../reference/route_math.md).
+For the reranking rules, see the
+[Route math appendix](../reference/route_math.md) or its
+[code counterpart](../reference/route_code.md).
 
 #### Implementation details
 
@@ -185,5 +228,6 @@ actually saves 1 km compared to the straight `at → stop` route.
 
 ---
 
-For map-rendering equations (label collision + fit-bounds zoom), see the
-[Map math appendix](../reference/map_math.md).
+For map-rendering details (label collision + fit-bounds zoom), see the
+[Map math appendix](../reference/map_math.md) or its
+[code counterpart](../reference/map_code.md).

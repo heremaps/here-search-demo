@@ -38,7 +38,7 @@ Demo documentation with interactive notebooks is available [here][docs].
 
 ## Offline notebooks
 
-1. Install the package in the virtual environment of your choice (Python 3.13 recommended):
+1. Install the package in the virtual environment of your choice (Python 3.14 recommended):
    ```shell
    pip install 'here-search-demo[lab]'
    ```
@@ -67,7 +67,7 @@ Demo documentation with interactive notebooks is available [here][docs].
    ```
 3. Build the JupyterLite static page:
    ```shell
-   jupyterlite_build/xeus.sh
+   ./lite-build.sh
    ```
 4. Build the docs page:
    ```shell

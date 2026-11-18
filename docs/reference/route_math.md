@@ -5,7 +5,8 @@ hide-toc: true
 # Route math appendix
 
 This page collects the implementation-level equations used by route-aware
-search logic.
+search logic. A [code-snippet version of this page](route_code.md) shows the
+same logic as it is actually implemented.
 
 ## Polyline simplification for `route=<polyline>;w=<width>`
 
@@ -30,112 +31,88 @@ making the payload small enough for Search.
 
 ## Corridor geometry from route width
 
-For corridor mode, the route centerline is buffered by width $w$ metres in a
-local projected CRS (UTM), then transformed back to WGS84 for map/search use.
+For corridor mode, the route centerline is buffered by the requested width in
+metres in a local tangent-plane projection centred on the route centroid, then
+transformed back to WGS84 for map/search use.
 
-In plain terms, we temporarily switch to a metre-based map projection so a
-"100 m width" really means 100 metres on the ground, build the corridor there,
-then convert it back to latitude/longitude.
+In plain terms, we temporarily switch to a metre-based projection so a "100 m
+width" really means 100 metres on the ground, build the corridor there, then
+convert it back to latitude/longitude.
 
 ## `min from pos` future position
 
-Given $N$ minutes entered by the user:
+Given a number of minutes entered by the user, the app converts it to seconds
+and adds it to the elapsed trip time at the anchor (`pos on route`), then maps
+that new elapsed time back to a location on the route.
 
-```math
-t_{\text{target}} = t_{\text{origin}} + 60 \cdot N
-```
+The elapsed time at the anchor is the sum of the durations of all route spans
+before the anchor's span, plus the fraction of the anchor's own span already
+travelled — measured by waypoint index within that span.
 
-```math
-\text{search\_at} = P\!\left(t_{\text{target}}\right)
-```
-
-where $t_{\text{origin}}$ is elapsed seconds at the anchor (`pos on route`)
-and $P(t)$ is the interpolated route position at elapsed time $t$.
-
-In plain terms, we first compute the trip time at the anchor by summing full
-durations of earlier spans plus a proportional fraction of the current span.
-Then we add the requested minutes and map that new elapsed time back to a
-location on the route.
-
-Span-based interpolation (matching implementation):
-
-```math
-t_{\text{origin}}=
-\sum_{k < s_o} d_k
-\;+\;
-d_{s_o}\cdot
-\frac{i_o-o_{s_o-1}}{o_{s_o}-o_{s_o-1}}
-```
-
-```math
-\tau = t_{\text{target}}-\sum_{k < s_t} d_k,\quad
-\alpha=\frac{\tau}{d_{s_t}},\quad
-\ell=\alpha\cdot L_{s_t}
-```
-
-```math
-P(t_{\text{target}})
-=
-\operatorname{interp\_along\_polyline}\!\left(
-[w_{o_{s_t-1}},\dots,w_{o_{s_t}}],
-\ell
-\right)
-```
-
-Here, $\operatorname{interp\_along\_polyline}(Q,\ell)$ returns the point at arc-length
-$\ell$ along the piecewise-linear polyline $Q$, clamped to the first/last point when
-$\ell$ is outside the polyline length.
-
-where $d_s$ is span duration, $L_s$ is span length, $o_s$ is span end
-offset (waypoint index), $i_o$ is the closest waypoint index to the anchor,
-and $w_i$ are decoded route waypoints.
+To turn the target elapsed time back into a position, the app finds the span
+that contains it, converts the leftover time into a proportional distance along
+that span, and walks the span's waypoints accumulating great-circle
+([haversine][haversine-wiki]) segment lengths until that distance is reached.
+The final position is interpolated linearly inside the segment that straddles
+it, and clamped to the last waypoint when the target lies beyond the end of the
+route.
 
 ## Detour reranking
 
-For each result $i$:
+Each result gets an *excursion distance*: the distance `at → result` plus
+`result → stop`, minus the direct `at → stop` distance. When a maximum
+excursion is configured, results above that threshold are dropped.
 
-```math
-\text{exc}_i = d_{to,i}+d_{from,i}-d_{base}
-```
+The remaining results are sorted by ascending travel time — time to reach the
+result when `all_along` is off, and time to reach it plus the onward time to
+the stop when `all_along` is on.
 
-where $d_{to,i}$ is distance `at → result`, $d_{from,i}$ is
-`result → stop`, and $d_{base}$ is direct `at → stop`.
-
-Filtering rule (if max excursion is configured):
-
-```math
-\text{keep } i \iff \text{exc}_i \le E_{\max}
-```
-
-Sort key:
-
-```math
-k_i=
-\begin{cases}
-t_{to,i}, & \text{all\_along = off}\\
-t_{to,i}+t_{from,i}, & \text{all\_along = on}
-\end{cases}
-```
-
-Results are sorted by ascending $k_i$.
-
-Displayed title values are integer-truncated for readability:
-
-```math
-\text{dur\_to\_min}=\left\lfloor\frac{t_{to}}{60}\right\rfloor,\quad
-\text{dur\_from\_min}=\left\lfloor\frac{t_{from}}{60}\right\rfloor,\quad
-\text{exc\_km}=\left\lfloor\frac{\text{exc}}{1000}\right\rfloor
-```
-
-and when `all_along = on`, the ranking key uses truncated total minutes:
-
-```math
-k_i=\left\lfloor\frac{t_{to,i}+t_{from,i}}{60}\right\rfloor
-```
+Durations and excursions shown in result titles are integer-truncated to whole
+minutes and whole kilometres for readability, and the ranking key itself is
+expressed in minutes.
 
 In plain terms, each place gets a detour cost compared with driving directly to
 the destination. We can drop places with too much detour, then rank the rest by
 the fastest relevant travel time (to the place, or to-place-plus-onward).
+
+## Route-stratified corridor search
+
+This only applies to `ranking=excursionDistance` (**all along**) searches —
+a default-relevance corridor search always uses a single whole-route call,
+since only excursion-distance ranking is prone to bunching every result near
+one end of the route.
+
+A single corridor call is split into $n = \min(\text{limit}, 20)$
+equal-distance slices whenever the *remaining* route — from the search
+position to the destination, not the full route — is long enough relative to
+the number of requested results:
+
+```math
+\frac{D_{\text{remaining}}}{\text{limit}} > 1000\ \text{m}
+```
+
+Each slice boundary is found by walking the cumulative great-circle
+([haversine][haversine-wiki]) distance along the remaining route and cutting
+it into $n$ equal-length spans; adjacent slices share their boundary
+waypoint so the sub-polylines stay geometrically contiguous.
+
+Each slice is searched independently, anchored at its own first waypoint, and
+over-fetches $\lceil \text{limit} / n \rceil + 2$ candidates (floor 4, cap
+100) so redistribution rarely needs a second network round-trip.
+
+Results are then merged tier by tier: every slice's best not-yet-picked
+candidate is taken before any slice's second-best, in route order, until
+*limit* is reached or every slice is exhausted. A slice with no candidates
+therefore loses its slot to whichever other slice has the next-best backup
+candidate, rather than always to the same neighbor. Duplicate ids (adjacent
+slices can share a boundary waypoint) are skipped in place, pulling that
+slice's next buffered candidate instead of dropping the slot.
+
+In plain terms: instead of one search over the whole remaining trip — which
+can bunch every result near one end — the app searches several shorter
+stretches in parallel and spreads the requested result count across them,
+giving an empty stretch's leftover slots to whichever other stretch has more
+to offer.
 
 ## References
 

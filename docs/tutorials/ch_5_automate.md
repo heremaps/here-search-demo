@@ -2,11 +2,11 @@
 hide-toc: true
 ---
 
-# OBM 5 Automate Notebook
+# Automation
 
-## API quick reference
+## Quick reference
 
-This notebook focuses on scripted OneBoxMap interactions and route automation.
+This notebook focuses on scripted interactions with widgets and route automation.
 Most-used elements:
 
 1. `OneBoxMap()`
@@ -15,14 +15,14 @@ Most-used elements:
 4. `RouteController.set_route_start/at/stop(...)`
 5. `RouteController.set_route_width(...)`
 
-For the complete reference, see [API Reference](../reference/api_reference.md).
+For the complete reference, see the [API reference](../reference/api_reference.md).
 For route architecture details, see [Route engine and widget controller architecture](../explanation/route_engine.md).
 
-<div style="height: 700px; overflow: hidden; border: 1px solid #ccc; border-radius: 4px;">
-  <iframe src="../../notebooks/?path=obm_5_automate.ipynb" loading="lazy" width="100%" height="780px" style="border: 0; margin-top: -70px;"></iframe>
+<div class="notebook-embed" style="--notebook-embed-height: 1000px;">
+  <iframe src="../../../notebooks?path=ch_5_automate.ipynb" loading="lazy"></iframe>
 </div>
 
-## API methods used in this notebook
+## Methods used in this notebook
 
 ```{eval-rst}
 .. autoclass:: here_search_demo.widgets.app.OneBoxMap
