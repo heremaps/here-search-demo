@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Tests and coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Notebooks and JupyterLite
+.ipynb_checkpoints/
+.jupyterlite.doit.db
+.jupyterlite-artifacts/
+.jupyterlite-artifacts-*/
+_output/
+
+# Docs
+/docs/_build/
+
+# Editors and OS
+.idea/
+*.iml
+.vscode/
+*.sw?
+.DS_Store
+
+# Local scratch
+workspace/
