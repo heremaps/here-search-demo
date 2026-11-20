@@ -20,8 +20,7 @@ what the file must contain and how it is used.
 
 1. Install the package into a virtual environment (Python 3.13 recommended):
    ```shell
-   pip install 'here-search-demo[lab]' \
-     --index-url https://artifactory.in.here.com/artifactory/api/pypi/here-elm-pypi-virtual-prd/simple
+   pip install 'here-search-demo[lab]'
    ```
 2. Extract the notebooks and `credentials.properties.txt` from `here-search-demo.zip`
    into the same directory.
